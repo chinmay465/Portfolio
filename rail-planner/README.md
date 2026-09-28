@@ -19,8 +19,12 @@ Backend: Python (FastAPI). Frontend: React + TypeScript (Vite).
 |---|---|---|
 | Extra travel time | 3 h | max time over the fastest direct train; any value, or **No limit** |
 | Extra distance | 150 km | max rail km over the shortest direct train; any value, or **No limit** |
+| Max changes | 1 | any number; 0 = direct trains only |
+| Via stations | none | stations the route must pass through, in order (changing there or staying on the train) |
 | Nearby stations within | 15 km | also board or alight at busy stations nearby (e.g. YPR/BNC/KJM for SBC); any value |
 | Minimum change time | 20 min | for one-change routes; any value. Changes under 45 min are flagged "Tight change" |
+
+Routes with 2 or more changes, or with via stations, come from a round-by-round search (one train per round) over the useful stations: both ends, nearby stations, the best-connected change points, and your via stations. It keeps the earliest few partial routes per station each round and prunes anything that can't meet your limits. If via stations are set but nothing fits your limits, the results say how many routes exist beyond them and how long the fastest takes, with a one-click "Remove limits". With live data, 2+ changes adds up to 16 more station timetables (cached and shared), about 30 requests for a brand-new route.
 
 There are no built-in upper bounds, and no hidden layover cap: the wait between trains is limited only by your total-time setting. Results come back 50 at a time, fastest first, and "Show more alternates" loads the next 50.
 
@@ -60,7 +64,7 @@ On every push and PR, CI (`.github/workflows/ci.yml`) runs the backend tests, bu
 ## API
 
 - `GET /api/stations?q=pune`
-- `GET /api/routes?from=SBC&to=PUNE&date=2026-10-20&extra_hours=3&extra_km=150&nearby_km=15&min_transfer_min=20&include_unreserved=false&limit=50`. Add `no_time_limit=true` or `no_km_limit=true` to remove either limit.
+- `GET /api/routes?from=SBC&to=PUNE&date=2026-10-20&extra_hours=3&extra_km=150&nearby_km=15&min_transfer_min=20&include_unreserved=false&limit=50`. Add `no_time_limit=true` or `no_km_limit=true` to remove either limit, `max_changes=3` for more changes, and `via=SRR,MAQ,TNA` to force stations in order.
 - `GET /api/booking-windows?date=2026-10-20&train=12627&board=BPL`
 
 ## Timetable data

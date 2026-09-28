@@ -144,7 +144,7 @@ footer { max-width: 1040px; margin: 0 auto; padding: 0 16px 32px; color: var(--m
 sup { font-size: 11px; color: var(--warn); margin-left: 2px; font-weight: 600; }
 .j-line { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); min-width: 0; }
 .track { position: relative; height: 2px; background: var(--line); border-radius: 2px; }
-.track .dot { position: absolute; left: 50%; top: 50%; width: 9px; height: 9px; transform: translate(-50%, -50%); border-radius: 50%; background: var(--surface); border: 2px solid var(--accent); }
+.track .dot { position: absolute; top: 50%; width: 9px; height: 9px; transform: translate(-50%, -50%); border-radius: 50%; background: var(--surface); border: 2px solid var(--accent); }
 
 .badges { display: flex; flex-wrap: wrap; gap: 6px; }
 .badge { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
@@ -223,3 +223,14 @@ sup { font-size: 11px; color: var(--warn); margin-left: 2px; font-weight: 600; }
   margin: 12px auto 0; display: block; padding: 9px 18px; border-radius: 9px; cursor: pointer;
   border: 1px solid var(--line); background: var(--surface); color: var(--accent); font-weight: 600;
 }
+
+.via { display: grid; gap: 8px; }
+.via-row { display: flex; }
+.via-row .field { max-width: 420px; }
+.via-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; align-items: center; }
+.via-chip { display: inline-flex; gap: 6px; align-items: center; font-family: inherit; cursor: default; }
+.via-chip .n { font-size: 11px; font-weight: 700; background: var(--accent); color: var(--accent-ink); border-radius: 999px; width: 18px; height: 18px; display: grid; place-items: center; }
+.via-chip button { border: 0; background: none; cursor: pointer; color: var(--muted); padding: 0 2px; font-size: 14px; }
+.hidden-note { background: var(--warn-soft); padding: 8px 12px; border-radius: 9px; font-size: 14px; margin: 0 0 12px; }
+.legs .wait { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.legs .wait.tight { color: var(--bad); font-weight: 600; }

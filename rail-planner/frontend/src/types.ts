@@ -17,6 +17,7 @@ export type Leg = {
   train: { number: string; name: string; type: string; classes: string[]; reserved: boolean; runs_on: string[] };
   from: StationRef;
   to: StationRef;
+  passes: StationRef[];
   depart_at: string;
   arrive_at: string;
   minutes: number;
@@ -26,7 +27,7 @@ export type Leg = {
 };
 
 export type Journey = {
-  kind: "direct" | "nearby" | "connection";
+  kind: "direct" | "nearby" | "connection" | "through";
   depart_at: string;
   arrive_at: string;
   minutes: number;
@@ -34,9 +35,14 @@ export type Journey = {
   extra_minutes: number | null;
   extra_km: number | null;
   legs: Leg[];
-  transfer: { station: StationRef; wait_minutes: number; tight: boolean } | null;
+  transfer: Transfer | null;
+  transfers: Transfer[];
+  changes: number;
+  via: StationRef[];
   access: { board_offset_km: number; alight_offset_km: number };
 };
+
+export type Transfer = { station: StationRef; wait_minutes: number; tight: boolean };
 
 export type DataSource = {
   kind: "live" | "snapshot" | null;
@@ -54,10 +60,13 @@ export type RouteResponse = {
   to: StationRef & { state: string };
   journey_date: string;
   params: Omit<Tolerance, "extra_hours" | "extra_km" | "no_time_limit" | "no_km_limit"> & {
+    via: string[];
     extra_hours: number | null;
     extra_km: number | null;
   };
   data_source: DataSource;
+  hidden_by_limits: number;
+  fastest_hidden_minutes: number | null;
   baseline: null | {
     minutes: number;
     km: number;
@@ -75,6 +84,7 @@ export type Tolerance = {
   extra_km: number;
   no_time_limit: boolean;
   no_km_limit: boolean;
+  max_changes: number;
   nearby_km: number;
   min_transfer_min: number;
   include_unreserved: boolean;
@@ -102,6 +112,7 @@ export const DEFAULT_TOLERANCE: Tolerance = {
   extra_km: 150,
   no_time_limit: false,
   no_km_limit: false,
+  max_changes: 1,
   nearby_km: 15,
   min_transfer_min: 20,
   include_unreserved: false,

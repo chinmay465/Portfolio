@@ -6,6 +6,7 @@ import { DEFAULT_TOLERANCE, type Journey, type RouteResponse, type StationHit, t
 import { JourneyCard } from "./JourneyCard";
 import { SourceNote } from "./SourceNote";
 import { StationInput } from "./StationInput";
+import { ViaPicker } from "./ViaPicker";
 
 const PAGE = 50;
 
@@ -21,6 +22,7 @@ export function TripPlanner() {
     return d && d >= todayIST() ? d : todayIST(1);
   });
   const [tol, setTol] = useState<Tolerance>(saved.tolerance);
+  const [via, setVia] = useState<StationHit[]>([]);
   const [recent, setRecent] = useState<SavedTrip[]>(saved.recent);
 
   const [data, setData] = useState<RouteResponse | null>(null);
@@ -31,7 +33,7 @@ export function TripPlanner() {
   const [limit, setLimit] = useState(PAGE);
   const ctrl = useRef<AbortController | null>(null);
 
-  const run = async (f = from, t = to, d = date, tl = tol, lim = PAGE) => {
+  const run = async (f = from, t = to, d = date, tl = tol, lim = PAGE, v = via) => {
     if (!f || !t) {
       setError("Pick both stations from the suggestions.");
       return;
@@ -42,7 +44,7 @@ export function TripPlanner() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.routes(f.code, t.code, d, tl, lim, c.signal);
+      const res = await api.routes(f.code, t.code, d, tl, v.map((s) => s.code), lim, c.signal);
       setData(res);
       setLimit(lim);
       storage.remember({ from: f, to: t, date: d }, tl);
@@ -65,12 +67,12 @@ export function TripPlanner() {
     const t = setTimeout(() => run(), 400);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tol]);
+  }, [tol, via]);
 
   const list = useMemo(() => {
     if (!data) return [];
     let items: Journey[] = [...data.direct, ...data.alternates];
-    if (filter !== "all") items = items.filter((j) => j.kind === filter);
+    if (filter !== "all") items = items.filter((j) => j.kind === filter || (filter === "connection" && j.kind === "through"));
     const by: Record<Sort, (a: Journey, b: Journey) => number> = {
       fastest: (a, b) => a.minutes - b.minutes || a.km - b.km,
       earliest: (a, b) => a.depart_at.localeCompare(b.depart_at),
@@ -83,7 +85,7 @@ export function TripPlanner() {
     all: data.direct.length + data.alternates.length,
     direct: data.direct.length,
     nearby: data.alternates.filter((j) => j.kind === "nearby").length,
-    connection: data.alternates.filter((j) => j.kind === "connection").length,
+    connection: data.alternates.filter((j) => j.kind === "connection" || j.kind === "through").length,
   };
 
   const setNum = (k: keyof Tolerance) => (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -124,6 +126,14 @@ export function TripPlanner() {
           </button>
         </div>
 
+        <ViaPicker
+          via={via}
+          onChange={(v) => {
+            setVia(v);
+            if (v.length > tol.max_changes) setTol((t) => ({ ...t, max_changes: v.length }));
+          }}
+        />
+
         {recent.length > 0 && (
           <div className="recent">
             <span className="muted small">Recent</span>
@@ -163,8 +173,12 @@ export function TripPlanner() {
             hint="over the shortest direct train" unlimited={tol.no_km_limit}
             onUnlimited={(v) => setTol((t) => ({ ...t, no_km_limit: v }))}
           />
+          <Slider
+            label="Max changes" unit="" range={6} step={1} value={tol.max_changes} onChange={setNum("max_changes")}
+            hint="0 = direct trains only"
+          />
           <Slider label="Nearby stations within" unit="km" range={50} step={1} value={tol.nearby_km} onChange={setNum("nearby_km")} hint="0 turns nearby boarding off" />
-          <Slider label="Minimum change time" unit="min" range={180} step={5} value={tol.min_transfer_min} onChange={setNum("min_transfer_min")} hint="for one-change routes" />
+          <Slider label="Minimum change time" unit="min" range={180} step={5} value={tol.min_transfer_min} onChange={setNum("min_transfer_min")} hint="at each change" />
           <label className="check">
             <input type="checkbox" checked={tol.include_unreserved} onChange={(e) => setTol((t) => ({ ...t, include_unreserved: e.target.checked }))} />
             Include unreserved passenger / MEMU trains
@@ -208,12 +222,23 @@ export function TripPlanner() {
             )}
           </div>
 
+          {data.hidden_by_limits > 0 && (
+            <p className="hidden-note">
+              {data.hidden_by_limits} more route{data.hidden_by_limits === 1 ? "" : "s"}
+              {data.params.via.length > 0 ? " through your via stations" : ""} exceed your time/distance limits
+              {data.fastest_hidden_minutes !== null && <> (fastest takes {duration(data.fastest_hidden_minutes)})</>}.{" "}
+              <button type="button" className="link" onClick={() => setTol((t) => ({ ...t, no_time_limit: true, no_km_limit: true }))}>
+                Remove limits
+              </button>
+            </p>
+          )}
+
           {counts && counts.all > 0 && (
             <div className="toolbar">
               <div className="tabs" role="tablist">
                 {(["all", "direct", "nearby", "connection"] as Filter[]).map((f) => (
                   <button key={f} role="tab" aria-selected={filter === f} className={filter === f ? "on" : ""} onClick={() => setFilter(f)} disabled={counts[f] === 0 && f !== "all"}>
-                    {{ all: "All", direct: "Direct", nearby: "Nearby station", connection: "1 change" }[f]} <span className="n">{counts[f]}</span>
+                    {{ all: "All", direct: "Direct", nearby: "Nearby station", connection: "With changes" }[f]} <span className="n">{counts[f]}</span>
                   </button>
                 ))}
               </div>

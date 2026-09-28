@@ -3,7 +3,13 @@ import { clock, day, dayDiff, duration, runDays } from "../format";
 import type { Journey, RouteResponse } from "../types";
 import { BookingWindows } from "./BookingWindows";
 
-const KIND_LABEL = { direct: "Direct", nearby: "Nearby station", connection: "1 change" } as const;
+const KIND_LABEL = { direct: "Direct", nearby: "Nearby station", connection: "Change", through: "Direct" } as const;
+
+function changeLabel(j: Journey): string {
+  const t = j.transfers;
+  if (t.length === 1) return `Change at ${t[0].station.name} · ${duration(t[0].wait_minutes)} wait`;
+  return `${t.length} changes: ${t.map((x) => x.station.name).join(", ")}`;
+}
 
 export function JourneyCard({ j, route }: { j: Journey; route: RouteResponse }) {
   const [open, setOpen] = useState(false);
@@ -21,7 +27,9 @@ export function JourneyCard({ j, route }: { j: Journey; route: RouteResponse }) 
         <div className="j-line">
           <span className="j-dur">{duration(j.minutes)}</span>
           <span className="track" aria-hidden>
-            {j.transfer && <i className="dot" title={j.transfer.station.name} />}
+            {j.transfers.map((t, i) => (
+              <i key={t.station.code} className="dot" title={t.station.name} style={{ left: `${((i + 1) / (j.transfers.length + 1)) * 100}%` }} />
+            ))}
           </span>
           <span className="j-km">{j.km} km</span>
         </div>
@@ -36,11 +44,10 @@ export function JourneyCard({ j, route }: { j: Journey; route: RouteResponse }) 
 
       <div className="badges">
         <span className={`badge kind ${j.kind}`}>
-          {j.kind === "connection" && j.transfer
-            ? `Change at ${j.transfer.station.name} · ${duration(j.transfer.wait_minutes)} wait`
-            : KIND_LABEL[j.kind]}
+          {j.transfers.length > 0 ? changeLabel(j) : KIND_LABEL[j.kind]}
         </span>
-        {j.transfer?.tight && (
+        {j.via.length > 0 && <span className="badge soft">Via {j.via.map((v) => v.code).join(" → ")}</span>}
+        {j.transfers.some((t) => t.tight) && (
           <span className="badge tight" title="Short connection: a late first train can make you miss the second">
             Tight change
           </span>
@@ -65,8 +72,13 @@ export function JourneyCard({ j, route }: { j: Journey; route: RouteResponse }) 
       )}
 
       <ol className="legs">
-        {j.legs.map((l) => (
+        {j.legs.map((l, i) => (
           <li key={l.train.number + l.depart_at}>
+            {i > 0 && j.transfers[i - 1] && (
+              <div className={`wait ${j.transfers[i - 1].tight ? "tight" : ""}`}>
+                Change at {j.transfers[i - 1].station.name} · {duration(j.transfers[i - 1].wait_minutes)} wait
+              </div>
+            )}
             <div className="leg-train">
               <span className="num">{l.train.number}</span>
               <span className="tname">{l.train.name}</span>
@@ -76,6 +88,7 @@ export function JourneyCard({ j, route }: { j: Journey; route: RouteResponse }) 
             <div className="leg-times">
               {l.from.code} {clock(l.depart_at)} → {l.to.code} {clock(l.arrive_at)}
               {dayDiff(l.depart_at, l.arrive_at) > 0 && <sup>+{dayDiff(l.depart_at, l.arrive_at)}</sup>} · {duration(l.minutes)} · {l.km} km
+              {l.passes.length > 0 && <> · via {l.passes.map((p) => p.name).join(", ")} (stay on)</>}
             </div>
           </li>
         ))}

@@ -225,3 +225,17 @@ def test_basava_hutatma_change_at_solapur(tmp_path):
 
     strict = search(TT, SearchParams("SBC", "PUNE", TUESDAY, min_transfer_min=30), client_for(Fake(), tmp_path / "b"))
     assert not any([l["train"]["number"] for l in j2["legs"]] == ["17307", "12158"] for j2 in strict["alternates"])
+
+
+def test_live_multi_change_via(tmp_path):
+    fake = Fake()
+    p = SearchParams("SBC", "PUNE", TUESDAY, extra_hours=None, extra_km=None, max_changes=3, via=("SRR", "MAQ", "TNA"))
+    res = search(TT, p, client_for(fake, tmp_path))
+    assert res["data_source"]["kind"] == "live"
+    assert res["alternates"], "expected a live route via SRR, MAQ, TNA"
+    for j in res["alternates"]:
+        assert j["changes"] <= 3
+        for leg in j["legs"]:
+            origin = date.fromisoformat(leg["origin_date"])
+            assert ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][origin.weekday()] in leg["train"]["runs_on"]
+    assert fake.calls <= 40  # one board per station, even with via + multi-change hubs

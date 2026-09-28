@@ -106,3 +106,43 @@ def test_long_layovers_allowed_when_time_is_unlimited():
     ).json()
     waits = [j["transfer"]["wait_minutes"] for j in body["alternates"] if j["transfer"]]
     assert max(waits) > 12 * 60  # the old hidden 12-hour layover cap is gone
+
+
+def _trains(j):
+    return [leg["train"]["number"] for leg in j["legs"]]
+
+
+def test_max_changes_is_respected():
+    zero = client.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": DATE, "max_changes": 0}).json()
+    assert all(j["changes"] == 0 for j in zero["alternates"])
+    two = client.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": DATE, "max_changes": 2}).json()
+    assert all(j["changes"] <= 2 for j in two["alternates"])
+    assert any(j["changes"] == 2 for j in two["alternates"])
+    for j in two["alternates"]:
+        codes = [leg["from"]["code"] for leg in j["legs"]] + [j["legs"][-1]["to"]["code"]]
+        assert len(codes) == len(set(codes)), "no station visited twice"
+        for t in j["transfers"]:
+            assert t["wait_minutes"] >= 20
+
+
+def test_via_kerala_mangaluru_thane():
+    params = {"from": "SBC", "to": "PUNE", "date": DATE, "max_changes": 3, "via": "SRR,MAQ,TNA",
+              "no_time_limit": True, "no_km_limit": True}
+    body = client.get("/api/routes", params=params).json()
+    assert body["alternates"], "expected a route through Shoranur, Mangaluru and Thane"
+    for j in body["alternates"]:
+        path = []
+        for leg in j["legs"]:
+            path += [leg["from"]["code"], *(x["code"] for x in leg["passes"])]
+        path.append(j["legs"][-1]["to"]["code"])
+        assert [c for c in path if c in ("SRR", "MAQ", "TNA")] == ["SRR", "MAQ", "TNA"]
+        assert [v["code"] for v in j["via"]] == ["SRR", "MAQ", "TNA"]
+        assert j["changes"] <= 3
+
+    limited = client.get("/api/routes", params={k: v for k, v in params.items() if not k.startswith("no_")}).json()
+    assert not limited["alternates"] and limited["hidden_by_limits"] > 0
+
+
+def test_bad_via():
+    r = client.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": DATE, "via": "NOPE"})
+    assert r.status_code == 400

@@ -86,6 +86,8 @@ def routes(
     min_transfer_min: int = Query(20, ge=0),
     include_unreserved: bool = False,
     limit: int = Query(50, ge=1),
+    max_changes: int = Query(1, ge=0),
+    via: str = Query("", description="Comma-separated station codes to pass through, in order"),
 ) -> dict:
     params = SearchParams(
         from_code=from_code.upper(),
@@ -97,6 +99,8 @@ def routes(
         min_transfer_min=min_transfer_min,
         include_unreserved=include_unreserved,
         limit=limit,
+        max_changes=max_changes,
+        via=tuple(c.strip().upper() for c in via.split(",") if c.strip()),
     )
     try:
         return search(timetable(), params, live())

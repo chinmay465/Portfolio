@@ -25,6 +25,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 
+from .multileg import BoardLegs, SnapshotLegs, multi_search, suggest_multi_hubs
 from .railradar import LegOption, LiveError, RailRadar, Usage, legs_from_boards
 from .rules import IST, booking_windows, window_status
 from .timetable import Station, StaticTimetable, Train, haversine_km
@@ -32,6 +33,8 @@ from .timetable import Station, StaticTimetable, Train, haversine_km
 INF = float("inf")
 LIVE_HUBS = 10  # change stations queried live (1 station-board request each, cached 7 days)
 LIVE_NEARBY = 2  # nearby stations per side queried live (1 request each)
+LIVE_MULTI_HUBS = 8  # extra stations per side for 2+ changes (1 request each, cached)
+SNAPSHOT_MULTI_HUBS = 15
 TIGHT_CHANGE_MIN = 45  # changes shorter than this are flagged in the UI
 DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
@@ -47,6 +50,8 @@ class SearchParams:
     min_transfer_min: int = 20
     include_unreserved: bool = False
     limit: int = 50
+    max_changes: int = 1
+    via: tuple[str, ...] = ()  # stations the route must pass through, in order
 
     @property
     def extra_min(self) -> float:
@@ -66,6 +71,7 @@ class Leg:
     arr: int  # same clock, at the alighting station
     km: int
     board_date: date  # date the train leaves the boarding station
+    passes: tuple[str, ...] = ()  # via stations passed without leaving this train
 
     @property
     def depart_at(self) -> datetime:
@@ -287,7 +293,7 @@ def suggest_hubs(
 # --------------------------------------------------------------------------- live path
 
 
-def _live_candidates(tt, live: RailRadar, a, b, near_a, near_b, p, usage: Usage, warnings: list[str]):
+def _live_candidates(tt, live: RailRadar, a, b, near_a, near_b, p, usage: Usage, warnings: list[str], extra=()):
     """One station-board request per station; every leg comes from intersecting two boards."""
     origin, dest = a.code, b.code
     hubs = suggest_hubs(tt, a, b, p)
@@ -303,7 +309,7 @@ def _live_candidates(tt, live: RailRadar, a, b, near_a, near_b, p, usage: Usage,
             return code, e
 
     with ThreadPoolExecutor(max_workers=6) as pool:
-        boards = dict(pool.map(fetch, dict.fromkeys([*from_codes, *to_codes, *hubs])))
+        boards = dict(pool.map(fetch, dict.fromkeys([*from_codes, *to_codes, *hubs, *extra])))
 
     failed = [c for c, v in boards.items() if isinstance(v, LiveError)]
     if failed:
@@ -348,7 +354,7 @@ def _live_candidates(tt, live: RailRadar, a, b, near_a, near_b, p, usage: Usage,
                 if leg2 is None or _minutes(leg1.depart_at, leg2.arrive_at) > max_total:
                     continue
                 _keep_best(best, Journey("connection", [leg1, leg2]), origin, dest)
-    return direct, all_direct, list(best.values())
+    return direct, all_direct, list(best.values()), boards
 
 
 # --------------------------------------------------------------------------- entry point
@@ -371,11 +377,25 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
         # rail routes rarely exceed ~1.5x the crow-fly distance
         return (min(j.km for j in direct) if direct else straight * 1.6) + p.extra_dist
 
+    via = [c.upper() for c in p.via if c]
+    for c in via:
+        if not tt.station(c):
+            raise ValueError(f"Unknown via station {c}")
+        if c in (a.code, b.code):
+            raise ValueError("Via stations must differ from origin and destination")
+    multi_wanted = p.max_changes >= 2 or bool(via)
+    multi_hubs: list[str] = []
+    if multi_wanted:
+        k = LIVE_MULTI_HUBS if live else SNAPSHOT_MULTI_HUBS
+        multi_hubs = suggest_multi_hubs(tt, origins, dests, a, b, k) if p.max_changes >= 2 else []
+
     usage, warnings = Usage(), []
-    source = "snapshot"
+    source, boards = "snapshot", None
     if live:
         try:
-            direct, all_direct, connections = _live_candidates(tt, live, a, b, near_a, near_b, p, usage, warnings)
+            direct, all_direct, connections, boards = _live_candidates(
+                tt, live, a, b, near_a, near_b, p, usage, warnings, extra=[*via, *multi_hubs]
+            )
             source = "live"
         except LiveError as e:
             warnings.append(f"{e}. Showing the offline snapshot instead.")
@@ -395,14 +415,73 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
             base_min = min(j.minutes for j in pool)
             base_km = min(j.km for j in pool)
 
+    multi: list[Journey] = []
+    via_beyond = None
+    if multi_wanted:
+        if source == "live":
+            src = BoardLegs(boards, lambda t: _eligible(t, p))
+            nodes = [n for n in [*origins, *dests, *suggest_hubs(tt, a, b, p), *multi_hubs, *via] if n in boards]
+            starts = [c for c in origins if c in boards]
+        else:
+            src = SnapshotLegs(tt, lambda t: _eligible(t, p))
+            nodes = [*origins, *dests, *suggest_hubs(tt, a, b, p, k=SNAPSHOT_MULTI_HUBS), *multi_hubs, *via]
+            starts = list(origins)
+        max_total = INF if base_min is None else base_min + p.extra_min
+        max_km = INF if base_km is None else base_km + p.extra_dist
+
+        def run_multi(t_cap, km_cap_):
+            return multi_search(
+                src, tt, nodes, starts, dests, b, p.journey_date, p.max_changes, p.min_transfer_min, via,
+                t_cap, km_cap_,
+                make_leg=lambda o, day: Leg(o.train, o.from_code, o.to_code, o.dep, o.arr, o.km, day),
+            )
+
+        found = run_multi(max_total, max_km)
+        if via and not found and (max_total < INF or max_km < INF):
+            # Nothing fits the limits: look without them so the UI can say what's out there.
+            beyond = [r for r in run_multi(INF, INF) if len(r.legs) > 1 or via]
+            if beyond:
+                durations = [
+                    (r.legs[-1].arrive_at - r.legs[0].depart_at).total_seconds() / 60 for r in beyond
+                ]
+                unique = {tuple(l.train.number for l in r.legs) for r in beyond}
+                via_beyond = {"count": len(unique), "fastest_minutes": int(min(durations))}
+        best: dict[tuple, Journey] = {}
+        for r in found:
+            if len(r.legs) == 1 and not via:
+                continue  # plain direct trains are already listed
+            j = Journey("connection" if len(r.legs) > 1 else "through", r.legs, tags=list(via))
+            key = tuple(l.train.number.split("-")[0] for l in j.legs)
+            cur = best.get(key)
+            if cur is None or (j.arrive_at, j.km) < (cur.arrive_at, cur.km):
+                best[key] = j
+        multi = list(best.values())
+        if base_min is None and multi:
+            base_min = min(j.minutes for j in multi)
+            base_km = min(j.km for j in multi)
+
+    if via:
+        pool = multi  # every alternate must pass the via stations
+    elif p.max_changes == 0:
+        pool = nearby
+    else:
+        seen = {tuple(l.train.number for l in j.legs) for j in connections}
+        pool = nearby + connections + [j for j in multi if tuple(l.train.number for l in j.legs) not in seen]
+
     alternates: list[Journey] = []
     if base_min is not None:
         max_min = base_min + p.extra_min
         max_km = base_km + p.extra_dist
-        alternates = [j for j in nearby + connections if j.minutes <= max_min and j.km <= max_km]
+        alternates = [j for j in pool if j.minutes <= max_min and j.km <= max_km]
+    hidden_by_limits = len(pool) - len(alternates) if base_min is not None else 0
+    fastest_hidden = min((j.minutes for j in pool if j not in alternates), default=None)
+    if via_beyond:
+        hidden_by_limits += via_beyond["count"]
+        fastest_hidden = via_beyond["fastest_minutes"]
 
     alternates.sort(key=lambda j: (j.minutes, j.km))
-    alternates = _diversify(alternates, p.limit)
+    # With via stations every route shares the same change points, so variety caps would only hide them.
+    alternates = alternates[: p.limit] if via else _diversify(alternates, p.limit)
     direct.sort(key=lambda j: j.depart_at)
 
     now = datetime.now(IST)
@@ -416,6 +495,8 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
             "nearby_km": p.nearby_km,
             "min_transfer_min": p.min_transfer_min,
             "include_unreserved": p.include_unreserved,
+            "max_changes": p.max_changes,
+            "via": list(p.via),
         },
         "data_source": {
             "kind": source,
@@ -425,6 +506,8 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
             "month_requests": live.month_requests() if live else None,
             "warnings": warnings,
         },
+        "hidden_by_limits": hidden_by_limits,
+        "fastest_hidden_minutes": fastest_hidden,
         "baseline": None
         if base_min is None
         else {
@@ -497,12 +580,16 @@ def _journey(tt, j: Journey, base_min, base_km, now, near_a, near_b) -> dict:
             "alight_offset_km": round(near_b.get(last.to_code, 0), 1),
         },
     }
-    if j.kind == "connection":
-        out["transfer"] = {
-            "station": {"code": first.to_code, "name": _name(tt, first.to_code)},
-            "wait_minutes": (wait := int((j.legs[1].depart_at - first.arrive_at).total_seconds() // 60)),
-            "tight": wait < TIGHT_CHANGE_MIN,
-        }
+    transfers = []
+    for x, y in zip(j.legs, j.legs[1:]):
+        wait = int((y.depart_at - x.arrive_at).total_seconds() // 60)
+        transfers.append(
+            {"station": {"code": x.to_code, "name": _name(tt, x.to_code)}, "wait_minutes": wait, "tight": wait < TIGHT_CHANGE_MIN}
+        )
+    out["transfers"] = transfers
+    out["changes"] = len(transfers)
+    out["transfer"] = transfers[0] if transfers else None
+    out["via"] = [{"code": c, "name": _name(tt, c)} for c in j.tags]
     return out
 
 
@@ -530,6 +617,7 @@ def _leg(tt, leg: Leg, now: datetime) -> dict:
             "reserved": t.reserved,
             "runs_on": [DAY_NAMES[d] for d in sorted(t.runs_on)],
         },
+        "passes": [{"code": c, "name": _name(tt, c)} for c in leg.passes],
         "from": {"code": leg.from_code, "name": _name(tt, leg.from_code)},
         "to": {"code": leg.to_code, "name": _name(tt, leg.to_code)},
         "depart_at": leg.depart_at.isoformat(),
