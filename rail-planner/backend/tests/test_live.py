@@ -103,6 +103,27 @@ def train_detail(number):
     return {"success": True, "data": {"train": {**meta, "coachPosition": "Engine-H1-A1-B1-B2-S1-S2-S3-GS"}, "route": route}}
 
 
+SEAT_STATUS = {("17307", "3A"): "AVAILABLE-0012", ("12158", "CC"): "GNWL24/WL11", ("12158", "2S"): "RAC 4",
+               ("11014", "SL"): "REGRET/WL"}
+SEAT_CALLS: list[dict] = []
+
+
+def seats_body(number, params):
+    """RailRadar-shaped 14-day window (note the API's 'availablity' spelling)."""
+    from datetime import timedelta as td
+
+    SEAT_CALLS.append({"train": number, **params})
+    start = date.fromisoformat(params["journeyDate"])
+    status = SEAT_STATUS.get((number, params["classCode"]), "AVAILABLE-0045")
+    rows = [
+        {"availablityDate": (start + td(days=i)).isoformat(), "availablityStatus": status if i == 0 else "WL#3",
+         "prediction": "LOW" if "WL" in status else "CONFIRMED", "predictionPercentage": 25 if "WL" in status else 100}
+        for i in range(14)
+    ]
+    return {"success": True, "data": {"trainNumber": number, "classCode": params["classCode"],
+                                      "quotaCode": params["quotaCode"], "availability": rows}}
+
+
 class Fake:
     def __init__(self, status=200):
         self.calls = 0
@@ -113,7 +134,9 @@ class Fake:
         assert request.headers["authorization"] == "Bearer rr_live_test"
         if self.status != 200:
             return httpx.Response(self.status, json={"success": False})
-        parts = request.url.path.split("/")  # /v1/stations/CODE/trains  or  /v1/trains/N
+        parts = request.url.path.split("/")  # /v1/stations/CODE/trains  or  /v1/trains/N[/seats]
+        if len(parts) > 4 and parts[4] == "seats":
+            return httpx.Response(200, json=seats_body(parts[3], dict(request.url.params)))
         if parts[2] == "stations":
             return httpx.Response(200, json=station_board(parts[3]))
         body = train_detail(parts[3])
@@ -239,3 +262,49 @@ def test_live_multi_change_via(tmp_path):
             origin = date.fromisoformat(leg["origin_date"])
             assert ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][origin.weekday()] in leg["train"]["runs_on"]
     assert fake.calls <= 40  # one board per station, even with via + multi-change hubs
+
+
+def test_seat_availability_endpoint(api_with_live):
+    SEAT_CALLS.clear()
+    legs = [
+        {"train": "17307", "from": "SBC", "to": "SUR", "date": "2026-10-20", "classes": ["2A", "3A", "SL"]},
+        {"train": "12158", "from": "SUR", "to": "PUNE", "date": "2026-10-21", "classes": ["CC", "2S"]},
+    ]
+    r = api_with_live.post("/api/seats", json={"cls": "3A", "quota": "GN", "legs": legs}).json()
+    first, second = r["results"]
+    assert first["category"] == "available" and first["count"] == 12 and first["raw"] == "AVAILABLE-0012"
+    assert first["checked_cls"] == "3A"
+    # Hutatma has no 3A: the closest class it does have (CC) is checked instead, and labelled as such.
+    assert second["checked_cls"] == "CC" and second["cls"] == "3A" and second["category"] == "waitlist"
+    assert SEAT_CALLS[0] == {"train": "17307", "source": "SBC", "destination": "SUR", "journeyDate": "2026-10-20",
+                             "classCode": "3A", "quotaCode": "GN"}
+    assert SEAT_CALLS[1]["classCode"] == "CC"
+    none = api_with_live.post("/api/seats", json={"cls": "1A", "legs": [{**legs[1], "classes": ["2S"]}]}).json()
+    assert none["results"][0]["category"] == "no_class" and none["requests"] == 0
+
+    wl = api_with_live.post("/api/seats", json={"cls": "CC", "quota": "GN", "legs": legs[1:]}).json()["results"][0]
+    assert wl["category"] == "waitlist" and wl["count"] == 11 and wl["prediction_pct"] == 25
+
+    again = api_with_live.post("/api/seats", json={"cls": "3A", "quota": "GN", "legs": legs[:1]}).json()
+    assert again["requests"] == 0 and again["cache_hits"] == 1  # cached for SEATS_TTL
+    assert again["results"][0]["checked_at"]
+
+
+def test_seats_pick_the_right_date_from_the_window(api_with_live):
+    # The fake returns AVAILABLE on the requested date and WL#3 on later dates.
+    r = api_with_live.post("/api/seats", json={"cls": "3A", "legs": [
+        {"train": "17307", "from": "SBC", "to": "SUR", "date": "2026-10-22"}]}).json()
+    assert r["results"][0]["category"] == "available"
+
+
+def test_seats_without_live_key():
+    client = TestClient(main.app)
+    r = client.post("/api/seats", json={"legs": [{"train": "17307", "from": "SBC", "to": "SUR", "date": "2026-10-20"}]})
+    assert r.status_code == 200 and r.json()["source"] is None
+
+
+def test_seat_refresh_bypasses_cache(api_with_live):
+    leg = [{"train": "17307", "from": "SBC", "to": "SUR", "date": "2026-10-25"}]
+    assert api_with_live.post("/api/seats", json={"legs": leg}).json()["requests"] == 1
+    assert api_with_live.post("/api/seats", json={"legs": leg}).json()["requests"] == 0
+    assert api_with_live.post("/api/seats", json={"legs": leg, "fresh": True}).json()["requests"] == 1

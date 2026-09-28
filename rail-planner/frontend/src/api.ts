@@ -1,4 +1,4 @@
-import type { RouteResponse, StationHit, Tolerance, WindowsResponse } from "./types";
+import type { RouteResponse, SeatsResponse, StationHit, Tolerance, WindowsResponse } from "./types";
 
 const BASE = import.meta.env.VITE_API_BASE ?? "";
 
@@ -19,7 +19,17 @@ async function get<T>(path: string, params: Record<string, string | number | boo
   return res.json() as Promise<T>;
 }
 
+async function post<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!res.ok) throw new Error(`Request failed (${res.status})`);
+  return res.json() as Promise<T>;
+}
+
+export type SeatLegReq = { train: string; from: string; to: string; date: string; classes?: string[] };
+
 export const api = {
+  seats: (cls: string, quota: string, legs: SeatLegReq[], fresh = false) =>
+    post<SeatsResponse>("/api/seats", { cls, quota, legs, fresh }),
   stations: (q: string, signal?: AbortSignal) => get<StationHit[]>("/api/stations", { q, limit: 8 }, signal),
   routes: (from: string, to: string, date: string, t: Tolerance, via: string[], limit: number, signal?: AbortSignal) =>
     get<RouteResponse>("/api/routes", { from, to, date, ...t, via: via.join(","), limit }, signal),

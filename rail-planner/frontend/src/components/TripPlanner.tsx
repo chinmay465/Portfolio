@@ -2,8 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import { duration, longDay, todayIST } from "../format";
 import { storage, type SavedTrip } from "../storage";
-import { DEFAULT_TOLERANCE, type Journey, type RouteResponse, type StationHit, type Tolerance } from "../types";
+import { isBookable, journeySeat, useSeats } from "../seats";
+import { DEFAULT_TOLERANCE, type Journey, type RouteResponse, type SeatPrefs, type StationHit, type Tolerance } from "../types";
 import { JourneyCard } from "./JourneyCard";
+import { SeatSettings } from "./SeatSettings";
 import { SourceNote } from "./SourceNote";
 import { StationInput } from "./StationInput";
 import { ViaPicker } from "./ViaPicker";
@@ -24,6 +26,12 @@ export function TripPlanner() {
   const [tol, setTol] = useState<Tolerance>(saved.tolerance);
   const [via, setVia] = useState<StationHit[]>([]);
   const [recent, setRecent] = useState<SavedTrip[]>(saved.recent);
+  const [seatPrefs, setSeatPrefsState] = useState<SeatPrefs>(saved.seats);
+  const setSeatPrefs = (p: SeatPrefs) => {
+    setSeatPrefsState(p);
+    storage.saveSeats(p);
+  };
+  const { seats, check, refresh, usage } = useSeats();
 
   const [data, setData] = useState<RouteResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -69,7 +77,7 @@ export function TripPlanner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tol, via]);
 
-  const list = useMemo(() => {
+  const sorted = useMemo(() => {
     if (!data) return [];
     let items: Journey[] = [...data.direct, ...data.alternates];
     if (filter !== "all") items = items.filter((j) => j.kind === filter || (filter === "connection" && j.kind === "through"));
@@ -80,6 +88,45 @@ export function TripPlanner() {
     };
     return items.sort(by[sort]);
   }, [data, filter, sort]);
+
+  const live = data?.data_source.kind === "live";
+
+  // Hide routes whose seats are known to be waitlisted / regret / missing the class. Unchecked routes stay.
+  const { list, hiddenBySeats, unchecked } = useMemo(() => {
+    let hidden = 0;
+    let open = 0;
+    const out = sorted.filter((j) => {
+      const s = journeySeat(j, seats, seatPrefs);
+      if (!s) open++;
+      if (seatPrefs.hide_unavailable && s && !isBookable(s, seatPrefs)) {
+        hidden++;
+        return false;
+      }
+      return true;
+    });
+    return { list: out, hiddenBySeats: hidden, unchecked: open };
+  }, [sorted, seats, seatPrefs]);
+
+  // Auto-check seats for the first N visible routes (live data only; one API request per leg, cached 15 min).
+  // When the filter hides waitlisted routes, later ones move up and get checked too, capped at 3xN per search
+  // so a fully booked corridor can't drain the monthly quota.
+  const autoChecked = useRef(new Set<Journey>());
+  useEffect(() => {
+    autoChecked.current = new Set();
+  }, [data, seatPrefs.cls, seatPrefs.quota]);
+  useEffect(() => {
+    const n = seatPrefs.auto_check;
+    if (!live || n <= 0) return;
+    const budget = 3 * n - autoChecked.current.size;
+    const todo = list
+      .slice(0, n)
+      .filter((j) => !journeySeat(j, seats, seatPrefs) && !autoChecked.current.has(j))
+      .slice(0, Math.max(0, budget));
+    if (!todo.length) return;
+    todo.forEach((j) => autoChecked.current.add(j));
+    check(todo, seatPrefs);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live, list, seatPrefs.auto_check, seatPrefs.cls, seatPrefs.quota]);
 
   const counts = data && {
     all: data.direct.length + data.alternates.length,
@@ -153,6 +200,8 @@ export function TripPlanner() {
             ))}
           </div>
         )}
+
+        <SeatSettings prefs={seatPrefs} onChange={setSeatPrefs} live={data ? live : undefined} month={usage?.month} message={usage?.message} />
 
         <fieldset className="tolerance">
           <legend>
@@ -253,9 +302,31 @@ export function TripPlanner() {
             </div>
           )}
 
+          {live && (hiddenBySeats > 0 || unchecked > 0) && (
+            <p className="seat-note">
+              {hiddenBySeats > 0 && <>{hiddenBySeats} route{hiddenBySeats === 1 ? "" : "s"} hidden (waitlist or no seats in {seatPrefs.cls}). </>}
+              {unchecked > 0 && (
+                <>
+                  {unchecked} route{unchecked === 1 ? "" : "s"} not checked yet.{" "}
+                  <button type="button" className="link" onClick={() => check(list.filter((j) => !journeySeat(j, seats, seatPrefs)).slice(0, 10), seatPrefs)}>
+                    Check seats for the next 10
+                  </button>
+                </>
+              )}
+            </p>
+          )}
+
           <div className="list">
             {list.map((j) => (
-              <JourneyCard key={j.kind + j.legs.map((l) => l.train.number + l.from.code).join("|")} j={j} route={data} />
+              <JourneyCard
+                key={j.kind + j.legs.map((l) => l.train.number + l.from.code).join("|")}
+                j={j}
+                route={data}
+                seats={live ? seats : undefined}
+                seatPrefs={seatPrefs}
+                onCheckSeats={() => check([j], seatPrefs)}
+                onRefreshSeats={() => refresh([j], seatPrefs)}
+              />
             ))}
           </div>
           {data.alternates.length >= limit && (

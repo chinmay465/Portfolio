@@ -30,6 +30,13 @@ There are no built-in upper bounds, and no hidden layover cap: the wait between 
 
 Alternates are either a direct train from or to a nearby station, or a two-train route with one change. If no direct train exists, the best alternate becomes the baseline. When you change the inputs, results refresh automatically. The last trip, recent trips and your tolerance settings are saved in the browser.
 
+**Seat availability** (live data only), from RailRadar's `GET /v1/trains/{number}/seats?source=&destination=&journeyDate=&classCode=&quotaCode=`
+- Choose a class and quota (General, Tatkal, Premium Tatkal, Ladies, Senior citizen). Each reserved leg shows AVL / RAC / WL (with confirmation %) / REGRET.
+- If a train doesn't have your class, the closest class it does have is checked and labelled (e.g. 3A chosen, Hutatma has only CC → "WL 11 · CC").
+- **Hide routes with waitlist / no seats** removes a route when any leg is waitlisted, regret, closed or missing the class. **Count RAC as available** is optional. Unchecked routes stay visible and are marked.
+- Cost control: each leg is one API request, cached for 15 minutes (`SEATS_TTL`). Only the first N routes are checked automatically (default 10, set to 0 to turn off). If the filter hides some, the next ones are checked, up to 3×N per search. Other routes have a "Check seats" button, and "Refresh" skips the cache.
+- Statuses come from RailRadar, not directly from IRCTC, so confirm on IRCTC or RailOne before paying.
+
 ## Run
 
 ```bash
@@ -66,6 +73,7 @@ On every push and PR, CI (`.github/workflows/ci.yml`) runs the backend tests, bu
 - `GET /api/stations?q=pune`
 - `GET /api/routes?from=SBC&to=PUNE&date=2026-10-20&extra_hours=3&extra_km=150&nearby_km=15&min_transfer_min=20&include_unreserved=false&limit=50`. Add `no_time_limit=true` or `no_km_limit=true` to remove either limit, `max_changes=3` for more changes, and `via=SRR,MAQ,TNA` to force stations in order.
 - `GET /api/booking-windows?date=2026-10-20&train=12627&board=BPL`
+- `POST /api/seats` with `{"cls": "3A", "quota": "GN", "fresh": false, "legs": [{"train": "17307", "from": "SBC", "to": "SUR", "date": "2026-10-20", "classes": ["2A","3A","SL"]}]}`
 
 ## Timetable data
 

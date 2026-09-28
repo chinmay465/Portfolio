@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { clock, day, dayDiff, duration, runDays } from "../format";
-import type { Journey, RouteResponse } from "../types";
+import { journeySeat, legKey, type SeatState } from "../seats";
+import type { Journey, RouteResponse, SeatPrefs, SeatResult } from "../types";
 import { BookingWindows } from "./BookingWindows";
 
 const KIND_LABEL = { direct: "Direct", nearby: "Nearby station", connection: "Change", through: "Direct" } as const;
@@ -11,7 +12,16 @@ function changeLabel(j: Journey): string {
   return `${t.length} changes: ${t.map((x) => x.station.name).join(", ")}`;
 }
 
-export function JourneyCard({ j, route }: { j: Journey; route: RouteResponse }) {
+type Props = {
+  j: Journey;
+  route: RouteResponse;
+  seats?: Record<string, SeatState>;
+  seatPrefs: SeatPrefs;
+  onCheckSeats: () => void;
+  onRefreshSeats: () => void;
+};
+
+export function JourneyCard({ j, route, seats, seatPrefs, onCheckSeats, onRefreshSeats }: Props) {
   const [open, setOpen] = useState(false);
   const first = j.legs[0];
   const last = j.legs[j.legs.length - 1];
@@ -54,6 +64,7 @@ export function JourneyCard({ j, route }: { j: Journey; route: RouteResponse }) 
         )}
         <Delta minutes={j.extra_minutes} km={j.extra_km} />
         <span className="badge soft">{day(j.depart_at)}</span>
+        {seats && <JourneySeatBadge s={journeySeat(j, seats, seatPrefs)} cls={seatPrefs.cls} />}
       </div>
 
       {(j.access.board_offset_km > 0 || j.access.alight_offset_km > 0) && (
@@ -80,6 +91,7 @@ export function JourneyCard({ j, route }: { j: Journey; route: RouteResponse }) 
               </div>
             )}
             <div className="leg-train">
+              {seats && l.train.reserved && <SeatPill s={seats[legKey(l, seatPrefs)]} />}
               <span className="num">{l.train.number}</span>
               <span className="tname">{l.train.name}</span>
               {l.train.classes.length > 0 && <span className="classes">{l.train.classes.join(" ")}</span>}
@@ -93,6 +105,19 @@ export function JourneyCard({ j, route }: { j: Journey; route: RouteResponse }) 
           </li>
         ))}
       </ol>
+
+      {seats && (
+        <div className="seat-actions">
+          {j.legs.some((l) => l.train.reserved && !seats[legKey(l, seatPrefs)]) ? (
+            <button type="button" className="link" onClick={onCheckSeats}>
+              Check {seatPrefs.cls} seats ({j.legs.filter((l) => l.train.reserved && !seats[legKey(l, seatPrefs)]).length} request
+              {j.legs.filter((l) => l.train.reserved && !seats[legKey(l, seatPrefs)]).length === 1 ? "" : "s"})
+            </button>
+          ) : (
+            <CheckedAt j={j} seats={seats} prefs={seatPrefs} onRefresh={onRefreshSeats} />
+          )}
+        </div>
+      )}
 
       <button type="button" className="toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         {open ? "Hide booking windows" : "Booking windows"} <NextOpen j={j} />
@@ -139,6 +164,64 @@ function NextOpen({ j }: { j: Journey }) {
   return (
     <span className="next">
       · next: {upcoming.label} {day(upcoming.opens_at)} {clock(upcoming.opens_at)}
+    </span>
+  );
+}
+
+function short(s: SeatResult): string {
+  switch (s.category) {
+    case "available":
+      return s.count != null ? `AVL ${s.count}` : "AVL";
+    case "rac":
+      return s.count != null ? `RAC ${s.count}` : "RAC";
+    case "waitlist":
+      return s.count != null ? `WL ${s.count}` : "WL";
+    case "regret":
+      return "REGRET";
+    case "closed":
+      return "Closed";
+    case "no_class":
+      return `No ${s.cls}`;
+    default:
+      return s.error ? "Check failed" : "Unknown";
+  }
+}
+
+function SeatPill({ s }: { s?: SeatState }) {
+  if (!s) return <span className="seat none" title="Seats not checked yet">—</span>;
+  if (s === "loading") return <span className="seat loading">…</span>;
+  const pct = s.category === "waitlist" && s.prediction_pct != null ? ` · ${Math.round(s.prediction_pct)}%` : "";
+  const title = [s.raw || s.label, s.prediction && `prediction: ${s.prediction}`, s.error].filter(Boolean).join(" · ");
+  const alt = s.checked_cls && s.checked_cls !== s.cls ? ` · ${s.checked_cls}` : "";
+  return (
+    <span className={`seat ${s.category}`} title={alt ? `${title} (train has no ${s.cls}; checked ${s.checked_cls})` : title}>
+      {short(s)}
+      {alt}
+      {pct}
+    </span>
+  );
+}
+
+function JourneySeatBadge({ s, cls }: { s: SeatResult | null; cls: string }) {
+  if (!s) return null;
+  const text =
+    s.category === "available" ? "Seats available" : s.category === "rac" ? "RAC only" : s.category === "waitlist" ? "Waitlisted" : s.category === "unknown" ? "Seats unknown" : `No ${cls} seats`;
+  return <span className={`badge seatb ${s.category}`}>{text}</span>;
+}
+
+function CheckedAt({ j, seats, prefs, onRefresh }: { j: Journey; seats: Record<string, SeatState>; prefs: SeatPrefs; onRefresh: () => void }) {
+  const times = j.legs
+    .map((l) => seats[legKey(l, prefs)])
+    .filter((s): s is SeatResult => !!s && s !== "loading" && !!s.checked_at)
+    .map((s) => s.checked_at as string)
+    .sort();
+  if (!times.length) return null;
+  return (
+    <span className="muted small">
+      {prefs.cls} · {prefs.quota} seats checked {clock(times[0])} ·{" "}
+      <button type="button" className="link" onClick={onRefresh}>
+        Refresh
+      </button>
     </span>
   );
 }

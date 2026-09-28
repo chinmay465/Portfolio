@@ -117,3 +117,45 @@ export const DEFAULT_TOLERANCE: Tolerance = {
   min_transfer_min: 20,
   include_unreserved: false,
 };
+
+export type SeatCategory = "available" | "rac" | "waitlist" | "regret" | "closed" | "no_class" | "unknown";
+
+export type SeatResult = {
+  train: string;
+  from: string;
+  to: string;
+  date: string;
+  cls: string;
+  checked_cls: string | null; // class actually checked (nearest one when the train lacks `cls`)
+  quota: string;
+  category: SeatCategory;
+  count: number | null;
+  label: string;
+  raw: string;
+  prediction: string | null;
+  prediction_pct: number | null;
+  checked_at: string | null;
+  error?: string;
+};
+
+export type SeatsResponse = {
+  source: "live" | null;
+  results: SeatResult[];
+  requests?: number;
+  cache_hits?: number;
+  month_requests?: number;
+  message?: string;
+};
+
+export type SeatPrefs = {
+  cls: string;
+  quota: string;
+  auto_check: number; // check seats for the first N results automatically (0 = off)
+  hide_unavailable: boolean; // hide routes with any waitlisted / regret / closed / missing-class leg
+  rac_ok: boolean; // treat RAC as bookable
+};
+
+export const DEFAULT_SEATS: SeatPrefs = { cls: "3A", quota: "GN", auto_check: 10, hide_unavailable: false, rac_ok: true };
+
+export const seatKey = (train: string, from: string, to: string, date: string, cls: string, quota: string) =>
+  [train, from, to, date, cls, quota].join("|");

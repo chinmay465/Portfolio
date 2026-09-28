@@ -24,6 +24,7 @@ from .rules import IST
 
 BASE_URL = os.getenv("RAILRADAR_BASE_URL", "https://api.railradar.in/v1")
 DEFAULT_CACHE = Path(__file__).resolve().parent.parent / "data" / "railradar-cache.sqlite3"
+SEATS_TTL = int(os.getenv("SEATS_TTL", "900"))
 DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 
 # RailRadar coach position codes -> class codes (H1 = First AC, A1 = 2A, B1 = 3A, ...)
@@ -143,11 +144,11 @@ class RailRadar:
 
     # ---- raw access with cache ----
 
-    def _get(self, path: str, usage: Usage | None = None, params: dict | None = None) -> dict:
+    def _get(self, path: str, usage: Usage | None = None, params: dict | None = None, ttl: int | None = None) -> dict:
         key = path + ("?" + "&".join(f"{k}={v}" for k, v in sorted(params.items())) if params else "")
         with self._lock:
             row = self._db.execute("SELECT body, fetched FROM cache WHERE key = ?", (key,)).fetchone()
-        if row and time.time() - row[1] < self._ttl:
+        if row and time.time() - row[1] < (self._ttl if ttl is None else ttl):
             if usage:
                 usage.cache_hits += 1
             return json.loads(row[0])
@@ -212,6 +213,32 @@ class RailRadar:
 
     def legs_between(self, a: str, b: str, usage: Usage | None = None) -> list[LegOption]:
         return legs_from_boards(self.station_board(a, usage), self.station_board(b, usage))
+
+    def seats(
+        self, number: str, source: str, destination: str, journey_date: str, cls: str, quota: str = "GN",
+        usage: Usage | None = None, fresh: bool = False,
+    ) -> dict:
+        """Seat availability for one train/segment/class/quota: a rolling window of dates from journey_date.
+
+        Request/response shape follows RailRadar's /trains/{number}/seats (fields are spelled
+        "availablity..." by the API). Cached for SEATS_TTL seconds (default 15 min): seats move fast.
+        """
+        body = self._get(
+            f"/trains/{number}/seats",
+            usage,
+            {"source": source, "destination": destination, "journeyDate": journey_date, "classCode": cls, "quotaCode": quota},
+            ttl=0 if fresh else SEATS_TTL,
+        )
+        data = body.get("data") or {}
+        rows = data.get("availability") if isinstance(data, dict) else data
+        return {"rows": rows or [], "fetched_at": self.fetched_at(number, source, destination, journey_date, cls, quota)}
+
+    def fetched_at(self, number, source, destination, journey_date, cls, quota) -> float | None:
+        params = {"source": source, "destination": destination, "journeyDate": journey_date, "classCode": cls, "quotaCode": quota}
+        key = f"/trains/{number}/seats?" + "&".join(f"{k}={v}" for k, v in sorted(params.items()))
+        with self._lock:
+            row = self._db.execute("SELECT fetched FROM cache WHERE key = ?", (key,)).fetchone()
+        return row[0] if row else None
 
     def train(self, number: str, usage: Usage | None = None) -> dict | None:
         """Full schedule: {"meta": TrainMeta, "route": [{code, name, arr, dep, day_arr, day_dep, km}]}."""

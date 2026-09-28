@@ -44,3 +44,17 @@ def test_status():
     assert window_status(opens, departs, datetime(2026, 10, 19, 9, 59, tzinfo=IST)) == "upcoming"
     assert window_status(opens, departs, datetime(2026, 10, 19, 10, 0, tzinfo=IST)) == "open"
     assert window_status(opens, departs, datetime(2026, 10, 20, 16, 0, tzinfo=IST)) == "departed"
+
+
+def test_seat_status_classification():
+    from app.seats import classify
+
+    cases = {
+        "AVAILABLE-0045": ("available", 45), "AVL 12": ("available", 12), "CURR_AVBL-0010": ("available", 10),
+        "RAC 8": ("rac", 8), "WL#35": ("waitlist", 35), "GNWL24/WL11": ("waitlist", 11),
+        "PQWL5/WL3": ("waitlist", 3), "REGRET/WL": ("regret", None), "TRAIN DEPARTED": ("closed", None),
+        "": ("unknown", None),
+    }
+    for raw, (cat, n) in cases.items():
+        c = classify(raw)
+        assert (c.category, c.count) == (cat, n), raw

@@ -6,13 +6,17 @@ from datetime import date, datetime
 from functools import lru_cache
 from pathlib import Path
 
+from concurrent.futures import ThreadPoolExecutor
+
 from fastapi import FastAPI, HTTPException, Query
+from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import railradar
-from .railradar import LiveError, RailRadar
+from .railradar import LiveError, RailRadar, Usage
+from .seats import QUOTAS, safe_check
 from .rules import ARP_DAYS, CLASS_LABELS, IST, booking_windows, window_status
 from .search import DAY_NAMES, SearchParams, search
 from .timetable import StaticTimetable
@@ -29,7 +33,7 @@ app = FastAPI(title="Rail Planner API", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:5173").split(","),
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -186,6 +190,45 @@ def windows(
         "windows": out,
         "data_source": {"kind": source, "warnings": warnings},
         "rules": {"arp_days": ARP_DAYS, "class_labels": CLASS_LABELS},
+    }
+
+
+class SeatLeg(BaseModel):
+    train: str
+    from_: str = Field(alias="from")
+    to: str
+    date: date
+    classes: list[str] | None = None
+
+
+class SeatRequest(BaseModel):
+    cls: str = "3A"
+    quota: str = "GN"
+    fresh: bool = False  # bypass the 15-minute cache (the Refresh button)
+    legs: list[SeatLeg]
+
+
+@app.post("/api/seats")
+def seats(req: SeatRequest) -> dict:
+    """Seat availability per leg. One RailRadar request per uncached (train, segment, class, quota, date)."""
+    client = live()
+    if not client:
+        return {"source": None, "results": [], "message": "Seat availability needs RAILRADAR_API_KEY (live data)."}
+    if req.quota not in QUOTAS:
+        raise HTTPException(400, f"Unknown quota {req.quota}")
+    usage = Usage()
+    items = [
+        {"train": l.train, "from": l.from_.upper(), "to": l.to.upper(), "date": l.date.isoformat(), "classes": l.classes}
+        for l in req.legs
+    ]
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        results = list(pool.map(lambda it: safe_check(client, it, req.cls.upper(), req.quota, usage, req.fresh), items))
+    return {
+        "source": "live",
+        "results": results,
+        "requests": usage.requests,
+        "cache_hits": usage.cache_hits,
+        "month_requests": client.month_requests(),
     }
 
 

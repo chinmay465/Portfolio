@@ -234,3 +234,22 @@ sup { font-size: 11px; color: var(--warn); margin-left: 2px; font-weight: 600; }
 .hidden-note { background: var(--warn-soft); padding: 8px 12px; border-radius: 9px; font-size: 14px; margin: 0 0 12px; }
 .legs .wait { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
 .legs .wait.tight { color: var(--bad); font-weight: 600; }
+
+.seats-set { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); align-items: end; }
+.seats-set .field { flex: none; }
+.seats-set select { min-height: 38px; padding: 6px 10px; }
+.seats-set .inline { display: flex; gap: 6px; align-items: center; font-size: 14px; }
+.seats-set .inline input { width: 72px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); min-height: 38px; }
+.seats-set .checks { display: grid; gap: 6px; grid-column: span 2; }
+.seats-set .hint { grid-column: 1 / -1; margin: 0; color: var(--muted); }
+.seat { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; font-family: ui-monospace, Menlo, monospace; white-space: nowrap; }
+.seat.available { background: var(--good-soft); color: var(--good); }
+.seat.rac { background: var(--warn-soft); color: var(--warn); }
+.seat.waitlist, .seat.regret, .seat.closed, .seat.no_class { background: color-mix(in srgb, var(--bad) 12%, transparent); color: var(--bad); }
+.seat.unknown, .seat.none, .seat.loading { background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); }
+.badge.seatb.available { background: var(--good-soft); color: var(--good); }
+.badge.seatb.rac { background: var(--warn-soft); color: var(--warn); }
+.badge.seatb.waitlist, .badge.seatb.regret, .badge.seatb.closed, .badge.seatb.no_class { background: color-mix(in srgb, var(--bad) 12%, transparent); color: var(--bad); }
+.seat-actions { font-size: 13px; }
+.seat-note { background: var(--surface-2); border: 1px solid var(--line); padding: 8px 12px; border-radius: 9px; font-size: 14px; margin: 0 0 12px; }
+@media (max-width: 640px) { .seats-set .checks { grid-column: 1 / -1; } }
