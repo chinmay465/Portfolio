@@ -29,7 +29,7 @@ from .railradar import LegOption, LiveError, RailRadar, Usage, legs_from_boards
 from .rules import IST, booking_windows, window_status
 from .timetable import Station, StaticTimetable, Train, haversine_km
 
-MAX_LAYOVER_MIN = 12 * 60  # hard cap while collecting candidates, before tolerance filtering
+INF = float("inf")
 LIVE_HUBS = 10  # change stations queried live (1 station-board request each, cached 7 days)
 LIVE_NEARBY = 2  # nearby stations per side queried live (1 request each)
 TIGHT_CHANGE_MIN = 45  # changes shorter than this are flagged in the UI
@@ -41,12 +41,20 @@ class SearchParams:
     from_code: str
     to_code: str
     journey_date: date
-    extra_hours: float = 3.0
-    extra_km: float = 150.0
+    extra_hours: float | None = 3.0  # None = no limit
+    extra_km: float | None = 150.0  # None = no limit
     nearby_km: float = 15.0
     min_transfer_min: int = 20
     include_unreserved: bool = False
-    limit: int = 25
+    limit: int = 50
+
+    @property
+    def extra_min(self) -> float:
+        return INF if self.extra_hours is None else self.extra_hours * 60
+
+    @property
+    def extra_dist(self) -> float:
+        return INF if self.extra_km is None else self.extra_km
 
 
 @dataclass
@@ -146,7 +154,7 @@ def _snap_direct(tt: StaticTimetable, origins: set[str], dests: set[str], p: Sea
 
 
 def _snap_connections(
-    tt: StaticTimetable, origins: set[str], dests: set[str], p: SearchParams, km_cap: float
+    tt: StaticTimetable, origins: set[str], dests: set[str], p: SearchParams, km_cap: float, max_total: float = INF
 ) -> list[Journey]:
     origin, dest = p.from_code, p.to_code
     # Index every train that reaches a destination: transfer station -> [(train, idx_at_transfer, idx_at_dest)]
@@ -183,10 +191,19 @@ def _snap_connections(
                     continue
                 s2k, s2j = t2.stops[k], t2.stops[j]
                 leg2 = _next_leg((t2, s2k.code, s2j.code, s2k.dep, s2j.arr, s2j.km - s2k.km), ready)
-                if leg2 is None or (leg2.depart_at - leg1.arrive_at).total_seconds() / 60 > MAX_LAYOVER_MIN:
+                if leg2 is None or _minutes(leg1.depart_at, leg2.arrive_at) > max_total:
                     continue
                 _keep_best(best, Journey("connection", [leg1, leg2]), origin, dest)
     return list(best.values())
+
+
+def _max_total(direct: list[Journey], p: SearchParams) -> float:
+    """Longest door-to-door time worth building while searching: fastest direct + tolerance (or unlimited)."""
+    return min(j.minutes for j in direct) + p.extra_min if direct else INF
+
+
+def _minutes(a: datetime, b: datetime) -> float:
+    return (b - a).total_seconds() / 60
 
 
 def _keep_best(best: dict, j: Journey, origin: str, dest: str) -> None:
@@ -206,7 +223,7 @@ def _snapshot_candidates(tt, a, b, origins, dests, p, km_cap_fn):
     all_direct = _snap_direct(tt, origins, dests, p)
     direct = [j for j in all_direct if j.legs[0].from_code == a.code and j.legs[-1].to_code == b.code]
     km_cap = km_cap_fn(direct)
-    return direct, all_direct, _snap_connections(tt, origins, dests, p, km_cap)
+    return direct, all_direct, _snap_connections(tt, origins, dests, p, km_cap, _max_total(direct, p))
 
 
 def suggest_hubs(
@@ -260,7 +277,7 @@ def suggest_hubs(
         if not st or min(haversine_km(st, a), haversine_km(st, b)) <= too_close:
             continue
         detour = min(reach[code].values()) + min(feed[code].values())
-        if detour > base_km + p.extra_km:
+        if detour > base_km + p.extra_dist:
             continue
         ranked.append((-len(reach[code]) * len(feed[code]), detour, code))
     ranked.sort()
@@ -314,6 +331,7 @@ def _live_candidates(tt, live: RailRadar, a, b, near_a, near_b, p, usage: Usage,
                     all_direct.append(Journey("direct", [leg]))
     direct = [j for j in all_direct if j.legs[0].from_code == a.code and j.legs[-1].to_code == b.code]
 
+    max_total = _max_total(direct, p)
     best: dict[tuple[str, str], Journey] = {}
     for h in hubs:
         firsts = [o for x in from_codes for o in legs(x, h) if o.train.number not in through]
@@ -327,7 +345,7 @@ def _live_candidates(tt, live: RailRadar, a, b, near_a, near_b, p, usage: Usage,
                 if o2.train.number == o1.train.number:
                     continue
                 leg2 = _next_leg((o2.train, o2.from_code, o2.to_code, o2.dep, o2.arr, o2.km), ready)
-                if leg2 is None or (leg2.depart_at - leg1.arrive_at).total_seconds() / 60 > MAX_LAYOVER_MIN:
+                if leg2 is None or _minutes(leg1.depart_at, leg2.arrive_at) > max_total:
                     continue
                 _keep_best(best, Journey("connection", [leg1, leg2]), origin, dest)
     return direct, all_direct, list(best.values())
@@ -351,7 +369,7 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
 
     def km_cap(direct: list[Journey]) -> float:
         # rail routes rarely exceed ~1.5x the crow-fly distance
-        return (min(j.km for j in direct) if direct else straight * 1.6) + p.extra_km
+        return (min(j.km for j in direct) if direct else straight * 1.6) + p.extra_dist
 
     usage, warnings = Usage(), []
     source = "snapshot"
@@ -379,8 +397,8 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
 
     alternates: list[Journey] = []
     if base_min is not None:
-        max_min = base_min + p.extra_hours * 60
-        max_km = base_km + p.extra_km
+        max_min = base_min + p.extra_min
+        max_km = base_km + p.extra_dist
         alternates = [j for j in nearby + connections if j.minutes <= max_min and j.km <= max_km]
 
     alternates.sort(key=lambda j: (j.minutes, j.km))
@@ -413,8 +431,8 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
             "minutes": base_min,
             "km": base_km,
             "source": "direct" if direct else "best_alternate",
-            "max_minutes": base_min + p.extra_hours * 60,
-            "max_km": base_km + p.extra_km,
+            "max_minutes": None if p.extra_hours is None else base_min + p.extra_min,
+            "max_km": None if p.extra_km is None else base_km + p.extra_dist,
         },
         "nearby_stations": {
             "from": [{"code": c, "name": tt.station(c).name, "distance_km": round(d, 1)} for c, d in near_a.items()],

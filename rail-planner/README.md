@@ -17,10 +17,12 @@ Backend: Python (FastAPI). Frontend: React + TypeScript (Vite).
 
 | Input | Default | Meaning |
 |---|---|---|
-| Extra travel time | 3 h | max time over the fastest direct train |
-| Extra distance | 150 km | max rail km over the shortest direct train |
-| Nearby stations within | 15 km | also board or alight at busy stations nearby (e.g. YPR/BNC/KJM for SBC) |
-| Minimum change time | 20 min | for one-change routes; changes under 45 min are flagged "Tight change" |
+| Extra travel time | 3 h | max time over the fastest direct train; any value, or **No limit** |
+| Extra distance | 150 km | max rail km over the shortest direct train; any value, or **No limit** |
+| Nearby stations within | 15 km | also board or alight at busy stations nearby (e.g. YPR/BNC/KJM for SBC); any value |
+| Minimum change time | 20 min | for one-change routes; any value. Changes under 45 min are flagged "Tight change" |
+
+There are no built-in upper bounds, and no hidden layover cap: the wait between trains is limited only by your total-time setting. Results come back 50 at a time, fastest first, and "Show more alternates" loads the next 50.
 
 Alternates are either a direct train from or to a nearby station, or a two-train route with one change. If no direct train exists, the best alternate becomes the baseline. When you change the inputs, results refresh automatically. The last trip, recent trips and your tolerance settings are saved in the browser.
 
@@ -58,7 +60,7 @@ On every push and PR, CI (`.github/workflows/ci.yml`) runs the backend tests, bu
 ## API
 
 - `GET /api/stations?q=pune`
-- `GET /api/routes?from=SBC&to=PUNE&date=2026-10-20&extra_hours=3&extra_km=150&nearby_km=15&min_transfer_min=45&include_unreserved=false`
+- `GET /api/routes?from=SBC&to=PUNE&date=2026-10-20&extra_hours=3&extra_km=150&nearby_km=15&min_transfer_min=20&include_unreserved=false&limit=50`. Add `no_time_limit=true` or `no_km_limit=true` to remove either limit.
 - `GET /api/booking-windows?date=2026-10-20&train=12627&board=BPL`
 
 ## Timetable data

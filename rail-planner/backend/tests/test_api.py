@@ -76,3 +76,33 @@ def test_booking_windows_shift_for_day_two_boarding():
 def test_bad_station():
     r = client.get("/api/routes", params={"from": "XXXX", "to": "PUNE", "date": DATE})
     assert r.status_code == 400
+
+
+def test_no_upper_bounds_on_constraints():
+    r = client.get(
+        "/api/routes",
+        params={"from": "SBC", "to": "PUNE", "date": DATE, "extra_hours": 100, "extra_km": 5000,
+                "nearby_km": 80, "min_transfer_min": 600, "limit": 500},
+    )
+    assert r.status_code == 200
+    assert r.json()["params"]["extra_hours"] == 100
+
+
+def test_no_limit_flags():
+    body = client.get(
+        "/api/routes", params={"from": "SBC", "to": "PUNE", "date": DATE, "no_time_limit": True, "no_km_limit": True}
+    ).json()
+    assert body["params"]["extra_hours"] is None and body["params"]["extra_km"] is None
+    assert body["baseline"]["max_minutes"] is None and body["baseline"]["max_km"] is None
+    capped = client.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": DATE}).json()
+    assert len(body["alternates"]) >= len(capped["alternates"])
+    assert max(j["minutes"] for j in body["alternates"]) > capped["baseline"]["max_minutes"]
+
+
+def test_long_layovers_allowed_when_time_is_unlimited():
+    body = client.get(
+        "/api/routes",
+        params={"from": "SBC", "to": "PUNE", "date": DATE, "no_time_limit": True, "no_km_limit": True, "limit": 500},
+    ).json()
+    waits = [j["transfer"]["wait_minutes"] for j in body["alternates"] if j["transfer"]]
+    assert max(waits) > 12 * 60  # the old hidden 12-hour layover cap is gone

@@ -21,8 +21,8 @@ async function get<T>(path: string, params: Record<string, string | number | boo
 
 export const api = {
   stations: (q: string, signal?: AbortSignal) => get<StationHit[]>("/api/stations", { q, limit: 8 }, signal),
-  routes: (from: string, to: string, date: string, t: Tolerance, signal?: AbortSignal) =>
-    get<RouteResponse>("/api/routes", { from, to, date, ...t }, signal),
+  routes: (from: string, to: string, date: string, t: Tolerance, limit: number, signal?: AbortSignal) =>
+    get<RouteResponse>("/api/routes", { from, to, date, ...t, limit }, signal),
   windows: (date: string, train?: string, board?: string) =>
     get<WindowsResponse>("/api/booking-windows", { date, train, board }),
 };

@@ -53,14 +53,17 @@ export type RouteResponse = {
   from: StationRef & { state: string };
   to: StationRef & { state: string };
   journey_date: string;
-  params: Tolerance;
+  params: Omit<Tolerance, "extra_hours" | "extra_km" | "no_time_limit" | "no_km_limit"> & {
+    extra_hours: number | null;
+    extra_km: number | null;
+  };
   data_source: DataSource;
   baseline: null | {
     minutes: number;
     km: number;
     source: "direct" | "best_alternate";
-    max_minutes: number;
-    max_km: number;
+    max_minutes: number | null; // null = no limit
+    max_km: number | null;
   };
   nearby_stations: { from: NearbyStation[]; to: NearbyStation[] };
   direct: Journey[];
@@ -70,6 +73,8 @@ export type RouteResponse = {
 export type Tolerance = {
   extra_hours: number;
   extra_km: number;
+  no_time_limit: boolean;
+  no_km_limit: boolean;
   nearby_km: number;
   min_transfer_min: number;
   include_unreserved: boolean;
@@ -95,6 +100,8 @@ export type WindowsResponse = {
 export const DEFAULT_TOLERANCE: Tolerance = {
   extra_hours: 3,
   extra_km: 150,
+  no_time_limit: false,
+  no_km_limit: false,
   nearby_km: 15,
   min_transfer_min: 20,
   include_unreserved: false,

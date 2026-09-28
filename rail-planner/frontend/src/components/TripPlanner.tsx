@@ -7,6 +7,8 @@ import { JourneyCard } from "./JourneyCard";
 import { SourceNote } from "./SourceNote";
 import { StationInput } from "./StationInput";
 
+const PAGE = 50;
+
 type Filter = "all" | "direct" | "nearby" | "connection";
 type Sort = "fastest" | "earliest" | "shortest";
 
@@ -26,9 +28,10 @@ export function TripPlanner() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<Sort>("fastest");
+  const [limit, setLimit] = useState(PAGE);
   const ctrl = useRef<AbortController | null>(null);
 
-  const run = async (f = from, t = to, d = date, tl = tol) => {
+  const run = async (f = from, t = to, d = date, tl = tol, lim = PAGE) => {
     if (!f || !t) {
       setError("Pick both stations from the suggestions.");
       return;
@@ -39,8 +42,9 @@ export function TripPlanner() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.routes(f.code, t.code, d, tl, c.signal);
+      const res = await api.routes(f.code, t.code, d, tl, lim, c.signal);
       setData(res);
+      setLimit(lim);
       storage.remember({ from: f, to: t, date: d }, tl);
       setRecent(storage.load().recent);
     } catch (e) {
@@ -149,10 +153,18 @@ export function TripPlanner() {
               </button>
             )}
           </legend>
-          <Slider label="Extra travel time" unit="h" min={0} max={12} step={0.5} value={tol.extra_hours} onChange={setNum("extra_hours")} hint="over the fastest direct train" />
-          <Slider label="Extra distance" unit="km" min={0} max={500} step={10} value={tol.extra_km} onChange={setNum("extra_km")} hint="over the shortest direct train" />
-          <Slider label="Nearby stations within" unit="km" min={0} max={40} step={1} value={tol.nearby_km} onChange={setNum("nearby_km")} hint="0 turns nearby boarding off" />
-          <Slider label="Minimum change time" unit="min" min={10} max={180} step={5} value={tol.min_transfer_min} onChange={setNum("min_transfer_min")} hint="for one-change routes" />
+          <Slider
+            label="Extra travel time" unit="h" range={24} step={0.5} value={tol.extra_hours} onChange={setNum("extra_hours")}
+            hint="over the fastest direct train" unlimited={tol.no_time_limit}
+            onUnlimited={(v) => setTol((t) => ({ ...t, no_time_limit: v }))}
+          />
+          <Slider
+            label="Extra distance" unit="km" range={1000} step={10} value={tol.extra_km} onChange={setNum("extra_km")}
+            hint="over the shortest direct train" unlimited={tol.no_km_limit}
+            onUnlimited={(v) => setTol((t) => ({ ...t, no_km_limit: v }))}
+          />
+          <Slider label="Nearby stations within" unit="km" range={50} step={1} value={tol.nearby_km} onChange={setNum("nearby_km")} hint="0 turns nearby boarding off" />
+          <Slider label="Minimum change time" unit="min" range={180} step={5} value={tol.min_transfer_min} onChange={setNum("min_transfer_min")} hint="for one-change routes" />
           <label className="check">
             <input type="checkbox" checked={tol.include_unreserved} onChange={(e) => setTol((t) => ({ ...t, include_unreserved: e.target.checked }))} />
             Include unreserved passenger / MEMU trains
@@ -181,7 +193,9 @@ export function TripPlanner() {
                     No direct train, so the best alternate sets the baseline: <b>{duration(data.baseline.minutes)}</b>, <b>{data.baseline.km} km</b>.{" "}
                   </>
                 )}
-                Alternates allowed up to <b>{duration(data.baseline.max_minutes)}</b> and <b>{data.baseline.max_km} km</b>.
+                Alternates allowed up to{" "}
+                <b>{data.baseline.max_minutes === null ? "any duration" : duration(data.baseline.max_minutes)}</b> and{" "}
+                <b>{data.baseline.max_km === null ? "any distance" : `${data.baseline.max_km} km`}</b>.
               </p>
             ) : (
               <p>No trains found for this pair. Try a larger nearby radius or extra time.</p>
@@ -219,6 +233,11 @@ export function TripPlanner() {
               <JourneyCard key={j.kind + j.legs.map((l) => l.train.number + l.from.code).join("|")} j={j} route={data} />
             ))}
           </div>
+          {data.alternates.length >= limit && (
+            <button type="button" className="more" disabled={loading} onClick={() => run(from, to, date, tol, limit + PAGE)}>
+              {loading ? "Loading…" : "Show more alternates"}
+            </button>
+          )}
         </section>
       )}
     </div>
@@ -228,26 +247,41 @@ export function TripPlanner() {
 type SliderProps = {
   label: string;
   unit: string;
-  min: number;
-  max: number;
+  range: number; // slider track length only; the number box accepts any value
   step: number;
   value: number;
   hint: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  unlimited?: boolean;
+  onUnlimited?: (v: boolean) => void;
 };
 
-function Slider({ label, unit, min, max, step, value, hint, onChange }: SliderProps) {
+function Slider({ label, unit, range, step, value, hint, onChange, unlimited, onUnlimited }: SliderProps) {
+  const max = Math.max(range, value);
   return (
-    <div className="slider">
+    <div className={`slider ${unlimited ? "off" : ""}`}>
       <div className="slider-top">
         <span>{label}</span>
         <span className="val">
-          <input type="number" min={min} max={max} step={step} value={value} onChange={onChange} aria-label={`${label} (${unit})`} />
-          {unit}
+          {unlimited ? (
+            <span className="nolimit">No limit</span>
+          ) : (
+            <>
+              <input type="number" min={0} step={step} value={value} onChange={onChange} aria-label={`${label} (${unit})`} />
+              {unit}
+            </>
+          )}
         </span>
       </div>
-      <input type="range" min={min} max={max} step={step} value={value} onChange={onChange} aria-label={label} />
-      <span className="hint">{hint}</span>
+      <input type="range" min={0} max={max} step={step} value={value} onChange={onChange} aria-label={label} disabled={unlimited} />
+      <span className="hint">
+        {hint}
+        {onUnlimited && (
+          <label className="nl">
+            <input type="checkbox" checked={!!unlimited} onChange={(e) => onUnlimited(e.target.checked)} /> No limit
+          </label>
+        )}
+      </span>
     </div>
   );
 }
