@@ -25,13 +25,14 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 
-from .railradar import LegOption, LiveError, RailRadar, Usage
+from .railradar import LegOption, LiveError, RailRadar, Usage, legs_from_boards
 from .rules import IST, booking_windows, window_status
 from .timetable import Station, StaticTimetable, Train, haversine_km
 
 MAX_LAYOVER_MIN = 12 * 60  # hard cap while collecting candidates, before tolerance filtering
-LIVE_HUBS = 6  # change stations queried live (2 requests each)
+LIVE_HUBS = 10  # change stations queried live (1 station-board request each, cached 7 days)
 LIVE_NEARBY = 2  # nearby stations per side queried live (1 request each)
+TIGHT_CHANGE_MIN = 45  # changes shorter than this are flagged in the UI
 DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
@@ -43,7 +44,7 @@ class SearchParams:
     extra_hours: float = 3.0
     extra_km: float = 150.0
     nearby_km: float = 15.0
-    min_transfer_min: int = 45
+    min_transfer_min: int = 20
     include_unreserved: bool = False
     limit: int = 25
 
@@ -147,6 +148,7 @@ def _snap_direct(tt: StaticTimetable, origins: set[str], dests: set[str], p: Sea
 def _snap_connections(
     tt: StaticTimetable, origins: set[str], dests: set[str], p: SearchParams, km_cap: float
 ) -> list[Journey]:
+    origin, dest = p.from_code, p.to_code
     # Index every train that reaches a destination: transfer station -> [(train, idx_at_transfer, idx_at_dest)]
     feeders: dict[str, list[tuple[Train, int, int]]] = {}
     for code in dests:
@@ -183,15 +185,20 @@ def _snap_connections(
                 leg2 = _next_leg((t2, s2k.code, s2j.code, s2k.dep, s2j.arr, s2j.km - s2k.km), ready)
                 if leg2 is None or (leg2.depart_at - leg1.arrive_at).total_seconds() / 60 > MAX_LAYOVER_MIN:
                     continue
-                _keep_best(best, Journey("connection", [leg1, leg2]))
+                _keep_best(best, Journey("connection", [leg1, leg2]), origin, dest)
     return list(best.values())
 
 
-def _keep_best(best: dict, j: Journey) -> None:
+def _keep_best(best: dict, j: Journey, origin: str, dest: str) -> None:
+    """One journey per train pair: earliest arrival, then the stations actually asked for, then later departure."""
     t1, t2 = j.legs[0].train.number, j.legs[1].train.number
     key = (t1.split("-")[0], t2.split("-")[0])  # fold slip coaches into their parent
+
+    def score(x: Journey):
+        return (x.arrive_at, x.legs[0].from_code != origin, x.legs[-1].to_code != dest, -x.depart_at.timestamp())
+
     cur = best.get(key)
-    if cur is None or (j.arrive_at, -j.depart_at.timestamp()) < (cur.arrive_at, -cur.depart_at.timestamp()):
+    if cur is None or score(j) < score(cur):
         best[key] = j
 
 
@@ -202,80 +209,115 @@ def _snapshot_candidates(tt, a, b, origins, dests, p, km_cap_fn):
     return direct, all_direct, _snap_connections(tt, origins, dests, p, km_cap)
 
 
-def suggest_hubs(tt: StaticTimetable, a: Station, b: Station, p: SearchParams, k: int = LIVE_HUBS) -> list[str]:
-    """Change stations worth asking the live API about, ranked by how many snapshot routes use them."""
-    loose = SearchParams(
-        a.code, b.code, p.journey_date, p.extra_hours + 3, p.extra_km + 100, 0, p.min_transfer_min, p.include_unreserved
-    )
-    direct = _snap_direct(tt, {a.code}, {b.code}, loose)
-    cap = (min(j.km for j in direct) if direct else haversine_km(a, b) * 1.6) + loose.extra_km
-    conns = _snap_connections(tt, {a.code}, {b.code}, loose, cap)
-    if direct:
-        limit = min(j.minutes for j in direct) + loose.extra_hours * 60
-        conns = [j for j in conns if j.minutes <= limit]
-    counts = Counter(j.legs[0].to_code for j in conns)
-    # Stations next to either end are covered by the nearby-station check; don't spend requests on them.
-    too_close = max(p.nearby_km, 10) + 5
-    hubs = []
-    for code, _ in counts.most_common():
-        s = tt.station(code)
-        if s and min(haversine_km(s, a), haversine_km(s, b)) > too_close:
-            hubs.append(code)
-        if len(hubs) == k:
-            break
-    return hubs
+def suggest_hubs(
+    tt: StaticTimetable, a: Station, b: Station, p: SearchParams, k: int = LIVE_HUBS
+) -> list[str]:
+    """Change stations worth asking the live API about.
+
+    Uses only the network's shape (which trains link which stations, and how far), never the
+    snapshot's clock times: those are years old, and a connection that looked impossible then
+    (e.g. Basava -> Hutatma at Solapur) can be the best one today. Stations are ranked by how
+    many first-leg x second-leg train pairs meet there, within the distance tolerance.
+    """
+    origins = {a.code, *(s.code for s, _ in tt.nearby(a.code, p.nearby_km))}
+    dests = {b.code, *(s.code for s, _ in tt.nearby(b.code, p.nearby_km))}
+
+    reach: dict[str, dict[str, int]] = {}  # hub -> {train: km from an origin}
+    direct_km = []
+    for o in origins:
+        for t, i in tt.trains_at(o):
+            start = t.stops[i]
+            if start.dep is None or not t.reserved:
+                continue
+            for s in t.stops[i + 1 :]:
+                if s.arr is None:
+                    continue
+                if s.code in dests:
+                    direct_km.append(s.km - start.km)
+                    break
+                reach.setdefault(s.code, {})
+                reach[s.code][t.number] = min(s.km - start.km, reach[s.code].get(t.number, 10**9))
+
+    feed: dict[str, dict[str, int]] = {}  # hub -> {train: km to a destination}
+    for d in dests:
+        for t, j in tt.trains_at(d):
+            end = t.stops[j]
+            if end.arr is None or not t.reserved:
+                continue
+            for s in reversed(t.stops[:j]):
+                if s.code in origins:
+                    break
+                if s.dep is None:
+                    continue
+                feed.setdefault(s.code, {})
+                feed[s.code][t.number] = min(end.km - s.km, feed[s.code].get(t.number, 10**9))
+
+    base_km = min(direct_km) if direct_km else haversine_km(a, b) * 1.6
+    too_close = max(p.nearby_km, 10) + 5  # covered by the nearby-station check
+    ranked = []
+    for code in reach.keys() & feed.keys():
+        st = tt.station(code)
+        if not st or min(haversine_km(st, a), haversine_km(st, b)) <= too_close:
+            continue
+        detour = min(reach[code].values()) + min(feed[code].values())
+        if detour > base_km + p.extra_km:
+            continue
+        ranked.append((-len(reach[code]) * len(feed[code]), detour, code))
+    ranked.sort()
+    return [code for *_, code in ranked[:k]]
 
 
 # --------------------------------------------------------------------------- live path
 
 
 def _live_candidates(tt, live: RailRadar, a, b, near_a, near_b, p, usage: Usage, warnings: list[str]):
+    """One station-board request per station; every leg comes from intersecting two boards."""
+    origin, dest = a.code, b.code
     hubs = suggest_hubs(tt, a, b, p)
-    nearby_from = sorted(near_a, key=tt.reserved_halts, reverse=True)[:LIVE_NEARBY]
-    nearby_to = sorted(near_b, key=tt.reserved_halts, reverse=True)[:LIVE_NEARBY]
+    from_codes = [a.code, *sorted(near_a, key=tt.reserved_halts, reverse=True)[:LIVE_NEARBY]]
+    to_codes = [b.code, *sorted(near_b, key=tt.reserved_halts, reverse=True)[:LIVE_NEARBY]]
 
-    pairs = {(a.code, b.code)}
-    pairs |= {(n, b.code) for n in nearby_from}
-    pairs |= {(a.code, n) for n in nearby_to}
-    for h in hubs:
-        pairs |= {(a.code, h), (h, b.code)}
-
-    def fetch(pair):
+    def fetch(code):
         try:
-            return pair, live.legs_between(*pair, usage)
+            return code, live.station_board(code, usage)
         except LiveError as e:
-            if pair == (a.code, b.code):
+            if code in (a.code, b.code):
                 raise
-            return pair, e
+            return code, e
 
     with ThreadPoolExecutor(max_workers=6) as pool:
-        results = dict(pool.map(fetch, sorted(pairs)))
+        boards = dict(pool.map(fetch, dict.fromkeys([*from_codes, *to_codes, *hubs])))
 
-    failed = [f"{x}→{y}" for (x, y), r in results.items() if isinstance(r, LiveError)]
+    failed = [c for c, v in boards.items() if isinstance(v, LiveError)]
     if failed:
-        warnings.append(f"Live data unavailable for {len(failed)} segment(s): {', '.join(failed[:4])}")
-    opts = {k: v for k, v in results.items() if not isinstance(v, LiveError)}
+        warnings.append(f"Live data unavailable for {', '.join(failed[:5])}")
+    boards = {c: v for c, v in boards.items() if not isinstance(v, LiveError)}
+    from_codes = [c for c in from_codes if c in boards]
+    to_codes = [c for c in to_codes if c in boards]
+    hubs = [h for h in hubs if h in boards]
 
-    def usable(o: LegOption) -> bool:
-        return _eligible(o.train, p)
+    def legs(x, y):
+        return [o for o in legs_from_boards(boards[x], boards[y]) if _eligible(o.train, p)]
 
     def board_today(o: LegOption) -> Leg | None:
-        leg = Leg(o.train, o.from_code, o.to_code, o.dep, o.arr, o.km, p.journey_date)
-        return leg if _runs(o.train, p.journey_date, o.dep) else None
+        if not _runs(o.train, p.journey_date, o.dep):
+            return None
+        return Leg(o.train, o.from_code, o.to_code, o.dep, o.arr, o.km, p.journey_date)
 
     all_direct: list[Journey] = []
-    for pair in [(a.code, b.code), *[(n, b.code) for n in nearby_from], *[(a.code, n) for n in nearby_to]]:
-        for o in opts.get(pair, []):
-            if usable(o) and (leg := board_today(o)):
-                all_direct.append(Journey("direct", [leg]))
-
+    through: set[str] = set()  # trains that already run origin-side -> destination-side
+    for x in from_codes:
+        for y in to_codes:
+            for o in legs(x, y):
+                through.add(o.train.number)
+                if leg := board_today(o):
+                    all_direct.append(Journey("direct", [leg]))
     direct = [j for j in all_direct if j.legs[0].from_code == a.code and j.legs[-1].to_code == b.code]
-    direct_numbers = {j.legs[0].train.number for j in direct}
 
     best: dict[tuple[str, str], Journey] = {}
     for h in hubs:
-        firsts = [o for o in opts.get((a.code, h), []) if usable(o) and o.train.number not in direct_numbers]
-        seconds = [o for o in opts.get((h, b.code), []) if usable(o) and o.train.number not in direct_numbers]
+        firsts = [o for x in from_codes for o in legs(x, h) if o.train.number not in through]
+        seconds = [o for y in to_codes for o in legs(h, y) if o.train.number not in through]
         for o1 in firsts:
             leg1 = board_today(o1)
             if not leg1:
@@ -287,7 +329,7 @@ def _live_candidates(tt, live: RailRadar, a, b, near_a, near_b, p, usage: Usage,
                 leg2 = _next_leg((o2.train, o2.from_code, o2.to_code, o2.dep, o2.arr, o2.km), ready)
                 if leg2 is None or (leg2.depart_at - leg1.arrive_at).total_seconds() / 60 > MAX_LAYOVER_MIN:
                     continue
-                _keep_best(best, Journey("connection", [leg1, leg2]))
+                _keep_best(best, Journey("connection", [leg1, leg2]), origin, dest)
     return direct, all_direct, list(best.values())
 
 
@@ -440,7 +482,8 @@ def _journey(tt, j: Journey, base_min, base_km, now, near_a, near_b) -> dict:
     if j.kind == "connection":
         out["transfer"] = {
             "station": {"code": first.to_code, "name": _name(tt, first.to_code)},
-            "wait_minutes": int((j.legs[1].depart_at - first.arrive_at).total_seconds() // 60),
+            "wait_minutes": (wait := int((j.legs[1].depart_at - first.arrive_at).total_seconds() // 60)),
+            "tight": wait < TIGHT_CHANGE_MIN,
         }
     return out
 

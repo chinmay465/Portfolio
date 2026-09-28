@@ -34,7 +34,7 @@ export type Journey = {
   extra_minutes: number | null;
   extra_km: number | null;
   legs: Leg[];
-  transfer: { station: StationRef; wait_minutes: number } | null;
+  transfer: { station: StationRef; wait_minutes: number; tight: boolean } | null;
   access: { board_offset_km: number; alight_offset_km: number };
 };
 
@@ -96,6 +96,6 @@ export const DEFAULT_TOLERANCE: Tolerance = {
   extra_hours: 3,
   extra_km: 150,
   nearby_km: 15,
-  min_transfer_min: 45,
+  min_transfer_min: 20,
   include_unreserved: false,
 };

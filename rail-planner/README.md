@@ -20,7 +20,7 @@ Backend: Python (FastAPI). Frontend: React + TypeScript (Vite).
 | Extra travel time | 3 h | max time over the fastest direct train |
 | Extra distance | 150 km | max rail km over the shortest direct train |
 | Nearby stations within | 15 km | also board or alight at busy stations nearby (e.g. YPR/BNC/KJM for SBC) |
-| Minimum change time | 45 min | for one-change routes |
+| Minimum change time | 20 min | for one-change routes; changes under 45 min are flagged "Tight change" |
 
 Alternates are either a direct train from or to a nearby station, or a two-train route with one change. If no direct train exists, the best alternate becomes the baseline. When you change the inputs, results refresh automatically. The last trip, recent trips and your tolerance settings are saved in the browser.
 
@@ -64,11 +64,11 @@ On every push and PR, CI (`.github/workflows/ci.yml`) runs the backend tests, bu
 ## Timetable data
 
 **Live (recommended): [RailRadar](https://railradar.in/docs).** Set `RAILRADAR_API_KEY` (on Render: service → Environment). This gives current trains, times, distances and running days.
-- Direct and nearby-station trains come from `GET /v1/trains/between/{from}/{to}`.
-- For one-change routes, the offline snapshot suggests the six most likely change stations, and the API supplies the actual trains for both legs. Hubs within the nearby radius of either end are skipped.
+- Trains come from station timetables: `GET /v1/stations/{code}/trains`, one request per station. A leg A→B is any train on both timetables that reaches B after A. Direct trains, nearby stations and both legs of a one-change route all come from intersecting these timetables.
+- Change stations are ranked using only the shape of the network: how many trains link each station to both ends, within the distance tolerance. Timings from the old snapshot are never used, because a connection that was impossible in 2016 can be the best one now (e.g. Basava 17307 → Hutatma 12158 at Solapur). The top 10 are queried, skipping any within the nearby radius of either end.
 - Running days are enforced for every leg. A train that doesn't run on your date (counted from its origin) is dropped, and the second leg waits for that train's next running day.
 - The booking calendar uses `GET /v1/trains/{number}` and warns when the train doesn't run on the chosen date.
-- A new route costs about 15–20 requests, and the free tier allows 1,000 a month. Responses are cached in SQLite for 7 days per station pair, and running days are applied locally, so a repeat search on any date costs 0 requests. The cache file is `RAILRADAR_CACHE` (default `backend/data/railradar-cache.sqlite3`). Render's free tier wipes it on restart, so mount a disk there if you need it to last.
+- A new route costs at most about 16 requests (2 ends + 4 nearby + 10 change stations), and the free tier allows 1,000 a month. Station timetables are cached in SQLite for 7 days and shared across routes (SBC, PUNE, SUR, DD… are reused), and running days are applied locally, so a repeat search on any date costs 0 requests. The cache file is `RAILRADAR_CACHE` (default `backend/data/railradar-cache.sqlite3`). Render's free tier wipes it on restart, so mount a disk there if you need it to last.
 - If the key is rejected or the quota runs out, the app falls back to the snapshot and says so in the UI.
 - Coach classes come from `coachPosition` when available, otherwise from the snapshot.
 

@@ -213,3 +213,4 @@ sup { font-size: 11px; color: var(--warn); margin-left: 2px; font-weight: 600; }
 .source .warn { color: var(--warn); }
 .leg-train .runs { font-size: 12px; color: var(--muted); }
 .leg-train .runs.limited { color: var(--warn); font-weight: 600; }
+.badge.tight { background: color-mix(in srgb, var(--bad) 12%, transparent); color: var(--bad); }

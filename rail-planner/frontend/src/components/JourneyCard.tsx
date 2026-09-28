@@ -40,6 +40,11 @@ export function JourneyCard({ j, route }: { j: Journey; route: RouteResponse }) 
             ? `Change at ${j.transfer.station.name} · ${duration(j.transfer.wait_minutes)} wait`
             : KIND_LABEL[j.kind]}
         </span>
+        {j.transfer?.tight && (
+          <span className="badge tight" title="Short connection: a late first train can make you miss the second">
+            Tight change
+          </span>
+        )}
         <Delta minutes={j.extra_minutes} km={j.extra_km} />
         <span className="badge soft">{day(j.depart_at)}</span>
       </div>

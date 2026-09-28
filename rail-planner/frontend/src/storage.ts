@@ -2,13 +2,22 @@ import { DEFAULT_TOLERANCE, type StationHit, type Tolerance } from "./types";
 
 export type SavedTrip = { from: StationHit; to: StationHit; date: string };
 
-const KEY = "rail-planner:v1";
+const KEY = "rail-planner:v2";
+// v1 stored the old 45-minute default change time; keep trips, reset tolerances.
+const OLD_KEYS = ["rail-planner:v1"];
 
 type Saved = { last?: SavedTrip; recent: SavedTrip[]; tolerance: Tolerance };
 
 function read(): Saved {
   try {
-    const raw = localStorage.getItem(KEY);
+    let raw = localStorage.getItem(KEY);
+    if (!raw) {
+      const old = OLD_KEYS.map((k) => localStorage.getItem(k)).find(Boolean);
+      if (old) {
+        const parsed = JSON.parse(old) as Partial<Saved>;
+        raw = JSON.stringify({ last: parsed.last, recent: parsed.recent ?? [] });
+      }
+    }
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<Saved>;
       return { recent: parsed.recent ?? [], last: parsed.last, tolerance: { ...DEFAULT_TOLERANCE, ...parsed.tolerance } };

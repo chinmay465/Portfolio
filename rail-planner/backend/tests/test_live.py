@@ -30,66 +30,77 @@ def hhmm(m):
     return f"{m // 60:02d}:{m % 60:02d}"
 
 
+def t(h, m, day=1):
+    return (day - 1) * 1440 + h * 60 + m
+
+
 def run_days(number):
     return ["mon", "thu"] if number == NOT_TUESDAY else DAYS
 
 
-def between(a, b):
-    trains = []
-    for t, i in TT.trains_at(a):
-        if t.number == WITHDRAWN:
-            continue
-        s = t.stops[i]
-        if s.dep is None:
-            continue
-        for j in range(i + 1, len(t.stops)):
-            e = t.stops[j]
-            if e.code == b and e.arr is not None:
-                trains.append(
-                    {
-                        "train": {"number": t.number, "name": t.name, "type": "Superfast Express", "runDays": run_days(t.number)},
-                        "from": {"departure": hhmm(s.dep), "day": s.dep // 1440 + 1, "sequence": i + 1},
-                        "to": {"arrival": hhmm(e.arr), "day": e.arr // 1440 + 1, "sequence": j + 1},
-                        "distance": float(e.km - s.km),
-                        "duration": e.arr - s.dep,
-                        "totalHaltsBetween": j - i - 1,
-                    }
-                )
-                break
-    if (a, b) == ("SBC", "PUNE"):
-        trains.append(
-            {
-                "train": NEW_TRAIN,
-                "from": {"departure": "05:30", "day": 1, "sequence": 1},
-                "to": {"arrival": "23:10", "day": 1, "sequence": 9},
-                "distance": 960.0,
-                "duration": 1060,
-                "totalHaltsBetween": 7,
-            }
-        )
-    return {"success": True, "data": {"from": {"code": a}, "to": {"code": b}, "count": len(trains), "trains": trains}}
+# The "current" railway: snapshot trains, minus a withdrawn one, plus today's timings for the
+# Basava -> Hutatma change at Solapur (arrive 06:10, depart 06:30) and a brand-new train.
+# Each train: meta dict + [(code, arr, dep, km)] with times in minutes from origin-day 00:00.
+WORLD: dict[str, tuple[dict, list]] = {}
+for tr in TT._trains.values():
+    if tr.number == WITHDRAWN:
+        continue
+    meta = {"number": tr.number, "name": tr.name, "type": "Superfast Express", "runDays": run_days(tr.number)}
+    WORLD[tr.number] = (meta, [(s.code, s.arr, s.dep, s.km) for s in tr.stops])
+WORLD[NEW_TRAIN["number"]] = (NEW_TRAIN, [("SBC", None, t(5, 30), 0), ("PUNE", t(23, 10), None, 960)])
+WORLD["17307"] = (
+    {"number": "17307", "name": "Basava Express", "type": "Express", "runDays": DAYS},
+    [("MYS", None, t(13, 25), 0), ("SBC", t(16, 30), t(16, 40), 139), ("YPR", t(16, 53), t(16, 55), 145),
+     ("SUR", t(6, 10, 2), t(6, 20, 2), 800), ("BGK", t(10, 55, 2), None, 1015)],
+)
+WORLD["12158"] = (
+    {"number": "12158", "name": "Hutatma Express", "type": "Superfast Express", "runDays": DAYS},
+    [("SUR", None, t(6, 30), 0), ("DD", t(9, 3), t(9, 5), 185), ("PUNE", t(10, 30), None, 264)],
+)
+
+BOARDS: dict[str, list] = {}
+for meta, stops in WORLD.values():
+    for seq, (code, arr, dep, km) in enumerate(stops, 1):
+        BOARDS.setdefault(code, []).append((meta, seq, arr, dep, km))
+
+
+def station_board(code):
+    trains = [
+        {
+            "train": meta,
+            "stop": {
+                "sequence": seq,
+                "arrival": hhmm(arr) if arr is not None else None,
+                "departure": hhmm(dep) if dep is not None else None,
+                "arrivalDay": (arr if arr is not None else dep) // 1440 + 1,
+                "departureDay": (dep if dep is not None else arr) // 1440 + 1,
+                "distance": km,
+                "stopType": "origin" if arr is None else "destination" if dep is None else "halt",
+            },
+        }
+        for meta, seq, arr, dep, km in BOARDS.get(code, [])
+    ]
+    return {"success": True, "data": {"station": {"code": code}, "count": len(trains), "trains": trains}}
 
 
 def train_detail(number):
-    t = TT.train(number)
-    if not t:
+    if number not in WORLD:
         return None
+    meta, stops = WORLD[number]
     route = [
         {
             "sequence": k + 1,
-            "station": {"code": s.code, "name": TT.station(s.code).name},
-            "arrival": hhmm(s.arr) if s.arr is not None else None,
-            "departure": hhmm(s.dep) if s.dep is not None else None,
-            "arrivalDay": (s.arr if s.arr is not None else s.dep) // 1440 + 1,
-            "departureDay": (s.dep if s.dep is not None else s.arr) // 1440 + 1,
-            "distance": s.km,
+            "station": {"code": code, "name": TT.station(code).name if TT.station(code) else code},
+            "arrival": hhmm(arr) if arr is not None else None,
+            "departure": hhmm(dep) if dep is not None else None,
+            "arrivalDay": (arr if arr is not None else dep) // 1440 + 1,
+            "departureDay": (dep if dep is not None else arr) // 1440 + 1,
+            "distance": km,
             "isHalt": True,
         }
-        for k, s in enumerate(t.stops)
+        for k, (code, arr, dep, km) in enumerate(stops)
     ]
-    train = {"number": t.number, "name": t.name, "type": "Superfast Express", "runDays": run_days(number),
-             "coachPosition": "Engine-H1-A1-B1-B2-S1-S2-S3-GS"}
-    return {"success": True, "data": {"train": train, "route": route}}
+    return {"success": True, "data": {"train": {**meta, "coachPosition": "Engine-H1-A1-B1-B2-S1-S2-S3-GS"}, "route": route}}
 
 
 class Fake:
@@ -102,9 +113,9 @@ class Fake:
         assert request.headers["authorization"] == "Bearer rr_live_test"
         if self.status != 200:
             return httpx.Response(self.status, json={"success": False})
-        parts = request.url.path.split("/")  # /v1/trains/between/A/B  or  /v1/trains/N
-        if parts[3] == "between":
-            return httpx.Response(200, json=between(parts[4], parts[5]))
+        parts = request.url.path.split("/")  # /v1/stations/CODE/trains  or  /v1/trains/N
+        if parts[2] == "stations":
+            return httpx.Response(200, json=station_board(parts[3]))
         body = train_detail(parts[3])
         return httpx.Response(200 if body else 404, json=body or {"success": False})
 
@@ -151,7 +162,7 @@ def test_cache_makes_repeat_searches_free(tmp_path):
     rr = client_for(fake, tmp_path)
     first = search(TT, SearchParams("SBC", "PUNE", TUESDAY), rr)
     n = fake.calls
-    assert 1 < n <= 1 + 2 * 2 + 6 * 2  # direct + nearby + hubs
+    assert 1 < n <= 2 + 2 * 2 + 10  # one board each: ends + nearby + hubs
     assert first["data_source"]["requests"] == n
     second = search(TT, SearchParams("SBC", "PUNE", date(2026, 10, 22)), rr)
     assert fake.calls == n  # different date, same cached pairs
@@ -192,3 +203,25 @@ def test_booking_windows_flags_non_running_day(api_with_live):
 
 def test_status_endpoint(api_with_live):
     assert api_with_live.get("/api/status").json()["source"] == "live"
+
+
+def test_basava_hutatma_change_at_solapur(tmp_path):
+    """Regression: 17307 SBC 16:40 -> SUR 06:10, then 12158 SUR 06:30 -> PUNE 10:30 (20-minute change).
+
+    The snapshot's 2016 timings made this change impossible, which used to drop Solapur from the
+    live hub list; the default 45-minute change time also hid it.
+    """
+    res = search(TT, SearchParams("SBC", "PUNE", TUESDAY), client_for(Fake(), tmp_path))
+    match = [
+        j for j in res["alternates"]
+        if [leg["train"]["number"] for leg in j["legs"]] == ["17307", "12158"]
+    ]
+    assert match, "Basava -> Hutatma via Solapur missing"
+    j = match[0]
+    assert j["transfer"]["station"]["code"] == "SUR"
+    assert j["transfer"]["wait_minutes"] == 20 and j["transfer"]["tight"] is True
+    assert j["legs"][0]["from"]["code"] == "SBC"
+    assert j["depart_at"].startswith("2026-10-20T16:40") and j["arrive_at"].startswith("2026-10-21T10:30")
+
+    strict = search(TT, SearchParams("SBC", "PUNE", TUESDAY, min_transfer_min=30), client_for(Fake(), tmp_path / "b"))
+    assert not any([l["train"]["number"] for l in j2["legs"]] == ["17307", "12158"] for j2 in strict["alternates"])

@@ -152,7 +152,7 @@ export function TripPlanner() {
           <Slider label="Extra travel time" unit="h" min={0} max={12} step={0.5} value={tol.extra_hours} onChange={setNum("extra_hours")} hint="over the fastest direct train" />
           <Slider label="Extra distance" unit="km" min={0} max={500} step={10} value={tol.extra_km} onChange={setNum("extra_km")} hint="over the shortest direct train" />
           <Slider label="Nearby stations within" unit="km" min={0} max={40} step={1} value={tol.nearby_km} onChange={setNum("nearby_km")} hint="0 turns nearby boarding off" />
-          <Slider label="Minimum change time" unit="min" min={15} max={180} step={5} value={tol.min_transfer_min} onChange={setNum("min_transfer_min")} hint="for one-change routes" />
+          <Slider label="Minimum change time" unit="min" min={10} max={180} step={5} value={tol.min_transfer_min} onChange={setNum("min_transfer_min")} hint="for one-change routes" />
           <label className="check">
             <input type="checkbox" checked={tol.include_unreserved} onChange={(e) => setTol((t) => ({ ...t, include_unreserved: e.target.checked }))} />
             Include unreserved passenger / MEMU trains

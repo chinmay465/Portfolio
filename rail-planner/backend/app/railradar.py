@@ -60,6 +60,32 @@ class LegOption:
     km: int
 
 
+@dataclass(frozen=True)
+class BoardStop:
+    """A train's halt at one station, from the station board. Times are minutes from origin-day 00:00."""
+
+    train: TrainMeta
+    code: str
+    sequence: int
+    arr: int | None
+    dep: int | None
+    km: float
+
+
+def legs_from_boards(a: dict[str, BoardStop], b: dict[str, BoardStop]) -> list[LegOption]:
+    """Trains that call at station a and later at station b."""
+    out = []
+    for number in a.keys() & b.keys():
+        s, e = a[number], b[number]
+        if s.dep is None or e.arr is None:
+            continue
+        later = e.sequence > s.sequence if s.sequence and e.sequence else e.km > s.km
+        if not later or e.arr <= s.dep:
+            continue
+        out.append(LegOption(s.train, s.code, e.code, s.dep, e.arr, round(e.km - s.km)))
+    return out
+
+
 @dataclass
 class Usage:
     requests: int = 0
@@ -164,35 +190,28 @@ class RailRadar:
 
     # ---- typed helpers ----
 
-    def legs_between(self, a: str, b: str, usage: Usage | None = None) -> list[LegOption]:
-        body = self._get(f"/trains/between/{a}/{b}", usage)
+    def station_board(self, code: str, usage: Usage | None = None) -> dict[str, "BoardStop"]:
+        """Every train that halts at a station, keyed by train number."""
+        body = self._get(f"/stations/{code}/trains", usage)
         data = body.get("data") or {}
-        out = []
+        out: dict[str, BoardStop] = {}
         for item in data.get("trains") or []:
-            t = item.get("train") or {}
-            f, to = item.get("from") or {}, item.get("to") or {}
-            dep, arr = _hhmm(f.get("departure")), _hhmm(to.get("arrival"))
-            if dep is None or arr is None or not t.get("number"):
+            t, st = item.get("train") or {}, item.get("stop") or {}
+            if not t.get("number"):
                 continue
-            dep += (int(f.get("day") or 1) - 1) * 1440
-            arr += (int(to.get("day") or 1) - 1) * 1440
-            if arr <= dep:
-                continue
-            # With plain codes (no byCity) the train runs between exactly a and b; prefer
-            # explicit station codes if the API ever includes them.
-            from_code = (f.get("station") or {}).get("code") or f.get("code") or a
-            to_code = (to.get("station") or {}).get("code") or to.get("code") or b
-            out.append(
-                LegOption(
-                    train=self._meta(t),
-                    from_code=from_code.upper(),
-                    to_code=to_code.upper(),
-                    dep=dep,
-                    arr=arr,
-                    km=round(float(item.get("distance") or 0)),
-                )
+            arr, dep = _hhmm(st.get("arrival")), _hhmm(st.get("departure"))
+            out[str(t["number"])] = BoardStop(
+                train=self._meta(t),
+                code=code.upper(),
+                sequence=int(st.get("sequence") or 0),
+                arr=None if arr is None else arr + (int(st.get("arrivalDay") or 1) - 1) * 1440,
+                dep=None if dep is None else dep + (int(st.get("departureDay") or 1) - 1) * 1440,
+                km=float(st.get("distance") or 0),
             )
         return out
+
+    def legs_between(self, a: str, b: str, usage: Usage | None = None) -> list[LegOption]:
+        return legs_from_boards(self.station_board(a, usage), self.station_board(b, usage))
 
     def train(self, number: str, usage: Usage | None = None) -> dict | None:
         """Full schedule: {"meta": TrainMeta, "route": [{code, name, arr, dep, day_arr, day_dep, km}]}."""

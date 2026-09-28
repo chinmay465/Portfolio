@@ -81,7 +81,7 @@ def routes(
     extra_hours: float = Query(3.0, ge=0, le=24),
     extra_km: float = Query(150.0, ge=0, le=1000),
     nearby_km: float = Query(15.0, ge=0, le=50),
-    min_transfer_min: int = Query(45, ge=15, le=240),
+    min_transfer_min: int = Query(20, ge=10, le=240),
     include_unreserved: bool = False,
     limit: int = Query(25, ge=1, le=60),
 ) -> dict:
