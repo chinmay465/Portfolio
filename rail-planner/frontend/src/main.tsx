@@ -29,7 +29,7 @@ function App() {
       </header>
       <main>{tab === "plan" ? <TripPlanner /> : <BookingCalendar />}</main>
       <footer>
-        Timetable from an open-data snapshot, so check times on IRCTC or RailOne before booking. Booking rules as of September 2026.
+        Always confirm times on IRCTC or RailOne before booking. Booking rules as of September 2026.
       </footer>
     </>
   );

@@ -7,3 +7,6 @@ services:
     branch: main
     autoDeploy: true
     healthCheckPath: /api/health
+    envVars:
+      - key: RAILRADAR_API_KEY # live timetable; without it the app falls back to the 2016-17 snapshot
+        sync: false

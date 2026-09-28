@@ -14,7 +14,7 @@ export type BookingWindow = {
 };
 
 export type Leg = {
-  train: { number: string; name: string; type: string; classes: string[]; reserved: boolean };
+  train: { number: string; name: string; type: string; classes: string[]; reserved: boolean; runs_on: string[] };
   from: StationRef;
   to: StationRef;
   depart_at: string;
@@ -38,6 +38,15 @@ export type Journey = {
   access: { board_offset_km: number; alight_offset_km: number };
 };
 
+export type DataSource = {
+  kind: "live" | "snapshot" | null;
+  live_configured?: boolean;
+  requests?: number;
+  cache_hits?: number;
+  month_requests?: number | null;
+  warnings: string[];
+};
+
 export type NearbyStation = StationRef & { distance_km: number };
 
 export type RouteResponse = {
@@ -45,6 +54,7 @@ export type RouteResponse = {
   to: StationRef & { state: string };
   journey_date: string;
   params: Tolerance;
+  data_source: DataSource;
   baseline: null | {
     minutes: number;
     km: number;
@@ -75,8 +85,11 @@ export type WindowsResponse = {
     board_day: number;
     classes: string[];
     reserved: boolean;
+    runs_on: string[];
+    runs_on_date: boolean;
   };
   windows: BookingWindow[];
+  data_source: DataSource;
 };
 
 export const DEFAULT_TOLERANCE: Tolerance = {

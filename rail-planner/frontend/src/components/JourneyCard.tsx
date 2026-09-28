@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { clock, day, dayDiff, duration } from "../format";
+import { clock, day, dayDiff, duration, runDays } from "../format";
 import type { Journey, RouteResponse } from "../types";
 import { BookingWindows } from "./BookingWindows";
 
@@ -66,6 +66,7 @@ export function JourneyCard({ j, route }: { j: Journey; route: RouteResponse }) 
               <span className="num">{l.train.number}</span>
               <span className="tname">{l.train.name}</span>
               {l.train.classes.length > 0 && <span className="classes">{l.train.classes.join(" ")}</span>}
+              <span className={`runs ${l.train.runs_on.length < 7 ? "limited" : ""}`}>{runDays(l.train.runs_on)}</span>
             </div>
             <div className="leg-times">
               {l.from.code} {clock(l.depart_at)} → {l.to.code} {clock(l.arrive_at)}

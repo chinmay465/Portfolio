@@ -1,0 +1,31 @@
+import type { DataSource } from "../types";
+
+export function SourceNote({ source }: { source: DataSource }) {
+  const live = source.kind === "live";
+  return (
+    <div className={`source ${live ? "live" : "stale"}`} role={live ? undefined : "note"}>
+      {live ? (
+        <span>
+          <b>Live timetable</b> from RailRadar
+          {source.requests !== undefined && (
+            <span className="muted">
+              {" "}
+              · {source.requests} API request{source.requests === 1 ? "" : "s"}, {source.cache_hits} cached
+              {source.month_requests != null && ` · ${source.month_requests} this month`}
+            </span>
+          )}
+        </span>
+      ) : (
+        <span>
+          <b>Offline snapshot (2016–17).</b> Some trains may be withdrawn and running days aren't known, so every train is shown as
+          daily. Check on IRCTC or RailOne before booking.
+        </span>
+      )}
+      {source.warnings.map((w) => (
+        <span key={w} className="warn">
+          {w}
+        </span>
+      ))}
+    </div>
+  );
+}

@@ -61,19 +61,25 @@ On every push and PR, CI (`.github/workflows/ci.yml`) runs the backend tests, bu
 - `GET /api/routes?from=SBC&to=PUNE&date=2026-10-20&extra_hours=3&extra_km=150&nearby_km=15&min_transfer_min=45&include_unreserved=false`
 - `GET /api/booking-windows?date=2026-10-20&train=12627&board=BPL`
 
-## Data: read before trusting results
+## Timetable data
 
-`backend/data/timetable.json.gz` is built from the open [datameet/railways](https://github.com/datameet/railways) dataset, a ~2016–17 snapshot. It has:
-- **no running days**, so every train is treated as daily
-- **no live availability or fares**
-- timings and train numbers that may have changed since then
+**Live (recommended): [RailRadar](https://railradar.in/docs).** Set `RAILRADAR_API_KEY` (on Render: service → Environment). This gives current trains, times, distances and running days.
+- Direct and nearby-station trains come from `GET /v1/trains/between/{from}/{to}`.
+- For one-change routes, the offline snapshot suggests the six most likely change stations, and the API supplies the actual trains for both legs. Hubs within the nearby radius of either end are skipped.
+- Running days are enforced for every leg. A train that doesn't run on your date (counted from its origin) is dropped, and the second leg waits for that train's next running day.
+- The booking calendar uses `GET /v1/trains/{number}` and warns when the train doesn't run on the chosen date.
+- A new route costs about 15–20 requests, and the free tier allows 1,000 a month. Responses are cached in SQLite for 7 days per station pair, and running days are applied locally, so a repeat search on any date costs 0 requests. The cache file is `RAILRADAR_CACHE` (default `backend/data/railradar-cache.sqlite3`). Render's free tier wipes it on restart, so mount a disk there if you need it to last.
+- If the key is rejected or the quota runs out, the app falls back to the snapshot and says so in the UI.
+- Coach classes come from `coachPosition` when available, otherwise from the snapshot.
 
-The search code only depends on the `Timetable` protocol in `app/timetable.py`. To get current results, implement that protocol against a live timetable source and set `Train.runs_on`, which is already honoured by the search. To rebuild the bundled file:
+**Fallback: offline snapshot.** `backend/data/timetable.json.gz` is built from [datameet/railways](https://github.com/datameet/railways), a ~2016–17 snapshot with no running days (every train is treated as daily). The UI shows a warning whenever results come from it. To rebuild it:
 
 ```bash
 git clone --depth 1 https://github.com/datameet/railways.git /tmp/railways
 python backend/scripts/build_timetable.py /tmp/railways backend/data/timetable.json.gz
 ```
+
+`GET /api/status` shows which source is active and this month's API request count.
 
 Booking rules are in `app/rules.py`, as of September 2026. Update the constants if IRCTC changes them.
 

@@ -4,6 +4,7 @@ import { duration, longDay, todayIST } from "../format";
 import { storage, type SavedTrip } from "../storage";
 import { DEFAULT_TOLERANCE, type Journey, type RouteResponse, type StationHit, type Tolerance } from "../types";
 import { JourneyCard } from "./JourneyCard";
+import { SourceNote } from "./SourceNote";
 import { StationInput } from "./StationInput";
 
 type Filter = "all" | "direct" | "nearby" | "connection";
@@ -164,6 +165,7 @@ export function TripPlanner() {
       {data && (
         <section className={`results ${loading ? "stale" : ""}`} aria-live="polite">
           <div className="summary">
+            <SourceNote source={data.data_source} />
             <h2>
               {data.from.name} → {data.to.name}
               <span className="muted"> · {longDay(data.journey_date + "T12:00:00+05:30")}</span>

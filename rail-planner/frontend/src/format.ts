@@ -54,3 +54,11 @@ export const CLASS_LABELS: Record<string, string> = {
   "2S": "Second Sitting",
   FC: "First Class",
 };
+
+const WEEK = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+export function runDays(days: string[]): string {
+  if (days.length === 7) return "Daily";
+  if (days.length === 6) return `Daily except ${WEEK.find((d) => !days.includes(d))}`;
+  return days.join(", ");
+}

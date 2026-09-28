@@ -67,10 +67,12 @@ def booking_windows(journey_date: date, boarding_day_offset: int, classes: list[
     general_day = start - timedelta(days=ARP_DAYS)
     tatkal_day = start - timedelta(days=1)
 
-    # Datasets often omit 2S for day trains; if we know nothing, show both Tatkal slots.
-    known = classes or ["3A", "SL"]
-    ac = [c for c in known if c in AC_CLASSES and c not in TATKAL_EXCLUDED]
-    non_ac = [c for c in known if c in NON_AC_CLASSES]
+    if classes:
+        known = classes
+        ac = [c for c in known if c in AC_CLASSES and c not in TATKAL_EXCLUDED]
+        non_ac = [c for c in known if c in NON_AC_CLASSES]
+    else:  # coach composition unknown: show both Tatkal slots without guessing classes
+        known, ac, non_ac = ["All classes"], ["AC classes"], ["Non-AC classes"]
 
     windows = [
         Window(

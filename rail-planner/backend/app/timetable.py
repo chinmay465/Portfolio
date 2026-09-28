@@ -139,5 +139,8 @@ class StaticTimetable:
     def train(self, number: str) -> Train | None:
         return self._trains.get(number)
 
+    def reserved_halts(self, code: str) -> int:
+        return self._reserved_halts.get(code, 0)
+
     def trains_at(self, code: str) -> list[tuple[Train, int]]:
         return self._at.get(code.upper(), [])

@@ -11,13 +11,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from . import railradar
+from .railradar import LiveError, RailRadar
 from .rules import ARP_DAYS, CLASS_LABELS, IST, booking_windows, window_status
-from .search import SearchParams, search
+from .search import DAY_NAMES, SearchParams, search
 from .timetable import StaticTimetable
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     timetable()  # load once at boot
+    live()
     yield
 
 
@@ -35,9 +39,30 @@ def timetable() -> StaticTimetable:
     return StaticTimetable()
 
 
+@lru_cache
+def live() -> RailRadar | None:
+    """RailRadar client when RAILRADAR_API_KEY is set; the snapshot fills in class info it lacks."""
+
+    def class_hint(number: str) -> tuple[str, ...]:
+        t = timetable().train(number)
+        return t.classes if t else ()
+
+    return railradar.from_env(class_hint)
+
+
 @app.get("/api/health")
 def health() -> dict:
     return {"ok": True}
+
+
+@app.get("/api/status")
+def status() -> dict:
+    client = live()
+    return {
+        "source": "live" if client else "snapshot",
+        "provider": "RailRadar" if client else "datameet snapshot (2016-17)",
+        "month_requests": client.month_requests() if client else None,
+    }
 
 
 @app.get("/api/stations")
@@ -72,9 +97,31 @@ def routes(
         limit=limit,
     )
     try:
-        return search(timetable(), params)
+        return search(timetable(), params, live())
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
+
+
+def _schedule(number: str, warnings: list[str]) -> dict | None:
+    """Train meta plus boardable halts as (code, name, dep_minutes_from_origin_midnight)."""
+    if live():
+        try:
+            t = live().train(number)
+            if t:
+                m = t["meta"]
+                stops = [
+                    (r["code"], r["name"], r["dep"] + (r["dep_day"] - 1) * 1440)
+                    for r in t["route"]
+                    if r["dep"] is not None
+                ]
+                return {"meta": m, "stops": stops, "source": "live"}
+        except LiveError as e:
+            warnings.append(f"{e}. Showing the offline snapshot instead.")
+    t = timetable().train(number)
+    if not t:
+        return None
+    stops = [(s.code, timetable().station(s.code).name, s.dep) for s in t.stops if s.dep is not None]
+    return {"meta": t, "stops": stops, "source": "snapshot"}
 
 
 @app.get("/api/booking-windows")
@@ -83,29 +130,33 @@ def windows(
     train: str | None = None,
     board: str | None = Query(None, description="Boarding station code; needed to shift for multi-day trains"),
 ) -> dict:
-    offset, classes, info, depart_at = 0, [], None, None
+    offset, classes, info, depart_at, source, warnings = 0, [], None, None, None, []
     if train:
-        t = timetable().train(train)
-        if not t:
+        sched = _schedule(train.strip(), warnings)
+        if not sched:
             raise HTTPException(404, f"Train {train} not found")
-        classes = list(t.classes)
-        idx = 0
+        m, stops, source = sched["meta"], sched["stops"], sched["source"]
+        stop = stops[0] if stops else None
         if board:
-            idx = next((i for i, s in enumerate(t.stops) if s.code == board.upper() and s.dep is not None), None)
-            if idx is None:
+            stop = next((s for s in stops if s[0] == board.upper()), None)
+            if stop is None:
                 raise HTTPException(400, f"Train {train} does not depart from {board.upper()}")
-        stop = t.stops[idx]
-        offset = stop.dep // 1440
-        depart_at = datetime.combine(journey_date, datetime.min.time(), IST).replace(
-            hour=(stop.dep % 1440) // 60, minute=stop.dep % 60
-        )
+        if stop is None:
+            raise HTTPException(404, f"No schedule for train {train}")
+        code, name, dep = stop
+        classes = list(m.classes)
+        offset = dep // 1440
+        depart_at = datetime.combine(journey_date, datetime.min.time(), IST).replace(hour=(dep % 1440) // 60, minute=dep % 60)
+        origin_weekday = date.fromordinal(journey_date.toordinal() - offset).weekday()
         info = {
-            "number": t.number,
-            "name": t.name,
-            "board": {"code": stop.code, "name": timetable().station(stop.code).name},
+            "number": m.number,
+            "name": m.name,
+            "board": {"code": code, "name": name},
             "board_day": offset + 1,
             "classes": classes,
-            "reserved": t.reserved,
+            "reserved": m.reserved,
+            "runs_on": [DAY_NAMES[d] for d in sorted(m.runs_on)],
+            "runs_on_date": origin_weekday in m.runs_on,
         }
 
     now = datetime.now(IST)
@@ -127,6 +178,7 @@ def windows(
         "origin_date": date.fromordinal(journey_date.toordinal() - offset).isoformat(),
         "train": info,
         "windows": out,
+        "data_source": {"kind": source, "warnings": warnings},
         "rules": {"arp_days": ARP_DAYS, "class_labels": CLASS_LABELS},
     }
 

@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { api } from "../api";
-import { longDay, todayIST } from "../format";
+import { longDay, runDays, todayIST } from "../format";
 import type { StationHit, WindowsResponse } from "../types";
 import { BookingWindows } from "./BookingWindows";
+import { SourceNote } from "./SourceNote";
 import { StationInput } from "./StationInput";
 
 export function BookingCalendar() {
@@ -60,10 +61,19 @@ export function BookingCalendar() {
             <span className="muted"> · {longDay(data.journey_date + "T12:00:00+05:30")}</span>
           </h2>
           {data.train && (
-            <p className="muted">
-              Boarding at {data.train.board.name} on day {data.train.board_day} of the run
-              {data.origin_date !== data.journey_date && <> — train leaves origin {longDay(data.origin_date + "T12:00:00+05:30")}</>}.
-            </p>
+            <>
+              <SourceNote source={data.data_source} />
+              <p className="muted">
+                Boarding at {data.train.board.name} on day {data.train.board_day} of the run
+                {data.origin_date !== data.journey_date && <> — train leaves origin {longDay(data.origin_date + "T12:00:00+05:30")}</>}.
+                Runs: {runDays(data.train.runs_on)}.
+              </p>
+              {!data.train.runs_on_date && (
+                <p className="error" role="alert">
+                  {data.train.number} doesn't run on this date from {data.train.board.name}. Pick another date or train.
+                </p>
+              )}
+            </>
           )}
           <BookingWindows
             windows={data.windows}

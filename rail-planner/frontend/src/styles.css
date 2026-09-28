@@ -204,3 +204,12 @@ sup { font-size: 11px; color: var(--warn); margin-left: 2px; font-weight: 600; }
   .window { grid-template-columns: 1fr; }
   .w-side { justify-content: flex-start; }
 }
+
+.source { display: grid; gap: 4px; font-size: 13px; padding: 8px 12px; border-radius: 9px; margin-bottom: 10px; }
+.source.live { background: var(--good-soft); color: var(--text); }
+.source.live b { color: var(--good); }
+.source.stale { background: var(--warn-soft); }
+.source.stale b { color: var(--warn); }
+.source .warn { color: var(--warn); }
+.leg-train .runs { font-size: 12px; color: var(--muted); }
+.leg-train .runs.limited { color: var(--warn); font-weight: 600; }
