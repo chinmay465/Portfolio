@@ -82,15 +82,16 @@ def routes(
     from_code: str = Query(..., alias="from"),
     to_code: str = Query(..., alias="to"),
     journey_date: date = Query(..., alias="date"),
-    extra_hours: float = Query(3.0, ge=0),
-    extra_km: float = Query(150.0, ge=0),
+    extra_hours: float = Query(5.0, ge=0),
+    extra_km: float = Query(100.0, ge=0),
     no_time_limit: bool = False,
     no_km_limit: bool = False,
     nearby_km: float = Query(15.0, ge=0),
     min_transfer_min: int = Query(20, ge=0),
     include_unreserved: bool = False,
     limit: int = Query(50, ge=1),
-    max_changes: int = Query(1, ge=0),
+    max_changes: int = Query(2, ge=0),
+    min_sleep_hours: float | None = Query(None, ge=0, description="Only routes where one train allows this much sleep, starting 21:00-24:00"),
     via: str = Query("", description="Comma-separated station codes to pass through, in order"),
 ) -> dict:
     params = SearchParams(
@@ -104,6 +105,7 @@ def routes(
         include_unreserved=include_unreserved,
         limit=limit,
         max_changes=max_changes,
+        min_sleep_hours=min_sleep_hours,
         via=tuple(c.strip().upper() for c in via.split(",") if c.strip()),
     )
     try:
@@ -199,6 +201,7 @@ class SeatLeg(BaseModel):
     to: str
     date: date
     classes: list[str] | None = None
+    cls: str | None = None  # per-leg class (Best/Cheapest/Custom pick per train); falls back to the request's cls
 
 
 class SeatRequest(BaseModel):
@@ -218,11 +221,12 @@ def seats(req: SeatRequest) -> dict:
         raise HTTPException(400, f"Unknown quota {req.quota}")
     usage = Usage()
     items = [
-        {"train": l.train, "from": l.from_.upper(), "to": l.to.upper(), "date": l.date.isoformat(), "classes": l.classes}
+        {"train": l.train, "from": l.from_.upper(), "to": l.to.upper(), "date": l.date.isoformat(), "classes": l.classes,
+         "cls": (l.cls or req.cls).upper()}
         for l in req.legs
     ]
     with ThreadPoolExecutor(max_workers=2) as pool:  # the client also caps concurrency and backs off on 429
-        results = list(pool.map(lambda it: safe_check(client, it, req.cls.upper(), req.quota, usage, req.fresh), items))
+        results = list(pool.map(lambda it: safe_check(client, it, it.pop("cls"), req.quota, usage, req.fresh), items))
     return {
         "source": "live",
         "results": results,

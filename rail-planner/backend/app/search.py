@@ -28,6 +28,7 @@ from datetime import date, datetime, time, timedelta
 from .multileg import BoardLegs, SnapshotLegs, multi_search, suggest_multi_hubs
 from .railradar import LegOption, LiveError, RailRadar, Usage, legs_from_boards
 from .rules import IST, booking_windows, window_status
+from .sleep import best_sleep, sleep_block
 from .timetable import Station, StaticTimetable, Train, haversine_km
 
 INF = float("inf")
@@ -44,13 +45,14 @@ class SearchParams:
     from_code: str
     to_code: str
     journey_date: date
-    extra_hours: float | None = 3.0  # None = no limit
-    extra_km: float | None = 150.0  # None = no limit
+    extra_hours: float | None = 5.0  # None = no limit
+    extra_km: float | None = 100.0  # None = no limit
     nearby_km: float = 15.0
     min_transfer_min: int = 20
     include_unreserved: bool = False
     limit: int = 50
-    max_changes: int = 1
+    max_changes: int = 2
+    min_sleep_hours: float | None = None  # None = don't care; else one train must allow this much sleep from 21-24h
     via: tuple[str, ...] = ()  # stations the route must pass through, in order
 
     @property
@@ -481,6 +483,13 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
 
     alternates.sort(key=lambda j: (j.minutes, j.km))
     # With via stations every route shares the same change points, so variety caps would only hide them.
+    hidden_by_sleep = 0
+    if p.min_sleep_hours is not None:
+        before = len(direct) + len(alternates)
+        direct = [j for j in direct if sleep_block(j.legs, p.min_sleep_hours)]
+        alternates = [j for j in alternates if sleep_block(j.legs, p.min_sleep_hours)]
+        hidden_by_sleep = before - len(direct) - len(alternates)
+
     alternates = alternates[: p.limit] if via else _diversify(alternates, p.limit)
     direct.sort(key=lambda j: j.depart_at)
 
@@ -496,6 +505,7 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
             "min_transfer_min": p.min_transfer_min,
             "include_unreserved": p.include_unreserved,
             "max_changes": p.max_changes,
+            "min_sleep_hours": p.min_sleep_hours,
             "via": list(p.via),
         },
         "data_source": {
@@ -507,6 +517,7 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
             "warnings": warnings,
         },
         "hidden_by_limits": hidden_by_limits,
+        "hidden_by_sleep": hidden_by_sleep,
         "fastest_hidden_minutes": fastest_hidden,
         "baseline": None
         if base_min is None
@@ -521,8 +532,8 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
             "from": [{"code": c, "name": tt.station(c).name, "distance_km": round(d, 1)} for c, d in near_a.items()],
             "to": [{"code": c, "name": tt.station(c).name, "distance_km": round(d, 1)} for c, d in near_b.items()],
         },
-        "direct": [_journey(tt, j, base_min, base_km, now, near_a, near_b) for j in direct],
-        "alternates": [_journey(tt, j, base_min, base_km, now, near_a, near_b) for j in alternates],
+        "direct": [_journey(tt, j, base_min, base_km, now, near_a, near_b, p.min_sleep_hours) for j in direct],
+        "alternates": [_journey(tt, j, base_min, base_km, now, near_a, near_b, p.min_sleep_hours) for j in alternates],
     }
 
 
@@ -563,7 +574,7 @@ def _name(tt: StaticTimetable, code: str) -> str:
     return s.name if s else code
 
 
-def _journey(tt, j: Journey, base_min, base_km, now, near_a, near_b) -> dict:
+def _journey(tt, j: Journey, base_min, base_km, now, near_a, near_b, sleep_hours=None) -> dict:
     first, last = j.legs[0], j.legs[-1]
     out = {
         "kind": j.kind,
@@ -590,6 +601,13 @@ def _journey(tt, j: Journey, base_min, base_km, now, near_a, near_b) -> dict:
     out["changes"] = len(transfers)
     out["transfer"] = transfers[0] if transfers else None
     out["via"] = [{"code": c, "name": _name(tt, c)} for c in j.tags]
+    block = sleep_block(j.legs, sleep_hours) if sleep_hours is not None else None
+    out["sleep"] = (
+        {"leg": block["leg"], "train": block["train"], "start": block["start"].isoformat(), "end": block["end"].isoformat(),
+         "hours": sleep_hours}
+        if block else None
+    )
+    out["max_sleep_minutes"] = int(best_sleep(j.legs).total_seconds() // 60)
     return out
 
 

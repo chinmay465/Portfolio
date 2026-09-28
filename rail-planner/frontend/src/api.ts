@@ -25,14 +25,19 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export type SeatLegReq = { train: string; from: string; to: string; date: string; classes?: string[] };
+export type SeatLegReq = { train: string; from: string; to: string; date: string; cls: string; classes?: string[] };
 
 export const api = {
-  seats: (cls: string, quota: string, legs: SeatLegReq[], fresh = false) =>
-    post<SeatsResponse>("/api/seats", { cls, quota, legs, fresh }),
+  seats: (quota: string, legs: SeatLegReq[], fresh = false) => post<SeatsResponse>("/api/seats", { quota, legs, fresh }),
   stations: (q: string, signal?: AbortSignal) => get<StationHit[]>("/api/stations", { q, limit: 8 }, signal),
-  routes: (from: string, to: string, date: string, t: Tolerance, via: string[], limit: number, signal?: AbortSignal) =>
-    get<RouteResponse>("/api/routes", { from, to, date, ...t, via: via.join(","), limit }, signal),
+  routes: (from: string, to: string, date: string, t: Tolerance, via: string[], limit: number, signal?: AbortSignal) => {
+    const { sleep_on, sleep_hours, ...rest } = t;
+    return get<RouteResponse>(
+      "/api/routes",
+      { from, to, date, ...rest, via: via.join(","), limit, min_sleep_hours: sleep_on ? sleep_hours : undefined },
+      signal,
+    );
+  },
   windows: (date: string, train?: string, board?: string) =>
     get<WindowsResponse>("/api/booking-windows", { date, train, board }),
 };

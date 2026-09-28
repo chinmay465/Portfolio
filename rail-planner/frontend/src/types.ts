@@ -40,6 +40,8 @@ export type Journey = {
   changes: number;
   via: StationRef[];
   access: { board_offset_km: number; alight_offset_km: number };
+  sleep: { leg: number; train: string; start: string; end: string; hours: number } | null;
+  max_sleep_minutes: number;
 };
 
 export type Transfer = { station: StationRef; wait_minutes: number; tight: boolean };
@@ -59,13 +61,15 @@ export type RouteResponse = {
   from: StationRef & { state: string };
   to: StationRef & { state: string };
   journey_date: string;
-  params: Omit<Tolerance, "extra_hours" | "extra_km" | "no_time_limit" | "no_km_limit"> & {
+  params: Omit<Tolerance, "extra_hours" | "extra_km" | "no_time_limit" | "no_km_limit" | "sleep_on" | "sleep_hours"> & {
+    min_sleep_hours: number | null;
     via: string[];
     extra_hours: number | null;
     extra_km: number | null;
   };
   data_source: DataSource;
   hidden_by_limits: number;
+  hidden_by_sleep: number;
   fastest_hidden_minutes: number | null;
   baseline: null | {
     minutes: number;
@@ -88,6 +92,8 @@ export type Tolerance = {
   nearby_km: number;
   min_transfer_min: number;
   include_unreserved: boolean;
+  sleep_on: boolean; // want uninterrupted sleep on one train?
+  sleep_hours: number; // how much, starting 21:00-24:00
 };
 
 export type WindowsResponse = {
@@ -108,14 +114,16 @@ export type WindowsResponse = {
 };
 
 export const DEFAULT_TOLERANCE: Tolerance = {
-  extra_hours: 3,
-  extra_km: 150,
+  extra_hours: 5,
+  extra_km: 100,
   no_time_limit: false,
   no_km_limit: false,
-  max_changes: 1,
+  max_changes: 2,
   nearby_km: 15,
   min_transfer_min: 20,
   include_unreserved: false,
+  sleep_on: false,
+  sleep_hours: 8,
 };
 
 export type SeatCategory = "available" | "rac" | "waitlist" | "regret" | "closed" | "no_class" | "unknown";
@@ -147,15 +155,23 @@ export type SeatsResponse = {
   message?: string;
 };
 
+export type ClassMode = "best" | "cheapest" | "custom";
+
 export type SeatPrefs = {
-  cls: string;
   quota: string;
   auto_check: number; // check seats for the first N results automatically (0 = off)
   hide_unavailable: boolean; // hide routes with any waitlisted / regret / closed / missing-class leg
   rac_ok: boolean; // treat RAC as bookable
 };
 
-export const DEFAULT_SEATS: SeatPrefs = { cls: "3A", quota: "GN", auto_check: 10, hide_unavailable: false, rac_ok: true };
+export const DEFAULT_SEATS: SeatPrefs = { quota: "GN", auto_check: 3, hide_unavailable: false, rac_ok: true };
+
+/** Which class to check on each train: Best/Cheapest pick per train from its own classes; Custom = per-train overrides. */
+export type ClassChoice = {
+  mode: ClassMode;
+  base: "best" | "cheapest"; // what non-overridden trains use while in Custom
+  overrides: Record<string, string>; // legId -> class
+};
 
 export const seatKey = (train: string, from: string, to: string, date: string, cls: string, quota: string) =>
   [train, from, to, date, cls, quota].join("|");

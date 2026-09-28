@@ -253,3 +253,27 @@ sup { font-size: 11px; color: var(--warn); margin-left: 2px; font-weight: 600; }
 .seat-actions { font-size: 13px; }
 .seat-note { background: var(--surface-2); border: 1px solid var(--line); padding: 8px 12px; border-radius: 9px; font-size: 14px; margin: 0 0 12px; }
 @media (max-width: 640px) { .seats-set .checks { grid-column: 1 / -1; } }
+
+.filter-bar { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.filter-bar .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip.static { cursor: default; font-family: inherit; }
+.ghost { border: 1px solid var(--line); background: var(--surface); color: var(--accent); font-weight: 600; border-radius: 9px; padding: 8px 14px; cursor: pointer; min-height: 38px; }
+.filters { display: grid; gap: 14px; }
+.filters-actions { display: flex; gap: 10px; align-items: center; border-top: 1px solid var(--line); padding-top: 12px; }
+.filters-actions .spacer { flex: 1; }
+.switch { display: flex; gap: 10px; align-items: center; font-size: 14px; grid-column: 1 / -1; cursor: pointer; }
+.switch input { appearance: none; width: 36px; height: 20px; border-radius: 999px; background: var(--line); position: relative; cursor: pointer; flex: none; transition: background 0.15s; }
+.switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--surface); transition: left 0.15s; box-shadow: 0 1px 2px rgb(0 0 0 / 25%); }
+.switch input:checked { background: var(--accent); }
+.switch input:checked::after { left: 18px; }
+.sleep-hours { display: grid; gap: 6px; grid-column: 1 / -1; }
+.sleep-hours label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.sleep-hours .inline, .seats-set .inline { display: flex; gap: 6px; align-items: center; font-size: 14px; }
+.sleep-hours .inline input, .seats-set .inline input { width: 80px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); min-height: 38px; }
+.sleep-hours .hint { margin: 0; color: var(--muted); }
+.classbar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.classbar button { border: 1px solid var(--line); background: var(--surface); padding: 6px 12px; border-radius: 999px; cursor: pointer; font-weight: 600; color: var(--muted); }
+.classbar button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.cls-pick { width: auto; min-height: 0; padding: 1px 4px; font-size: 12px; font-family: ui-monospace, Menlo, monospace; border-radius: 6px; }
+.badge.sleepb { background: color-mix(in srgb, #6366f1 14%, transparent); color: #4f46e5; }
+@media (prefers-color-scheme: dark) { .badge.sleepb { color: #a5b4fc; } }

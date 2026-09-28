@@ -17,21 +17,25 @@ Backend: Python (FastAPI). Frontend: React + TypeScript (Vite).
 
 | Input | Default | Meaning |
 |---|---|---|
-| Extra travel time | 3 h | max time over the fastest direct train; any value, or **No limit** |
-| Extra distance | 150 km | max rail km over the shortest direct train; any value, or **No limit** |
-| Max changes | 1 | any number; 0 = direct trains only |
+| Extra travel time | 5 h | max time over the fastest direct train; any value, or **No limit** |
+| Extra distance | 100 km | max rail km over the shortest direct train; any value, or **No limit** |
+| Max changes | 2 | any number; 0 = direct trains only |
 | Via stations | none | stations the route must pass through, in order (changing there or staying on the train) |
+| Minimum sleep | off (8 h when on) | one train must let you sleep this long, starting 21:00–24:00 (at 21:00, or at departure if later) |
 | Nearby stations within | 15 km | also board or alight at busy stations nearby (e.g. YPR/BNC/KJM for SBC); any value |
 | Minimum change time | 20 min | for one-change routes; any value. Changes under 45 min are flagged "Tight change" |
 
 Routes with 2 or more changes, or with via stations, come from a round-by-round search (one train per round) over the useful stations: both ends, nearby stations, the best-connected change points, and your via stations. It keeps the earliest few partial routes per station each round and prunes anything that can't meet your limits. If via stations are set but nothing fits your limits, the results say how many routes exist beyond them and how long the fastest takes, with a one-click "Remove limits". With live data, 2+ changes adds up to 16 more station timetables (cached and shared), about 30 requests for a brand-new route.
+
+Filters are hidden behind **+ Add filters** and edited as a draft. Nothing is searched until you press **Apply** (or **Find trains**). Every number field accepts 0 (Max changes 0 = direct trains only).
 
 There are no built-in upper bounds, and no hidden layover cap: the wait between trains is limited only by your total-time setting. Results come back 50 at a time, fastest first, and "Show more alternates" loads the next 50.
 
 Alternates are either a direct train from or to a nearby station, or a two-train route with one change. If no direct train exists, the best alternate becomes the baseline. When you change the inputs, results refresh automatically. The last trip, recent trips and your tolerance settings are saved in the browser.
 
 **Seat availability** (live data only), from RailRadar's `GET /v1/trains/{number}/seats?source=&destination=&journeyDate=&classCode=&quotaCode=`
-- Choose a class and quota (General, Tatkal, Premium Tatkal, Ladies, Senior citizen). Each reserved leg shows AVL / RAC / WL (with confirmation %) / REGRET.
+- **Seat class** above the results: **Best possible** picks the highest class each train carries, **Cheapest** the lowest (fare order 2S < SL < 3E < CC < 3A < 2A < EC < 1A). A route can end up with 2S on one train and SL on another. **Custom** gives each train a class dropdown. Changing any train's class switches the toggle to Custom and keeps the other picks. With minimum sleep on, the train you sleep on only uses berth classes. Class lists come from the timetable snapshot, so they can be incomplete.
+- Choose a quota (General, Tatkal, Premium Tatkal, Ladies, Senior citizen). Each reserved leg shows AVL / RAC / WL (with confirmation %) / REGRET.
 - If a train doesn't have your class, the closest class it does have is checked and labelled (e.g. 3A chosen, Hutatma has only CC → "WL 11 · CC").
 - **Hide routes with waitlist / no seats** removes a route when any leg is waitlisted, regret, closed or missing the class. **Count RAC as available** is optional. Unchecked routes stay visible and are marked.
 - Cost control: each leg is one API request, cached for 15 minutes (`SEATS_TTL`). Only the first N routes are checked automatically (default 10, set to 0 to turn off). If the filter hides some, the next ones are checked, up to 3×N per search. Other routes have a "Check seats" button, and "Refresh" skips the cache.

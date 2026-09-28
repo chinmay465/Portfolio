@@ -185,7 +185,7 @@ def test_cache_makes_repeat_searches_free(tmp_path):
     rr = client_for(fake, tmp_path)
     first = search(TT, SearchParams("SBC", "PUNE", TUESDAY), rr)
     n = fake.calls
-    assert 1 < n <= 2 + 2 * 2 + 10  # one board each: ends + nearby + hubs
+    assert 1 < n <= 2 + 2 * 2 + 10 + 16  # one board each: ends + nearby + hubs + multi-change hubs
     assert first["data_source"]["requests"] == n
     second = search(TT, SearchParams("SBC", "PUNE", date(2026, 10, 22)), rr)
     assert fake.calls == n  # different date, same cached pairs
@@ -372,3 +372,14 @@ def test_seat_errors_are_reported_per_leg(api_with_live, monkeypatch):
         client._client = real
     leg = r["results"][0]
     assert leg["category"] == "unknown" and "Too many requests" in leg["error"]
+
+
+def test_seat_class_per_leg(api_with_live):
+    SEAT_CALLS.clear()
+    legs = [
+        {"train": "17307", "from": "SBC", "to": "SUR", "date": "2026-11-05", "classes": ["2A", "3A", "SL"], "cls": "SL"},
+        {"train": "12158", "from": "SUR", "to": "PUNE", "date": "2026-11-06", "classes": ["CC", "2S"], "cls": "2S"},
+    ]
+    r = api_with_live.post("/api/seats", json={"quota": "GN", "legs": legs}).json()["results"]
+    assert [x["cls"] for x in r] == ["SL", "2S"] and [x["checked_cls"] for x in r] == ["SL", "2S"]
+    assert [c["classCode"] for c in SEAT_CALLS] == ["SL", "2S"] or sorted(c["classCode"] for c in SEAT_CALLS) == ["2S", "SL"]

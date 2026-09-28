@@ -19,11 +19,12 @@ def test_station_search():
     assert r.json()[0]["code"] == "PUNE"
 
 
-def test_defaults_are_3h_and_150km():
+def test_defaults_are_2_changes_5h_100km():
     r = client.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": DATE})
     body = r.json()
-    assert body["params"]["extra_hours"] == 3
-    assert body["params"]["extra_km"] == 150
+    assert body["params"]["extra_hours"] == 5
+    assert body["params"]["extra_km"] == 100
+    assert body["params"]["max_changes"] == 2
 
 
 @pytest.mark.parametrize("pair", [("SBC", "PUNE"), ("PUNE", "NGP"), ("CSTM", "NDLS")])
@@ -45,7 +46,7 @@ def test_tighter_tolerance_returns_fewer_alternates():
 
 
 def test_connections_are_physically_consistent():
-    body = client.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": DATE, "min_transfer_min": 60}).json()
+    body = client.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": DATE, "min_transfer_min": 60, "max_changes": 1}).json()
     conns = [j for j in body["alternates"] if j["kind"] == "connection"]
     assert conns
     for j in conns:
@@ -90,11 +91,12 @@ def test_no_upper_bounds_on_constraints():
 
 def test_no_limit_flags():
     body = client.get(
-        "/api/routes", params={"from": "SBC", "to": "PUNE", "date": DATE, "no_time_limit": True, "no_km_limit": True}
+        "/api/routes",
+        params={"from": "SBC", "to": "PUNE", "date": DATE, "no_time_limit": True, "no_km_limit": True, "limit": 1000},
     ).json()
     assert body["params"]["extra_hours"] is None and body["params"]["extra_km"] is None
     assert body["baseline"]["max_minutes"] is None and body["baseline"]["max_km"] is None
-    capped = client.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": DATE}).json()
+    capped = client.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": DATE, "limit": 1000}).json()
     assert len(body["alternates"]) >= len(capped["alternates"])
     assert max(j["minutes"] for j in body["alternates"]) > capped["baseline"]["max_minutes"]
 

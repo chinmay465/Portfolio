@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { clock, day, dayDiff, duration, runDays } from "../format";
-import { journeySeat, legKey, type SeatState } from "../seats";
-import type { Journey, RouteResponse, SeatPrefs, SeatResult } from "../types";
+import { classOptions, journeyPicks, journeySeat, legClass, type LegPick, type SeatState } from "../seats";
+import type { ClassChoice, Journey, Leg, RouteResponse, SeatResult } from "../types";
 import { BookingWindows } from "./BookingWindows";
 
 const KIND_LABEL = { direct: "Direct", nearby: "Nearby station", connection: "Change", through: "Direct" } as const;
@@ -16,13 +16,18 @@ type Props = {
   j: Journey;
   route: RouteResponse;
   seats?: Record<string, SeatState>;
-  seatPrefs: SeatPrefs;
+  choice: ClassChoice;
+  quota: string;
+  onPickClass: (leg: Leg, cls: string) => void;
   onCheckSeats: () => void;
   onRefreshSeats: () => void;
 };
 
-export function JourneyCard({ j, route, seats, seatPrefs, onCheckSeats, onRefreshSeats }: Props) {
+export function JourneyCard({ j, route, seats, choice, quota, onPickClass, onCheckSeats, onRefreshSeats }: Props) {
   const [open, setOpen] = useState(false);
+  const picks = journeyPicks(j, choice, quota);
+  const pickFor = (l: Leg) => picks.find((p) => p.leg === l);
+  const pending = seats ? picks.filter((p) => !seats[p.key]) : [];
   const first = j.legs[0];
   const last = j.legs[j.legs.length - 1];
   const plus = dayDiff(j.depart_at, j.arrive_at);
@@ -64,7 +69,12 @@ export function JourneyCard({ j, route, seats, seatPrefs, onCheckSeats, onRefres
         )}
         <Delta minutes={j.extra_minutes} km={j.extra_km} />
         <span className="badge soft">{day(j.depart_at)}</span>
-        {seats && <JourneySeatBadge s={journeySeat(j, seats, seatPrefs)} cls={seatPrefs.cls} />}
+        {j.sleep && (
+          <span className="badge sleepb" title={`Uninterrupted on ${j.sleep.train}`}>
+            Sleep {clock(j.sleep.start)}–{clock(j.sleep.end)} on {j.sleep.train}
+          </span>
+        )}
+        {seats && <JourneySeatBadge s={journeySeat(j, seats, choice, quota)} />}
       </div>
 
       {(j.access.board_offset_km > 0 || j.access.alight_offset_km > 0) && (
@@ -91,10 +101,12 @@ export function JourneyCard({ j, route, seats, seatPrefs, onCheckSeats, onRefres
               </div>
             )}
             <div className="leg-train">
-              {seats && l.train.reserved && <SeatPill s={seats[legKey(l, seatPrefs)]} />}
               <span className="num">{l.train.number}</span>
               <span className="tname">{l.train.name}</span>
-              {l.train.classes.length > 0 && <span className="classes">{l.train.classes.join(" ")}</span>}
+              {l.train.reserved && (
+                <ClassPicker leg={l} value={legClass(l, j.sleep?.leg === i, choice)} onChange={(c) => onPickClass(l, c)} />
+              )}
+              {seats && l.train.reserved && <SeatPill s={seats[pickFor(l)?.key ?? ""]} />}
               <span className={`runs ${l.train.runs_on.length < 7 ? "limited" : ""}`}>{runDays(l.train.runs_on)}</span>
             </div>
             <div className="leg-times">
@@ -108,13 +120,12 @@ export function JourneyCard({ j, route, seats, seatPrefs, onCheckSeats, onRefres
 
       {seats && (
         <div className="seat-actions">
-          {j.legs.some((l) => l.train.reserved && !seats[legKey(l, seatPrefs)]) ? (
+          {pending.length > 0 ? (
             <button type="button" className="link" onClick={onCheckSeats}>
-              Check {seatPrefs.cls} seats ({j.legs.filter((l) => l.train.reserved && !seats[legKey(l, seatPrefs)]).length} request
-              {j.legs.filter((l) => l.train.reserved && !seats[legKey(l, seatPrefs)]).length === 1 ? "" : "s"})
+              Check seats ({pending.map((p) => p.cls).join(" + ")} · {pending.length} request{pending.length === 1 ? "" : "s"})
             </button>
           ) : (
-            <CheckedAt j={j} seats={seats} prefs={seatPrefs} onRefresh={onRefreshSeats} />
+            <CheckedAt picks={picks} seats={seats} quota={quota} onRefresh={onRefreshSeats} />
           )}
         </div>
       )}
@@ -202,23 +213,44 @@ function SeatPill({ s }: { s?: SeatState }) {
   );
 }
 
-function JourneySeatBadge({ s, cls }: { s: SeatResult | null; cls: string }) {
+function JourneySeatBadge({ s }: { s: SeatResult | null }) {
   if (!s) return null;
   const text =
-    s.category === "available" ? "Seats available" : s.category === "rac" ? "RAC only" : s.category === "waitlist" ? "Waitlisted" : s.category === "unknown" ? "Seats unknown" : `No ${cls} seats`;
+    s.category === "available" ? "Seats available" : s.category === "rac" ? "RAC only" : s.category === "waitlist" ? "Waitlisted" : s.category === "unknown" ? "Seats unknown" : "No seats";
   return <span className={`badge seatb ${s.category}`}>{text}</span>;
 }
 
-function CheckedAt({ j, seats, prefs, onRefresh }: { j: Journey; seats: Record<string, SeatState>; prefs: SeatPrefs; onRefresh: () => void }) {
-  const times = j.legs
-    .map((l) => seats[legKey(l, prefs)])
+function ClassPicker({ leg, value, onChange }: { leg: Leg; value: string; onChange: (cls: string) => void }) {
+  const { options, known } = classOptions(leg);
+  const opts = options.includes(value) ? options : [value, ...options];
+  return (
+    <select
+      className="cls-pick"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      aria-label={`Class on ${leg.train.number}`}
+      title={known ? "Classes this train carries" : "This train's classes aren't known; common classes shown"}
+    >
+      {opts.map((c) => (
+        <option key={c} value={c}>
+          {c}
+          {known ? "" : "?"}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function CheckedAt({ picks, seats, quota, onRefresh }: { picks: LegPick[]; seats: Record<string, SeatState>; quota: string; onRefresh: () => void }) {
+  const times = picks
+    .map((p) => seats[p.key])
     .filter((s): s is SeatResult => !!s && s !== "loading" && !!s.checked_at)
     .map((s) => s.checked_at as string)
     .sort();
   if (!times.length) return null;
   return (
     <span className="muted small">
-      {prefs.cls} · {prefs.quota} seats checked {clock(times[0])} ·{" "}
+      {quota} quota · checked {clock(times[0])} ·{" "}
       <button type="button" className="link" onClick={onRefresh}>
         Refresh
       </button>
