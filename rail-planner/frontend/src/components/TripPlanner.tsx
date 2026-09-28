@@ -128,6 +128,11 @@ export function TripPlanner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live, list, seatPrefs.auto_check, seatPrefs.cls, seatPrefs.quota]);
 
+  const seatErrors = useMemo(
+    () => [...new Set(Object.values(seats).flatMap((s) => (s !== "loading" && s.error ? [s.error] : [])))].slice(0, 2),
+    [seats],
+  );
+
   const counts = data && {
     all: data.direct.length + data.alternates.length,
     direct: data.direct.length,
@@ -300,6 +305,12 @@ export function TripPlanner() {
                 </select>
               </label>
             </div>
+          )}
+
+          {seatErrors.length > 0 && (
+            <p className="error" role="alert">
+              Seat check failed: {seatErrors.join(" · ")}
+            </p>
           )}
 
           {live && (hiddenBySeats > 0 || unchecked > 0) && (

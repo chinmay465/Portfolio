@@ -25,6 +25,9 @@ from .rules import IST
 BASE_URL = os.getenv("RAILRADAR_BASE_URL", "https://api.railradar.in/v1")
 DEFAULT_CACHE = Path(__file__).resolve().parent.parent / "data" / "railradar-cache.sqlite3"
 SEATS_TTL = int(os.getenv("SEATS_TTL", "900"))
+CONCURRENCY = int(os.getenv("RAILRADAR_CONCURRENCY", "2"))
+MAX_RETRIES = 3
+BACKOFF = float(os.getenv("RAILRADAR_BACKOFF", "1"))  # seconds; doubles each retry
 DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 
 # RailRadar coach position codes -> class codes (H1 = First AC, A1 = 2A, B1 = 3A, ...)
@@ -94,6 +97,24 @@ class Usage:
     errors: list[str] = field(default_factory=list)
 
 
+def _error_message(res: httpx.Response) -> str:
+    """RailRadar's own error text, wherever it put it."""
+    try:
+        body = res.json()
+    except ValueError:
+        return (res.text or res.reason_phrase or "").strip()[:200]
+    if isinstance(body, dict):
+        for v in (
+            (body.get("meta") or {}).get("message") if isinstance(body.get("meta"), dict) else None,
+            body.get("message"),
+            (body.get("error") or {}).get("message") if isinstance(body.get("error"), dict) else body.get("error"),
+            body.get("detail"),
+        ):
+            if v:
+                return str(v)[:200]
+    return res.reason_phrase or f"HTTP {res.status_code}"
+
+
 def _hhmm(value: str | None) -> int | None:
     if not value:
         return None
@@ -141,6 +162,10 @@ class RailRadar:
         self._db.execute("CREATE TABLE IF NOT EXISTS cache (key TEXT PRIMARY KEY, body TEXT, fetched REAL)")
         self._db.execute("CREATE TABLE IF NOT EXISTS usage (month TEXT PRIMARY KEY, requests INTEGER)")
         self._lock = threading.Lock()
+        self._slots = threading.BoundedSemaphore(CONCURRENCY)
+        self._next_ok = 0.0  # monotonic time before which no call may start (shared cool-down after 429)
+        self._quota_month: str | None = None
+        self._quota_msg = ""
 
     # ---- raw access with cache ----
 
@@ -153,27 +178,55 @@ class RailRadar:
                 usage.cache_hits += 1
             return json.loads(row[0])
 
-        try:
-            res = self._client.get(path, params=params)
-        except httpx.HTTPError as e:
-            raise LiveError(f"RailRadar unreachable: {e.__class__.__name__}") from e
-        self._count()
-        if usage:
-            usage.requests += 1
-        if res.status_code in (401, 403):
-            raise LiveError("RailRadar rejected the API key")
-        if res.status_code == 429:
-            raise LiveError("RailRadar quota exceeded for this month")
+        res = self._fetch(path, params, usage)
         if res.status_code == 404:
             body = {"success": False, "data": None}
-        elif res.status_code >= 400:
-            raise LiveError(f"RailRadar error {res.status_code}")
         else:
             body = res.json()
         with self._lock:
             self._db.execute("INSERT OR REPLACE INTO cache VALUES (?, ?, ?)", (key, json.dumps(body), time.time()))
             self._db.commit()
         return body
+
+    def _fetch(self, path: str, params: dict | None, usage: Usage | None) -> httpx.Response:
+        """One upstream call, with a shared cool-down after 429s and a small concurrency cap.
+
+        RailRadar answers 429 both for per-second rate limits and for an exhausted monthly quota.
+        Rate limits are retried after Retry-After (or 1 -> 2 -> 4 s); a quota message stops all
+        further calls until the next month so retries don't burn what's left.
+        """
+        month = datetime.now(IST).strftime("%Y-%m")
+        if self._quota_month == month:
+            raise LiveError(f"RailRadar monthly quota used up: {self._quota_msg}")
+        for attempt in range(MAX_RETRIES + 1):
+            with self._slots:
+                wait = self._next_ok - time.monotonic()
+                if wait > 0:
+                    time.sleep(wait)
+                try:
+                    res = self._client.get(path, params=params)
+                except httpx.HTTPError as e:
+                    raise LiveError(f"RailRadar unreachable: {e.__class__.__name__}") from e
+            self._count()
+            if usage:
+                usage.requests += 1
+            if res.status_code != 429:
+                break
+            msg = _error_message(res)
+            if any(w in msg.lower() for w in ("month", "quota", "plan limit", "upgrade")):
+                self._quota_month, self._quota_msg = month, msg
+                raise LiveError(f"RailRadar monthly quota used up: {msg}")
+            retry_after = res.headers.get("retry-after")
+            delay = float(retry_after) if retry_after and retry_after.replace(".", "", 1).isdigit() else BACKOFF * 2**attempt
+            self._next_ok = max(self._next_ok, time.monotonic() + min(delay, 10))
+        else:
+            raise LiveError(f"RailRadar rate limit (HTTP 429): {_error_message(res)}")
+
+        if res.status_code in (401, 403):
+            raise LiveError(f"RailRadar refused the request (HTTP {res.status_code}): {_error_message(res)}")
+        if res.status_code >= 400 and res.status_code != 404:
+            raise LiveError(f"RailRadar error (HTTP {res.status_code}): {_error_message(res)}")
+        return res
 
     def _count(self) -> None:
         month = datetime.now(IST).strftime("%Y-%m")

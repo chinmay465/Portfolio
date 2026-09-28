@@ -221,7 +221,7 @@ def seats(req: SeatRequest) -> dict:
         {"train": l.train, "from": l.from_.upper(), "to": l.to.upper(), "date": l.date.isoformat(), "classes": l.classes}
         for l in req.legs
     ]
-    with ThreadPoolExecutor(max_workers=6) as pool:
+    with ThreadPoolExecutor(max_workers=2) as pool:  # the client also caps concurrency and backs off on 429
         results = list(pool.map(lambda it: safe_check(client, it, req.cls.upper(), req.quota, usage, req.fresh), items))
     return {
         "source": "live",
@@ -230,6 +230,15 @@ def seats(req: SeatRequest) -> dict:
         "cache_hits": usage.cache_hits,
         "month_requests": client.month_requests(),
     }
+
+
+@app.get("/api/seats")
+def seat_one(
+    train: str, from_code: str = Query(..., alias="from"), to: str = Query(...), journey_date: date = Query(..., alias="date"),
+    cls: str = "3A", quota: str = "GN", fresh: bool = False,
+) -> dict:
+    """Single-leg seat check (GET), handy for checking one train from a browser or curl."""
+    return seats(SeatRequest(cls=cls, quota=quota, fresh=fresh, legs=[SeatLeg(train=train, **{"from": from_code}, to=to, date=journey_date)]))
 
 
 # Serve the built frontend when present (single-process deploy).

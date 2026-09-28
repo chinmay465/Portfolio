@@ -197,7 +197,7 @@ def test_cache_makes_repeat_searches_free(tmp_path):
 def test_bad_key_falls_back_to_snapshot(tmp_path):
     res = search(TT, SearchParams("SBC", "PUNE", TUESDAY), client_for(Fake(status=401), tmp_path))
     assert res["data_source"]["kind"] == "snapshot"
-    assert "rejected the API key" in res["data_source"]["warnings"][0]
+    assert "refused the request (HTTP 401)" in res["data_source"]["warnings"][0]
     assert res["direct"]
 
 
@@ -308,3 +308,67 @@ def test_seat_refresh_bypasses_cache(api_with_live):
     assert api_with_live.post("/api/seats", json={"legs": leg}).json()["requests"] == 1
     assert api_with_live.post("/api/seats", json={"legs": leg}).json()["requests"] == 0
     assert api_with_live.post("/api/seats", json={"legs": leg, "fresh": True}).json()["requests"] == 1
+
+
+class Flaky(Fake):
+    """429 for the first `n` calls, with a RailRadar-style message, then normal."""
+
+    def __init__(self, n, message="Too many requests, slow down"):
+        super().__init__()
+        self.n, self.message = n, message
+
+    def __call__(self, request):
+        if self.n > 0:
+            self.n -= 1
+            self.calls += 1
+            return httpx.Response(429, json={"success": False, "meta": {"message": self.message}})
+        return super().__call__(request)
+
+
+def test_rate_limit_is_retried(tmp_path, monkeypatch):
+    import app.railradar as rr_mod
+
+    monkeypatch.setattr(rr_mod, "BACKOFF", 0.01)
+    fake = Flaky(2)
+    rr = client_for(fake, tmp_path)
+    res = rr.seats("17307", "SBC", "SUR", "2026-10-20", "3A")
+    assert res["rows"] and fake.calls == 3  # two 429s, then success
+
+
+def test_rate_limit_gives_up_with_real_message(tmp_path, monkeypatch):
+    import app.railradar as rr_mod
+    from app.railradar import LiveError
+
+    monkeypatch.setattr(rr_mod, "BACKOFF", 0.01)
+    rr = client_for(Flaky(10), tmp_path)
+    with pytest.raises(LiveError, match="rate limit .*Too many requests, slow down"):
+        rr.seats("17307", "SBC", "SUR", "2026-10-20", "3A")
+
+
+def test_monthly_quota_stops_further_calls(tmp_path):
+    from app.railradar import LiveError
+
+    fake = Flaky(10, "Request rate exceeded your plan quota (1,000 requests/month on free sandbox tier).")
+    rr = client_for(fake, tmp_path)
+    with pytest.raises(LiveError, match="monthly quota used up"):
+        rr.seats("17307", "SBC", "SUR", "2026-10-20", "3A")
+    calls = fake.calls
+    with pytest.raises(LiveError, match="monthly quota used up"):
+        rr.station_board("SBC")
+    assert fake.calls == calls == 1  # no retries, no further requests this month
+
+
+def test_seat_errors_are_reported_per_leg(api_with_live, monkeypatch):
+    import app.railradar as rr_mod
+
+    monkeypatch.setattr(rr_mod, "BACKOFF", 0.01)
+    client = main.live()
+    real = client._client
+    client._client = httpx.Client(base_url="https://api.railradar.in/v1", headers=dict(real.headers),
+                                  transport=httpx.MockTransport(Flaky(99)))
+    try:
+        r = api_with_live.get("/api/seats", params={"train": "17307", "from": "SBC", "to": "SUR", "date": "2026-11-02"}).json()
+    finally:
+        client._client = real
+    leg = r["results"][0]
+    assert leg["category"] == "unknown" and "Too many requests" in leg["error"]

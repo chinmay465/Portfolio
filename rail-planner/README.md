@@ -35,6 +35,8 @@ Alternates are either a direct train from or to a nearby station, or a two-train
 - If a train doesn't have your class, the closest class it does have is checked and labelled (e.g. 3A chosen, Hutatma has only CC → "WL 11 · CC").
 - **Hide routes with waitlist / no seats** removes a route when any leg is waitlisted, regret, closed or missing the class. **Count RAC as available** is optional. Unchecked routes stay visible and are marked.
 - Cost control: each leg is one API request, cached for 15 minutes (`SEATS_TTL`). Only the first N routes are checked automatically (default 10, set to 0 to turn off). If the filter hides some, the next ones are checked, up to 3×N per search. Other routes have a "Check seats" button, and "Refresh" skips the cache.
+- Rate limits: RailRadar answers HTTP 429 both for per-second limits and for the monthly quota. After a rate-limit 429 the client pauses every call (honouring `Retry-After`, otherwise 1 → 2 → 4 s) and retries up to 3 times. It runs at most 2 calls in parallel (`RAILRADAR_CONCURRENCY`). A quota message stops all calls until next month. RailRadar's own error text is shown in the UI.
+- `GET /api/seats?train=17307&from=SBC&to=SUR&date=2026-10-20&cls=3A&quota=GN` checks one leg.
 - Statuses come from RailRadar, not directly from IRCTC, so confirm on IRCTC or RailOne before paying.
 
 ## Run
