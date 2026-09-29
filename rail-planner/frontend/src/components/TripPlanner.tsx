@@ -12,7 +12,17 @@ import { StationInput } from "./StationInput";
 const PAGE = 50;
 
 type Filter = "all" | "direct" | "nearby" | "connection";
-type Sort = "fastest" | "earliest" | "shortest";
+type Sort = "duration" | "departure" | "arrival" | "distance" | "changes";
+type Dir = "asc" | "desc";
+
+// Each sort, with what ascending/descending mean for it.
+const SORTS: Record<Sort, { label: string; asc: string; desc: string }> = {
+  duration: { label: "Travel time", asc: "shortest first", desc: "longest first" },
+  departure: { label: "Departure", asc: "earliest first", desc: "latest first" },
+  arrival: { label: "Arrival", asc: "earliest first", desc: "latest first" },
+  distance: { label: "Distance", asc: "shortest first", desc: "longest first" },
+  changes: { label: "Changes", asc: "fewest first", desc: "most first" },
+};
 
 export function TripPlanner() {
   const saved = useMemo(() => storage.load(), []);
@@ -36,7 +46,8 @@ export function TripPlanner() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
-  const [sort, setSort] = useState<Sort>("fastest");
+  const [sort, setSort] = useState<Sort>("duration");
+  const [dir, setDir] = useState<Dir>("asc");
   const [limit, setLimit] = useState(PAGE);
   const ctrl = useRef<AbortController | null>(null);
   const { seats, check, usage } = useSeats();
@@ -92,13 +103,17 @@ export function TripPlanner() {
     if (!data) return [];
     let items: Journey[] = [...data.direct, ...data.alternates];
     if (filter !== "all") items = items.filter((j) => j.kind === filter || (filter === "connection" && j.kind === "through"));
-    const by: Record<Sort, (a: Journey, b: Journey) => number> = {
-      fastest: (a, b) => a.minutes - b.minutes || a.km - b.km,
-      earliest: (a, b) => a.depart_at.localeCompare(b.depart_at),
-      shortest: (a, b) => a.km - b.km || a.minutes - b.minutes,
+    const key: Record<Sort, (a: Journey, b: Journey) => number> = {
+      duration: (a, b) => a.minutes - b.minutes,
+      departure: (a, b) => a.depart_at.localeCompare(b.depart_at),
+      arrival: (a, b) => a.arrive_at.localeCompare(b.arrive_at),
+      distance: (a, b) => a.km - b.km,
+      changes: (a, b) => a.changes - b.changes,
     };
-    return items.sort(by[sort]);
-  }, [data, filter, sort]);
+    const sign = dir === "asc" ? 1 : -1;
+    // Ties fall back to fastest, then shortest, whichever direction the main sort runs.
+    return items.sort((a, b) => sign * key[sort](a, b) || a.minutes - b.minutes || a.km - b.km);
+  }, [data, filter, sort, dir]);
 
   // Seat checks need a RailRadar key, whichever source the timetable came from.
   const live = !!data?.data_source.live_configured;
@@ -323,14 +338,25 @@ export function TripPlanner() {
                     </button>
                   ))}
                 </div>
-                <label className="sort">
-                  Sort
-                  <select value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
-                    <option value="fastest">Fastest</option>
-                    <option value="earliest">Earliest departure</option>
-                    <option value="shortest">Shortest distance</option>
+                <div className="sort">
+                  <label htmlFor="sort-key">Sort</label>
+                  <select id="sort-key" value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
+                    {(Object.keys(SORTS) as Sort[]).map((k) => (
+                      <option key={k} value={k}>
+                        {SORTS[k].label}
+                      </option>
+                    ))}
                   </select>
-                </label>
+                  <button
+                    type="button"
+                    className="sort-dir"
+                    onClick={() => setDir((d) => (d === "asc" ? "desc" : "asc"))}
+                    aria-label={`Sort ${dir === "asc" ? "ascending" : "descending"}: ${SORTS[sort][dir]}. Click to reverse.`}
+                    title="Reverse order"
+                  >
+                    {dir === "asc" ? "↑" : "↓"} {SORTS[sort][dir]}
+                  </button>
+                </div>
               </div>
             </>
           )}

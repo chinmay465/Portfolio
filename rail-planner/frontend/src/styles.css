@@ -281,3 +281,4 @@ sup { font-size: 11px; color: var(--warn); margin-left: 2px; font-weight: 600; }
 .via-chip .stay { display: inline-flex; gap: 4px; align-items: center; font-size: 12px; color: var(--muted); margin-left: 4px; }
 .via-chip .stay input { width: 52px; padding: 2px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); font-size: 12px; text-align: right; }
 .legs .wait.stay { color: var(--accent); }
+.sort-dir { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 10px; min-height: 36px; cursor: pointer; font-size: 13px; color: var(--text); white-space: nowrap; }
