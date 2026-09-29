@@ -198,6 +198,27 @@ class StaticTimetable:
     def train(self, number: str) -> Train | None:
         return self._trains.get(number)
 
+    def search_trains(self, query: str, limit: int = 10) -> list[Train]:
+        q = query.strip().lower()
+        scored = []
+        for t in self._trains.values():
+            n, name = t.number.lower(), t.name.lower()
+            if n == q:
+                score = 0
+            elif n.startswith(q):
+                score = 1
+            elif name.startswith(q):
+                score = 2
+            elif any(w.startswith(q) for w in name.split()):
+                score = 3
+            elif q in name:
+                score = 4
+            else:
+                continue
+            scored.append((score, t.number, t))
+        scored.sort(key=lambda x: x[:2])
+        return [t for *_, t in scored[:limit]]
+
     def reserved_halts(self, code: str) -> int:
         return self._reserved_halts.get(code, 0)
 

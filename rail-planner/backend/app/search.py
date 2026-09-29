@@ -34,6 +34,7 @@ from .timetable import Station, StaticTimetable, Train, haversine_km
 INF = float("inf")
 LIVE_HUBS = 10  # change stations queried live (1 station-board request each, cached 7 days)
 LIVE_NEARBY = 2  # nearby stations per side queried live (1 request each)
+LIVE_PINNED_NODES = 8  # halts of a pinned train added as change points in live mode (1 request each, cached)
 LIVE_MULTI_HUBS = 8  # extra stations per side for 2+ changes (1 request each, cached)
 SNAPSHOT_MULTI_HUBS = 15
 TIGHT_CHANGE_MIN = 45  # changes shorter than this are flagged in the UI
@@ -57,6 +58,7 @@ class SearchParams:
     via_stay_min: tuple[int, ...] = ()  # planned stop at each via station (minutes, 0 = just pass/change)
     max_wait_min: float | None = None  # longest wait at any change (on top of a planned stay); None = no limit
     offset: int = 0  # paging: skip this many sorted results (limit 0 = all)
+    trains: tuple[str, ...] = ()  # only routes that use at least one of these trains (empty = any)
     sort: str = "duration"  # duration | departure | arrival | distance | changes
     order: str = "asc"  # asc | desc
     kind: str = "all"  # all | direct | nearby | connection  (connection includes "through")
@@ -403,11 +405,16 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
             raise ValueError(f"Unknown via station {c}")
         if c in (a.code, b.code):
             raise ValueError("Via stations must differ from origin and destination")
-    multi_wanted = p.max_changes >= 2 or bool(via)
+    pinned = {t.strip() for t in p.trains if t.strip()}
+    # Stations on a pinned train become candidate change points, so routes built around it are found,
+    # not just filtered out of whatever the usual hubs produced.
+    pinned_nodes = _pinned_nodes(tt, pinned, origins | dests, cap=LIVE_PINNED_NODES if live else None)
+    multi_wanted = p.max_changes >= 2 or bool(via) or (bool(pinned) and p.max_changes >= 1)
     multi_hubs: list[str] = []
     if multi_wanted:
         k = LIVE_MULTI_HUBS if live else SNAPSHOT_MULTI_HUBS
         multi_hubs = suggest_multi_hubs(tt, origins, dests, a, b, k) if p.max_changes >= 2 else []
+    multi_hubs = list(dict.fromkeys([*multi_hubs, *pinned_nodes]))
 
     usage, warnings = Usage(), []
     source, boards = "snapshot", None
@@ -437,6 +444,7 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
 
     multi: list[Journey] = []
     via_beyond = None
+    relaxed = None
     if multi_wanted:
         if source == "live":
             src = BoardLegs(boards, lambda t: _eligible(t, p))
@@ -460,6 +468,7 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
             )
 
         found = run_multi(max_total, max_km)
+        relaxed = lambda: run_multi(INF, INF, INF)  # noqa: E731
         if via and not found and (max_total < INF or max_km < INF or p.wait_cap < INF):
             # Nothing fits the limits: look without them so the UI can say what's out there.
             beyond = [r for r in run_multi(INF, INF, INF) if len(r.legs) > 1 or via]
@@ -492,12 +501,18 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
         pool = nearby + connections + [j for j in multi if tuple(l.train.number for l in j.legs) not in seen]
 
     alternates: list[Journey] = []
+    max_min_used = INF
     if base_min is not None:
         max_min = base_min + p.extra_min + (sum(p.stays.values()) if via else 0)
+        max_min_used = max_min
         max_km = base_km + p.extra_dist
         alternates = [j for j in pool if j.minutes <= max_min and j.km <= max_km]
-    hidden_by_limits = len(pool) - len(alternates) if base_min is not None else 0
-    fastest_hidden = min((j.minutes for j in pool if j not in alternates), default=None)
+    kept = set(map(id, alternates))
+    over = [j for j in pool if id(j) not in kept] if base_min is not None else []
+    if pinned:  # only count what the pinned trains would have added
+        over = [j for j in over if any(l.train.number in pinned for l in j.legs)]
+    hidden_by_limits = len(over)
+    fastest_hidden = min((j.minutes for j in over), default=None)
     if via_beyond:
         hidden_by_limits += via_beyond["count"]
         fastest_hidden = via_beyond["fastest_minutes"]
@@ -513,6 +528,15 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
 
     # One list, sorted and filtered here over *every* route found, then cut to the page size.
     everything = direct + alternates
+    if pinned:
+        everything = [j for j in everything if any(l.train.number in pinned for l in j.legs)]
+        limited = max_min_used < INF or p.extra_km is not None or p.wait_cap < INF
+        if not everything and relaxed and limited and not hidden_by_limits:
+            # Nothing with the pinned train fits the limits: count what exists beyond them.
+            beyond = [r for r in relaxed() if any(l.train.number in pinned for l in r.legs)]
+            if beyond:
+                hidden_by_limits = len({tuple(l.train.number for l in r.legs) for r in beyond})
+                fastest_hidden = int(min((r.legs[-1].arrive_at - r.legs[0].depart_at).total_seconds() / 60 for r in beyond))
     counts = {
         "all": len(everything),
         "direct": sum(j.kind == "direct" for j in everything),
@@ -541,6 +565,7 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
             "via": list(p.via),
             "via_stay_min": list(p.via_stay_min),
             "max_wait_min": p.max_wait_min,
+            "trains": sorted(pinned),
         },
         "data_source": {
             "kind": source,
@@ -577,6 +602,19 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
         "limit": p.limit,
         "results": [_journey(tt, j, base_min, base_km, now, near_a, near_b, p.min_sleep_hours, p.stays) for j in results],
     }
+
+
+def _pinned_nodes(tt: StaticTimetable, pinned: set[str], ends: set[str], cap: int | None) -> list[str]:
+    """Halts of the pinned trains (busiest first when capped, e.g. to limit live requests)."""
+    codes: list[str] = []
+    for n in pinned:
+        t = tt.train(n)
+        if t:
+            codes += [s.code for s in t.stops if s.code not in ends]
+    codes = list(dict.fromkeys(codes))
+    if cap is not None:
+        codes = sorted(codes, key=tt.reserved_halts, reverse=True)[:cap]
+    return codes
 
 
 SORTS = ("duration", "departure", "arrival", "distance", "changes")

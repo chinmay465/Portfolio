@@ -1,4 +1,4 @@
-import type { ListQuery, RouteResponse, SeatsResponse, StationHit, Tolerance, ViaStop, WindowsResponse } from "./types";
+import type { ListQuery, RouteResponse, SeatsResponse, StationHit, Tolerance, TrainRef, ViaStop, WindowsResponse } from "./types";
 
 const BASE = import.meta.env.VITE_API_BASE ?? "";
 
@@ -30,12 +30,14 @@ export type SeatLegReq = { train: string; from: string; to: string; date: string
 export const api = {
   seats: (quota: string, legs: SeatLegReq[], fresh = false) => post<SeatsResponse>("/api/seats", { quota, legs, fresh }),
   stations: (q: string, signal?: AbortSignal) => get<StationHit[]>("/api/stations", { q, limit: 8 }, signal),
+  trains: (q: string, signal?: AbortSignal) => get<TrainRef[]>("/api/trains", { q, limit: 8 }, signal),
   routes: (
     from: string,
     to: string,
     date: string,
     t: Tolerance,
     via: ViaStop[],
+    trains: TrainRef[],
     q: ListQuery,
     limit: number, // 0 = all
     offset: number,
@@ -50,6 +52,7 @@ export const api = {
         date,
         ...rest,
         via: via.map((v) => v.code).join(","),
+        trains: trains.map((t) => t.number).join(",") || undefined,
         via_stay: via.some((v) => v.stay_h) ? via.map((v) => v.stay_h ?? 0).join(",") : undefined,
         max_wait_hours: no_wait_limit ? undefined : max_wait_hours,
         limit,

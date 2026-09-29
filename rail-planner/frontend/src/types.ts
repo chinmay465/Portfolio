@@ -68,6 +68,7 @@ export type RouteResponse = {
   journey_date: string;
   params: Omit<Tolerance, "extra_hours" | "extra_km" | "no_time_limit" | "no_km_limit" | "sleep_on" | "sleep_hours" | "no_wait_limit" | "max_wait_hours"> & {
     via_stay_min: number[];
+    trains: string[];
     max_wait_min: number | null;
     min_sleep_hours: number | null;
     via: string[];
@@ -195,3 +196,5 @@ export type SortKey = "duration" | "departure" | "arrival" | "distance" | "chang
 export type SortOrder = "asc" | "desc";
 export type KindFilter = "all" | "direct" | "nearby" | "connection";
 export type ListQuery = { sort: SortKey; order: SortOrder; kind: KindFilter };
+
+export type TrainRef = { number: string; name: string; from?: string; to?: string };

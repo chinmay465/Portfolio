@@ -257,3 +257,29 @@ def test_paging_and_show_all():
 def test_page_is_not_cached_but_assets_are():
     r = client.get("/api/status")
     assert "version" in r.json()
+
+
+def test_train_search():
+    hits = client.get("/api/trains", params={"q": "basava"}).json()
+    assert hits and hits[0]["number"] in ("17307", "17308") and "Basava" in hits[0]["name"]
+    assert client.get("/api/trains", params={"q": "17307"}).json()[0]["number"] == "17307"
+
+
+def test_routes_filtered_by_pinned_trains():
+    base = {"from": "SBC", "to": "PUNE", "date": DATE, "limit": 0}
+    one = client.get("/api/routes", params={**base, "trains": "17307"}).json()
+    assert one["params"]["trains"] == ["17307"] and one["results"]
+    assert all(any(l["train"]["number"] == "17307" for l in j["legs"]) for j in one["results"])
+    assert one["counts"]["all"] == one["total"]
+    both = client.get("/api/routes", params={**base, "trains": "17307,12158"}).json()
+    nums = {l["train"]["number"] for j in both["results"] for l in j["legs"]}
+    assert "17307" in nums and "12158" in nums  # any of the pinned trains
+    assert all(any(l["train"]["number"] in ("17307", "12158") for l in j["legs"]) for j in both["results"])
+
+
+def test_pinned_train_beyond_limits_is_reported():
+    body = client.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": "2026-10-16", "trains": "16515"}).json()
+    assert body["total"] == 0 and body["hidden_by_limits"] > 0 and body["fastest_hidden_minutes"]
+    free = client.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": "2026-10-16", "trains": "16515",
+                                              "no_time_limit": True, "no_km_limit": True}).json()
+    assert free["total"] > 0

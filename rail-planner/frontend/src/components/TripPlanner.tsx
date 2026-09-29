@@ -3,7 +3,7 @@ import { api } from "../api";
 import { duration, longDay, todayIST } from "../format";
 import { isBookable, journeyPicks, journeySeat, legId, useSeats } from "../seats";
 import { storage, type SavedTrip } from "../storage";
-import type { ClassChoice, ClassMode, KindFilter, Leg, ListQuery, RouteResponse, SeatPrefs, SortKey, SortOrder, StationHit, Tolerance, ViaStop } from "../types";
+import type { ClassChoice, ClassMode, KindFilter, Leg, ListQuery, RouteResponse, SeatPrefs, SortKey, SortOrder, StationHit, Tolerance, TrainRef, ViaStop } from "../types";
 import { FiltersPanel, filterSummary, type Draft } from "./FiltersPanel";
 import { JourneyCard } from "./JourneyCard";
 import { SourceNote } from "./SourceNote";
@@ -46,6 +46,7 @@ export function TripPlanner() {
   // Applied filters (used by searches) and the draft being edited in the panel.
   const [tol, setTol] = useState<Tolerance>(saved.tolerance);
   const [via, setVia] = useState<ViaStop[]>([]);
+  const [trains, setTrains] = useState<TrainRef[]>([]);
   const [seatPrefs, setSeatPrefs] = useState<SeatPrefs>(saved.seats);
   const [draft, setDraft] = useState<Draft | null>(null);
 
@@ -68,6 +69,7 @@ export function TripPlanner() {
       t?: StationHit | null;
       tl?: Tolerance;
       v?: ViaStop[];
+      tr?: TrainRef[];
       q?: Partial<ListQuery>;
       size?: number;
       pg?: number; // page index; any change other than paging goes back to page 0
@@ -78,6 +80,7 @@ export function TripPlanner() {
     const t = opts.t ?? to;
     const tl = opts.tl ?? tol;
     const v = opts.v ?? via;
+    const tr = opts.tr ?? trains;
     const size = opts.size ?? pageSize;
     const pg = opts.pg ?? 0;
     if (!f || !t) {
@@ -90,7 +93,7 @@ export function TripPlanner() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.routes(f.code, t.code, date, tl, v, q, size, pg * size, c.signal);
+      const res = await api.routes(f.code, t.code, date, tl, v, tr, q, size, pg * size, c.signal);
       setData(res);
       setPage(pg);
       storage.remember({ from: f, to: t, date }, tl);
@@ -106,10 +109,17 @@ export function TripPlanner() {
     if (!draft) return;
     setTol(draft.tol);
     setVia(draft.via);
+    setTrains(draft.trains);
     setSeatPrefs(draft.seats);
     storage.saveFilters(draft.tol, draft.seats);
     setDraft(null);
-    if (from && to) run({ tl: draft.tol, v: draft.via });
+    if (from && to) run({ tl: draft.tol, v: draft.via, tr: draft.trains });
+  };
+
+  // Quick add/remove of a train from a result card or a chip: searches straight away.
+  const setTrainsAndRun = (next: TrainRef[]) => {
+    setTrains(next);
+    if (from && to) run({ tr: next });
   };
 
   const setMode = (mode: ClassMode) => {
@@ -250,8 +260,21 @@ export function TripPlanner() {
                   {c}
                 </span>
               ))}
+              {trains.map((t) => (
+                <span key={t.number} className="chip static train-chip">
+                  Train {t.number}
+                  <button
+                    type="button"
+                    aria-label={`Stop filtering by train ${t.number}`}
+                    disabled={loading}
+                    onClick={() => setTrainsAndRun(trains.filter((x) => x.number !== t.number))}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
             </div>
-            <button type="button" className="ghost" onClick={() => setDraft({ tol, via, seats: seatPrefs })}>
+            <button type="button" className="ghost" onClick={() => setDraft({ tol, via, trains, seats: seatPrefs })}>
               + Add filters
             </button>
           </div>
@@ -297,7 +320,8 @@ export function TripPlanner() {
           {data.hidden_by_limits > 0 && (
             <p className="hidden-note">
               {data.hidden_by_limits} more route{data.hidden_by_limits === 1 ? "" : "s"}
-              {data.params.via.length > 0 ? " through your via stations" : ""} exceed your time/distance/wait limits
+              {data.params.via.length > 0 ? " through your via stations" : ""}
+              {data.params.trains.length > 0 ? ` using train ${data.params.trains.join(" / ")}` : ""} exceed your time/distance/wait limits
               {data.fastest_hidden_minutes !== null && <> (fastest takes {duration(data.fastest_hidden_minutes)})</>}.{" "}
               <button
                 type="button"
@@ -424,6 +448,15 @@ export function TripPlanner() {
                 seats={live ? seats : undefined}
                 choice={choice}
                 quota={q}
+                pinned={trains.map((t) => t.number)}
+                onPinTrain={
+                  draft
+                    ? undefined
+                    : (t) =>
+                        setTrainsAndRun(
+                          trains.some((x) => x.number === t.number) ? trains.filter((x) => x.number !== t.number) : [...trains, t],
+                        )
+                }
                 onPickClass={(leg, cls) => {
                   pickClass(leg, cls);
                   const nextChoice: ClassChoice = {

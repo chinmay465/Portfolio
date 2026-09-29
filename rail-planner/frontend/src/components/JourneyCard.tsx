@@ -28,11 +28,13 @@ type Props = {
   choice: ClassChoice;
   quota: string;
   onPickClass: (leg: Leg, cls: string) => void;
+  pinned?: string[];
+  onPinTrain?: (t: { number: string; name: string }) => void; // undefined while filters are being edited
   onCheckSeats: () => void;
   onRefreshSeats: () => void;
 };
 
-export function JourneyCard({ j, route, seats, choice, quota, onPickClass, onCheckSeats, onRefreshSeats }: Props) {
+export function JourneyCard({ j, route, seats, choice, quota, onPickClass, onCheckSeats, onRefreshSeats, pinned = [], onPinTrain }: Props) {
   const [open, setOpen] = useState(false);
   const picks = journeyPicks(j, choice, quota);
   const pickFor = (l: Leg) => picks.find((p) => p.leg === l);
@@ -112,6 +114,20 @@ export function JourneyCard({ j, route, seats, choice, quota, onPickClass, onChe
             <div className="leg-train">
               <span className="num">{l.train.number}</span>
               <span className="tname">{l.train.name}</span>
+              <button
+                type="button"
+                className={`pin ${pinned.includes(l.train.number) ? "on" : ""}`}
+                disabled={!onPinTrain}
+                onClick={() => onPinTrain?.({ number: l.train.number, name: l.train.name })}
+                title={
+                  pinned.includes(l.train.number)
+                    ? `Stop filtering by ${l.train.number}`
+                    : `Only show routes that use ${l.train.number}`
+                }
+                aria-pressed={pinned.includes(l.train.number)}
+              >
+                {pinned.includes(l.train.number) ? "Pinned ✓" : "Only this train"}
+              </button>
               {l.train.reserved && (
                 <ClassPicker leg={l} value={legClass(l, j.sleep?.leg === i, choice)} onChange={(c) => onPickClass(l, c)} />
               )}

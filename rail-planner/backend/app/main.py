@@ -89,6 +89,13 @@ def stations(q: str = Query(..., min_length=1), limit: int = Query(10, le=25)) -
     ]
 
 
+@app.get("/api/trains")
+def trains_search(q: str = Query(..., min_length=1), limit: int = Query(10, le=25)) -> list[dict]:
+    """Train lookup by number or name, for the Trains filter."""
+    return [{"number": t.number, "name": t.name, "from": t.stops[0].code, "to": t.stops[-1].code}
+            for t in timetable().search_trains(q, limit)]
+
+
 @app.get("/api/routes")
 def routes(
     from_code: str = Query(..., alias="from"),
@@ -103,6 +110,7 @@ def routes(
     include_unreserved: bool = False,
     limit: int = Query(50, ge=0, description="Results per page; 0 = all"),
     offset: int = Query(0, ge=0),
+    trains: str = Query("", description="Comma-separated train numbers; only routes using at least one of them"),
     sort: str = Query("duration", pattern="^(duration|departure|arrival|distance|changes)$"),
     order: str = Query("asc", pattern="^(asc|desc)$"),
     kind: str = Query("all", pattern="^(all|direct|nearby|connection)$"),
@@ -123,6 +131,7 @@ def routes(
         include_unreserved=include_unreserved,
         limit=limit,
         offset=offset,
+        trains=tuple(t.strip() for t in trains.split(",") if t.strip()),
         sort=sort,
         order=order,
         kind=kind,

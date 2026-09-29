@@ -1,4 +1,5 @@
-import { DEFAULT_SEATS, DEFAULT_TOLERANCE, type SeatPrefs, type Tolerance, type ViaStop } from "../types";
+import { DEFAULT_SEATS, DEFAULT_TOLERANCE, type SeatPrefs, type Tolerance, type TrainRef, type ViaStop } from "../types";
+import { TrainPicker } from "./TrainPicker";
 import { NumberField, Slider } from "./controls";
 import { ViaPicker } from "./ViaPicker";
 
@@ -10,7 +11,7 @@ const QUOTAS: [string, string][] = [
   ["SS", "Senior citizen"],
 ];
 
-export type Draft = { tol: Tolerance; via: ViaStop[]; seats: SeatPrefs };
+export type Draft = { tol: Tolerance; via: ViaStop[]; trains: TrainRef[]; seats: SeatPrefs };
 
 type Props = {
   draft: Draft;
@@ -33,6 +34,8 @@ export function FiltersPanel({ draft, onChange, onCancel, live, month }: Props) 
         via={via}
         onChange={(v) => onChange({ ...draft, via: v, tol: v.length > tol.max_changes ? { ...tol, max_changes: v.length } : tol })}
       />
+
+      <TrainPicker trains={draft.trains} onChange={(t) => onChange({ ...draft, trains: t })} />
 
       <fieldset className="tolerance">
         <legend>Route</legend>
@@ -118,7 +121,7 @@ export function FiltersPanel({ draft, onChange, onCancel, live, month }: Props) 
       </fieldset>
 
       <div className="filters-actions">
-        <button type="button" className="link" onClick={() => onChange({ tol: DEFAULT_TOLERANCE, via: [], seats: DEFAULT_SEATS })}>
+        <button type="button" className="link" onClick={() => onChange({ tol: DEFAULT_TOLERANCE, via: [], trains: [], seats: DEFAULT_SEATS })}>
           Reset to defaults
         </button>
         <span className="spacer" />
