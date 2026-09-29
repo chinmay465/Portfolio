@@ -118,6 +118,7 @@ def routes(
     min_sleep_hours: float | None = Query(None, ge=0, description="Only routes where one train allows this much sleep, starting 21:00-24:00"),
     via: str = Query("", description="Comma-separated station codes to pass through, in order"),
     via_stay: str = Query("", description="Comma-separated planned stop at each via station, in hours (e.g. 0,7)"),
+    via_radius: str = Query("", description="Comma-separated km buffer per via station; any station that close counts"),
     max_wait_hours: float | None = Query(None, ge=0, description="Longest wait at any change; on top of a planned stay"),
 ) -> dict:
     params = SearchParams(
@@ -139,6 +140,7 @@ def routes(
         min_sleep_hours=min_sleep_hours,
         via=(via_codes := tuple(c.strip().upper() for c in via.split(",") if c.strip())),
         via_stay_min=_stays(via_stay, len(via_codes)),
+        via_radius_km=_numbers(via_radius, len(via_codes), "via_radius"),
         max_wait_min=None if max_wait_hours is None else max_wait_hours * 60,
     )
     try:
@@ -169,6 +171,18 @@ def _schedule(number: str, warnings: list[str]) -> dict | None:
         return None
     stops = [(s.code, timetable().station(s.code).name, s.dep) for s in t.stops if s.dep is not None]
     return {"meta": t, "stops": stops, "source": "snapshot"}
+
+
+def _numbers(raw: str, n: int, name: str) -> tuple[float, ...]:
+    """Comma-separated non-negative numbers, padded/truncated to n (blank = 0)."""
+    parts = [x.strip() for x in raw.split(",")] if raw.strip() else []
+    try:
+        vals = [float(x) if x else 0.0 for x in parts]
+    except ValueError as e:
+        raise HTTPException(400, f"{name} must be comma-separated numbers") from e
+    if any(v < 0 for v in vals):
+        raise HTTPException(400, f"{name} can't be negative")
+    return tuple((vals + [0.0] * n)[:n])
 
 
 def _stays(raw: str, n: int) -> tuple[int, ...]:

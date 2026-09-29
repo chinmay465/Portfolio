@@ -309,6 +309,17 @@ export function TripPlanner() {
             ) : (
               <p>No trains found for this pair. Try a larger nearby radius or extra time.</p>
             )}
+            {data.params.via_groups.some((g) => g.radius_km > 0) && (
+              <p className="muted small">
+                {data.params.via_groups
+                  .filter((g) => g.radius_km > 0)
+                  .map(
+                    (g) =>
+                      `Via ${g.stations[0]?.name ?? g.code} ± ${g.radius_km} km counts ${g.stations.length} station${g.stations.length === 1 ? "" : "s"}: ${g.stations.map((x) => x.code).join(", ")}`,
+                  )
+                  .join(" · ")}
+              </p>
+            )}
             {(data.nearby_stations.from.length > 0 || data.nearby_stations.to.length > 0) && (
               <p className="muted small">
                 Also checking{" "}

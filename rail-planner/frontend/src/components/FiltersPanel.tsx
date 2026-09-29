@@ -149,7 +149,12 @@ export function filterSummary(tol: Tolerance, via: ViaStop[], seats: SeatPrefs):
     tol.no_time_limit ? "Any duration" : `+${tol.extra_hours} h`,
     tol.no_km_limit ? "Any distance" : `+${tol.extra_km} km`,
   ];
-  if (via.length) chips.push(`Via ${via.map((v) => (v.stay_h ? `${v.code} (${v.stay_h} h stop)` : v.code)).join(" → ")}`);
+  if (via.length)
+    chips.push(
+      `Via ${via
+        .map((v) => [v.code, v.radius_km ? `±${v.radius_km} km` : "", v.stay_h ? `${v.stay_h} h stop` : ""].filter(Boolean).join(" "))
+        .join(" → ")}`,
+    );
   if (!tol.no_wait_limit) chips.push(`Wait ≤ ${tol.max_wait_hours} h`);
   if (tol.sleep_on) chips.push(`Sleep ${tol.sleep_hours} h`);
   if (seats.quota !== "GN") chips.push(QUOTAS.find(([c]) => c === seats.quota)?.[1] ?? seats.quota);

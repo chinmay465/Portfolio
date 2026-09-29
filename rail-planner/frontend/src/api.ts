@@ -54,6 +54,7 @@ export const api = {
         via: via.map((v) => v.code).join(","),
         trains: trains.map((t) => t.number).join(",") || undefined,
         via_stay: via.some((v) => v.stay_h) ? via.map((v) => v.stay_h ?? 0).join(",") : undefined,
+        via_radius: via.some((v) => v.radius_km) ? via.map((v) => v.radius_km ?? 0).join(",") : undefined,
         max_wait_hours: no_wait_limit ? undefined : max_wait_hours,
         limit,
         offset,

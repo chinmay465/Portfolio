@@ -1,7 +1,7 @@
 export type StationRef = { code: string; name: string };
 export type StationHit = StationRef & { state: string };
 /** A via station, optionally with a planned stop (hours) — e.g. Udupi, 7 h. */
-export type ViaStop = StationHit & { stay_h?: number };
+export type ViaStop = StationHit & { stay_h?: number; radius_km?: number };
 
 export type WindowKind = "general" | "tatkal_ac" | "tatkal_non_ac";
 export type WindowStatus = "upcoming" | "open" | "departed";
@@ -68,6 +68,7 @@ export type RouteResponse = {
   journey_date: string;
   params: Omit<Tolerance, "extra_hours" | "extra_km" | "no_time_limit" | "no_km_limit" | "sleep_on" | "sleep_hours" | "no_wait_limit" | "max_wait_hours"> & {
     via_stay_min: number[];
+    via_groups: { code: string; radius_km: number; stations: StationRef[] }[];
     trains: string[];
     max_wait_min: number | null;
     min_sleep_hours: number | null;

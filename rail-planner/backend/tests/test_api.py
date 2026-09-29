@@ -283,3 +283,28 @@ def test_pinned_train_beyond_limits_is_reported():
     free = client.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": "2026-10-16", "trains": "16515",
                                               "no_time_limit": True, "no_km_limit": True}).json()
     assert free["total"] > 0
+
+
+def test_via_buffer_accepts_nearby_stations():
+    base = {"from": "PUNE", "to": "SBC", "date": DATE, "via": "MAO", "max_changes": 3, "no_time_limit": True,
+            "no_km_limit": True, "limit": 0}
+    exact = client.get("/api/routes", params=base).json()
+    wide = client.get("/api/routes", params={**base, "via_radius": "30"}).json()
+    group = {s["code"] for s in wide["params"]["via_groups"][0]["stations"]}
+    assert "MAO" in group and len(group) > 1 and wide["params"]["via_groups"][0]["radius_km"] == 30
+    assert wide["total"] >= exact["total"] > 0
+
+    def via_points(j):
+        pts = []
+        for leg in j["legs"]:
+            pts += [leg["from"]["code"], *(x["code"] for x in leg["passes"])]
+        return pts + [j["legs"][-1]["to"]["code"]]
+
+    assert all(set(via_points(j)) & group for j in wide["results"])  # every route touches the buffer
+    assert any(not ({"MAO"} & set(via_points(j))) for j in wide["results"])  # and some use a nearby station instead
+    assert all(j["kind"] != "direct" for j in wide["results"])  # direct trains that skip the via aren't listed
+
+
+def test_bad_via_radius():
+    r = client.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": DATE, "via": "UD", "via_radius": "x"})
+    assert r.status_code == 400

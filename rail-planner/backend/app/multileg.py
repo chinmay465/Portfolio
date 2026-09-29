@@ -137,6 +137,7 @@ def multi_search(
     per_hop: int = 2,
     via_stays: dict[str, int] | None = None,
     max_wait_min: float = float("inf"),
+    via_groups: list[set[str]] | None = None,
 ) -> list[MultiResult]:
     """All times are integer minutes from 00:00 on the journey date (fast; no datetimes in the loop).
 
@@ -146,7 +147,12 @@ def multi_search(
     """
     via_stays = via_stays or {}
     nodes = list(dict.fromkeys(nodes))
-    via_set = set(via)
+    # Each via point can be satisfied by any station in its group (the station plus a km buffer).
+    groups = via_groups or [{c} for c in via]
+    via_of: dict[str, int] = {}
+    for i, g in enumerate(groups):
+        for c in g:
+            via_of.setdefault(c, i)
     remaining_km = {c: haversine_km(s, dest_station) if (s := tt.station(c)) else 0.0 for c in nodes}
     wd0 = journey_date.weekday()
 
@@ -170,11 +176,12 @@ def multi_search(
         grown: list[_State] = []
         for st in states:
             cur = st.legs[-1] if st.legs else None
-            just_hit_via = cur is not None and st.station in via_set
+            just_hit_via = cur is not None and st.station in via_of
             for y in nodes:
-                if y in st.visited or (y in via_set and via.index(y) != st.via_i):
-                    continue  # no loops; via stations in order
-                new_via_i = st.via_i + (1 if y in via_set else 0)
+                vi = via_of.get(y)
+                if y in st.visited or (vi is not None and vi != st.via_i):
+                    continue  # no loops; via points in order
+                new_via_i = st.via_i + (1 if vi is not None else 0)
                 reaching_dest = y in dests
                 if reaching_dest and new_via_i != len(via):
                     continue

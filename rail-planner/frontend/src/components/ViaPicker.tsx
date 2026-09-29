@@ -35,6 +35,16 @@ export function ViaPicker({ via, onChange }: Props) {
             <li key={s.code} className="chip via-chip">
               <span className="n">{i + 1}</span>
               {s.name} <span className="code">{s.code}</span>
+              <span className="stay" title="Any station within this distance also counts as this via stop">
+                ±
+                <NumberField
+                  value={s.radius_km ?? 0}
+                  onChange={(km) => onChange(via.map((v) => (v.code === s.code ? { ...v, radius_km: km } : v)))}
+                  step={5}
+                  label={`Buffer around ${s.name} (km)`}
+                />
+                km
+              </span>
               <span className="stay" title="Planned stop here: you get off, and the next train leaves at least this long after you arrive">
                 stop
                 <NumberField

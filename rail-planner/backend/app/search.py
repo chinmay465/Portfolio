@@ -34,6 +34,7 @@ from .timetable import Station, StaticTimetable, Train, haversine_km
 INF = float("inf")
 LIVE_HUBS = 10  # change stations queried live (1 station-board request each, cached 7 days)
 LIVE_NEARBY = 2  # nearby stations per side queried live (1 request each)
+VIA_GROUP_MAX = 10  # stations per via buffer (busiest first)
 LIVE_PINNED_NODES = 8  # halts of a pinned train added as change points in live mode (1 request each, cached)
 LIVE_MULTI_HUBS = 8  # extra stations per side for 2+ changes (1 request each, cached)
 SNAPSHOT_MULTI_HUBS = 15
@@ -56,6 +57,7 @@ class SearchParams:
     min_sleep_hours: float | None = None  # None = don't care; else one train must allow this much sleep from 21-24h
     via: tuple[str, ...] = ()  # stations the route must pass through, in order
     via_stay_min: tuple[int, ...] = ()  # planned stop at each via station (minutes, 0 = just pass/change)
+    via_radius_km: tuple[float, ...] = ()  # per via station: any station within this many km also counts
     max_wait_min: float | None = None  # longest wait at any change (on top of a planned stay); None = no limit
     offset: int = 0  # paging: skip this many sorted results (limit 0 = all)
     trains: tuple[str, ...] = ()  # only routes that use at least one of these trains (empty = any)
@@ -409,6 +411,17 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
     # Stations on a pinned train become candidate change points, so routes built around it are found,
     # not just filtered out of whatever the usual hubs produced.
     pinned_nodes = _pinned_nodes(tt, pinned, origins | dests, cap=LIVE_PINNED_NODES if live else None)
+    # Via point i is satisfied by its station or any station within its km buffer.
+    radii = list(p.via_radius_km) + [0.0] * len(via)
+    via_groups: list[list[str]] = []
+    for code, r in zip(via, radii):
+        members = [code]
+        if r > 0:
+            members += [s.code for s, _ in tt.nearby(code, r, min_halts=1, limit=VIA_GROUP_MAX)
+                        if s.code not in (a.code, b.code)]
+        via_groups.append(members)
+    stays = {m: p.stays.get(g[0], 0) for g in via_groups for m in g if p.stays.get(g[0], 0) > 0}
+    via_members = [m for g in via_groups for m in g]
     multi_wanted = p.max_changes >= 2 or bool(via) or (bool(pinned) and p.max_changes >= 1)
     multi_hubs: list[str] = []
     if multi_wanted:
@@ -421,7 +434,7 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
     if live:
         try:
             direct, all_direct, connections, boards = _live_candidates(
-                tt, live, a, b, near_a, near_b, p, usage, warnings, extra=[*via, *multi_hubs]
+                tt, live, a, b, near_a, near_b, p, usage, warnings, extra=[*via_members, *multi_hubs]
             )
             source = "live"
         except LiveError as e:
@@ -448,11 +461,11 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
     if multi_wanted:
         if source == "live":
             src = BoardLegs(boards, lambda t: _eligible(t, p))
-            nodes = [n for n in [*origins, *dests, *suggest_hubs(tt, a, b, p), *multi_hubs, *via] if n in boards]
+            nodes = [n for n in [*origins, *dests, *suggest_hubs(tt, a, b, p), *multi_hubs, *via_members] if n in boards]
             starts = [c for c in origins if c in boards]
         else:
             src = SnapshotLegs(tt, lambda t: _eligible(t, p))
-            nodes = [*origins, *dests, *suggest_hubs(tt, a, b, p, k=SNAPSHOT_MULTI_HUBS), *multi_hubs, *via]
+            nodes = [*origins, *dests, *suggest_hubs(tt, a, b, p, k=SNAPSHOT_MULTI_HUBS), *multi_hubs, *via_members]
             starts = list(origins)
         planned = sum(p.stays.values())  # your planned stops don't count against the extra-time limit
         max_total = INF if base_min is None else base_min + p.extra_min + planned
@@ -463,7 +476,8 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
                 src, tt, nodes, starts, dests, b, p.journey_date, p.max_changes, p.min_transfer_min, via,
                 t_cap, km_cap_,
                 make_leg=lambda o, day: Leg(o.train, o.from_code, o.to_code, o.dep, o.arr, o.km, day),
-                via_stays=p.stays,
+                via_stays=stays,
+                via_groups=[set(g) for g in via_groups],
                 max_wait_min=wait_cap,
             )
 
@@ -527,7 +541,8 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
         hidden_by_sleep = before - len(direct) - len(alternates)
 
     # One list, sorted and filtered here over *every* route found, then cut to the page size.
-    everything = direct + alternates
+    # With via stations, only routes through them are listed; direct trains still set the time baseline.
+    everything = alternates if via else direct + alternates
     if pinned:
         everything = [j for j in everything if any(l.train.number in pinned for l in j.legs)]
         limited = max_min_used < INF or p.extra_km is not None or p.wait_cap < INF
@@ -563,6 +578,10 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
             "max_changes": p.max_changes,
             "min_sleep_hours": p.min_sleep_hours,
             "via": list(p.via),
+            "via_groups": [
+                {"code": g[0], "radius_km": r, "stations": [{"code": c, "name": _name(tt, c)} for c in g]}
+                for g, r in zip(via_groups, radii)
+            ],
             "via_stay_min": list(p.via_stay_min),
             "max_wait_min": p.max_wait_min,
             "trains": sorted(pinned),
@@ -600,7 +619,7 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
         "total": total,
         "offset": p.offset,
         "limit": p.limit,
-        "results": [_journey(tt, j, base_min, base_km, now, near_a, near_b, p.min_sleep_hours, p.stays) for j in results],
+        "results": [_journey(tt, j, base_min, base_km, now, near_a, near_b, p.min_sleep_hours, stays) for j in results],
     }
 
 
