@@ -1,7 +1,8 @@
 """Timetable data layer.
 
 `Timetable` is the interface the search code depends on. `StaticTimetable` loads the bundled
-open-data snapshot; swap in a live provider by implementing the same methods.
+open-data snapshot (see scripts/build_timetable_2024.py); swap in a live provider by
+implementing the same methods.
 """
 
 from __future__ import annotations
@@ -44,8 +45,8 @@ class Train:
     classes: tuple[str, ...]
     distance: int
     stops: tuple[Stop, ...]
-    # Mon=0 .. Sun=6 for departures from origin; the bundled snapshot has no running days,
-    # so every train is treated as daily.
+    # Mon=0 .. Sun=6 for departures from origin; a snapshot without running days treats every
+    # train as daily.
     runs_on: frozenset[int] = frozenset(range(7))
 
     @property
@@ -71,6 +72,8 @@ class StaticTimetable:
     def __init__(self, path: Path = DEFAULT_DATA) -> None:
         with gzip.open(path, "rt", encoding="utf-8") as fh:
             raw = json.load(fh)
+        # {"source", "as_of", "run_days"}; the old datameet file has no meta block
+        self.meta: dict = raw.get("meta") or {"source": "datameet snapshot (2016-17)", "as_of": "2016", "run_days": False}
 
         self._stations = {
             code: Station(code, name, lat, lon, state) for code, (name, lat, lon, state) in raw["stations"].items()
@@ -85,6 +88,7 @@ class StaticTimetable:
                 classes=tuple(t["classes"]),
                 distance=t["distance"],
                 stops=tuple(Stop(*s) for s in t["stops"]),
+                runs_on=frozenset(t["days"]) if t.get("days") else frozenset(range(7)),
             )
             self._trains[number] = train
             for i, stop in enumerate(train.stops):

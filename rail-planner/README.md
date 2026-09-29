@@ -34,7 +34,7 @@ There are no built-in upper bounds, and no hidden layover cap: the wait between 
 Alternates are either a direct train from or to a nearby station, or a two-train route with one change. If no direct train exists, the best alternate becomes the baseline. When you change the inputs, results refresh automatically. The last trip, recent trips and your tolerance settings are saved in the browser.
 
 **Seat availability** (live data only), from RailRadar's `GET /v1/trains/{number}/seats?source=&destination=&journeyDate=&classCode=&quotaCode=`
-- **Seat class** above the results: **Best possible** picks the highest class each train carries, **Cheapest** the lowest (fare order 2S < SL < 3E < CC < 3A < 2A < EC < 1A). A route can end up with 2S on one train and SL on another. **Custom** gives each train a class dropdown. Changing any train's class switches the toggle to Custom and keeps the other picks. With minimum sleep on, the train you sleep on only uses berth classes. Class lists come from the timetable snapshot, so they can be incomplete.
+- **Seat class** above the results: **Best possible** picks the highest class each train carries, **Cheapest** the lowest (fare order 2S < SL < 3E < CC < 3A < 2A < EC < 1A). A route can end up with 2S on one train and SL on another. **Custom** gives each train a class dropdown. Changing any train's class switches the toggle to Custom and keeps the other picks. With minimum sleep on, the train you sleep on only uses berth classes. Class lists come from the stored timetable, so they can be incomplete.
 - Choose a quota (General, Tatkal, Premium Tatkal, Ladies, Senior citizen). Each reserved leg shows AVL / RAC / WL (with confirmation %) / REGRET.
 - If a train doesn't have your class, the closest class it does have is checked and labelled (e.g. 3A chosen, Hutatma has only CC → "WL 11 · CC").
 - **Hide routes with waitlist / no seats** removes a route when any leg is waitlisted, regret, closed or missing the class. **Count RAC as available** is optional. Unchecked routes stay visible and are marked.
@@ -83,23 +83,42 @@ On every push and PR, CI (`.github/workflows/ci.yml`) runs the backend tests, bu
 
 ## Timetable data
 
-**Live (recommended): [RailRadar](https://railradar.in/docs).** Set `RAILRADAR_API_KEY` (on Render: service → Environment). This gives current trains, times, distances and running days.
-- Trains come from station timetables: `GET /v1/stations/{code}/trains`, one request per station. A leg A→B is any train on both timetables that reaches B after A. Direct trains, nearby stations and both legs of a one-change route all come from intersecting these timetables.
-- Change stations are ranked using only the shape of the network: how many trains link each station to both ends, within the distance tolerance. Timings from the old snapshot are never used, because a connection that was impossible in 2016 can be the best one now (e.g. Basava 17307 → Hutatma 12158 at Solapur). The top 10 are queried, skipping any within the nearby radius of either end.
-- Running days are enforced for every leg. A train that doesn't run on your date (counted from its origin) is dropped, and the second leg waits for that train's next running day.
-- The booking calendar uses `GET /v1/trains/{number}` and warns when the train doesn't run on the chosen date.
-- A new route costs at most about 16 requests (2 ends + 4 nearby + 10 change stations), and the free tier allows 1,000 a month. Station timetables are cached in SQLite for 7 days and shared across routes (SBC, PUNE, SUR, DD… are reused), and running days are applied locally, so a repeat search on any date costs 0 requests. The cache file is `RAILRADAR_CACHE` (default `backend/data/railradar-cache.sqlite3`). Render's free tier wipes it on restart, so mount a disk there if you need it to last.
-- If the key is rejected or the quota runs out, the app falls back to the snapshot and says so in the UI.
-- Coach classes come from `coachPosition` when available, otherwise from the snapshot.
-
-**Fallback: offline snapshot.** `backend/data/timetable.json.gz` is built from [datameet/railways](https://github.com/datameet/railways), a ~2016–17 snapshot with no running days (every train is treated as daily). The UI shows a warning whenever results come from it. To rebuild it:
+**Default: stored timetable, `backend/data/timetable.json.gz`.** Every train with its halts, times, distances, classes and **running days**, 0.9 MB, loaded at boot. Route search and the booking calendar use it, so they make **no RailRadar requests**. RailRadar's 10-requests-a-minute limit is left for seat checks.
+- Current file: the Indian Railways timetable as of **September 2024**, from the [RSTGCN dataset](https://github.com/KoyenaChowdhury/RSTGCN) (IIT Kharagpur): 3,877 trains (express, superfast, Rajdhani, Shatabdi, Vande Bharat and specials) and 4,718 stations. Suburban, passenger and MEMU trains are mostly not included.
+- Running days are the weekdays each train actually left its origin in September 2024, taken from that month's run records. 1,418 trains run daily and 1,336 weekly. Halt times are the scheduled times from the same records, because the dataset's route file has broken times for some trains.
+- Coordinates, states and coach classes come from [datameet/railways](https://github.com/datameet/railways). 275 stations missing there are placed along the line between neighbouring halts.
+- Things that changed after September 2024 aren't in it (new trains, retimings), and many specials (0xxxx) no longer run. The UI says so. Station codes are current (e.g. CSMT, not CSTM).
+- To rebuild:
 
 ```bash
+git clone --depth 1 https://github.com/KoyenaChowdhury/RSTGCN.git /tmp/rstgcn
+unzip -q /tmp/rstgcn/Indian-Railway-Network-and-Delays.zip -d /tmp/rstgcn
 git clone --depth 1 https://github.com/datameet/railways.git /tmp/railways
-python backend/scripts/build_timetable.py /tmp/railways backend/data/timetable.json.gz
+python backend/scripts/build_timetable_2024.py /tmp/rstgcn/Indian-Railway-Network-and-Delays /tmp/railways backend/data/timetable.json.gz
 ```
 
-`GET /api/status` shows which source is active and this month's API request count.
+**Refresh it to today's timetable with RailRadar:** `backend/scripts/crawl_railradar.py` fetches `GET /v1/trains/{number}` for every train in the file (one request each) and writes the result back to the same file.
+- It paces itself (9 requests/min by default), stops at `--max` requests per run (default 900) and stops cleanly on a quota or key error.
+- Every response is cached in `backend/data/railradar-crawl.sqlite3` (git-ignored, 45 days), so re-running continues where it stopped and never re-fetches. A full crawl of about 4,000 trains is about 7.5 hours of requests, so spread it over as many runs or months as your quota needs.
+- Until the crawl completes, crawled trains replace their stored entries, trains RailRadar doesn't know (withdrawn) are dropped, and the rest stay as they were. The file's `meta` records how far it got.
+- `--stations 50` also scans the 50 busiest station boards on the first run to find trains that are new since 2024.
+
+```bash
+cd backend
+RAILRADAR_API_KEY=rr_live_... python scripts/crawl_railradar.py --max 900   # repeat until it says "complete"
+git add data/timetable.json.gz && git commit -m "Refresh timetable from RailRadar"
+```
+
+**Live timetables (optional): `TIMETABLE_SOURCE=live`.** Routes then come from [RailRadar](https://railradar.in/docs) station boards (`GET /v1/stations/{code}/trains`) instead of the stored file. Set `RAILRADAR_API_KEY` too (on Render: service → Environment).
+- A leg A→B is any train on both boards that reaches B after A. Change stations are ranked from the stored network's shape (never its clock times), and the top 10 are queried, skipping any within the nearby radius of either end.
+- A new route costs about 16 requests, and up to 30 with 2+ changes, which is more than the 10-a-minute limit. Station boards are cached in SQLite for 7 days (`RAILRADAR_CACHE`, default `backend/data/railradar-cache.sqlite3`), so repeat searches are free. Render's free tier wipes the cache on restart.
+- If the key is rejected or the quota runs out, the app falls back to the stored timetable and says so in the UI.
+
+**Seat availability** always uses RailRadar and needs `RAILRADAR_API_KEY`, whichever timetable source is set.
+
+The previous fallback, a ~2016–17 snapshot from datameet without running days, can still be built with `backend/scripts/build_timetable.py`.
+
+`GET /api/status` shows the timetable source and its date, whether seat checks are available, and this month's API request count.
 
 Booking rules are in `app/rules.py`, as of September 2026. Update the constants if IRCTC changes them.
 

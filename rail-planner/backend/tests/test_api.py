@@ -27,7 +27,7 @@ def test_defaults_are_2_changes_5h_100km():
     assert body["params"]["max_changes"] == 2
 
 
-@pytest.mark.parametrize("pair", [("SBC", "PUNE"), ("PUNE", "NGP"), ("CSTM", "NDLS")])
+@pytest.mark.parametrize("pair", [("SBC", "PUNE"), ("PUNE", "NGP"), ("CSMT", "NDLS")])
 def test_alternates_respect_tolerance(pair):
     body = client.get("/api/routes", params={"from": pair[0], "to": pair[1], "date": DATE}).json()
     base = body["baseline"]
@@ -148,3 +148,13 @@ def test_via_kerala_mangaluru_thane():
 def test_bad_via():
     r = client.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": DATE, "via": "NOPE"})
     assert r.status_code == 400
+
+
+def test_snapshot_running_days():
+    """17020 Hyderabad -> Hisar is weekly (Saturday) in the stored timetable."""
+    def direct_trains(day):
+        body = client.get("/api/routes", params={"from": "HYB", "to": "HSR", "date": day, "max_changes": 0}).json()
+        return {j["legs"][0]["train"]["number"] for j in body["direct"]}
+
+    assert "17020" in direct_trains("2026-10-24")  # Saturday
+    assert "17020" not in direct_trains("2026-10-20")  # Tuesday
