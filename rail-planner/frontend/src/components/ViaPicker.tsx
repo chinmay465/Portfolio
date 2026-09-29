@@ -1,8 +1,9 @@
 import { useState } from "react";
-import type { StationHit } from "../types";
+import type { StationHit, ViaStop } from "../types";
+import { NumberField } from "./controls";
 import { StationInput } from "./StationInput";
 
-type Props = { via: StationHit[]; onChange: (v: StationHit[]) => void };
+type Props = { via: ViaStop[]; onChange: (v: ViaStop[]) => void };
 
 /** Ordered list of stations the route must pass through (changing trains there or riding through). */
 export function ViaPicker({ via, onChange }: Props) {
@@ -12,7 +13,7 @@ export function ViaPicker({ via, onChange }: Props) {
   const add = (s: StationHit | null) => {
     setAdding(s);
     if (s && !via.some((v) => v.code === s.code)) {
-      onChange([...via, s]);
+      onChange([...via, { ...s, stay_h: 0 }]);
       setAdding(null);
       setKey((k) => k + 1);
     }
@@ -34,6 +35,16 @@ export function ViaPicker({ via, onChange }: Props) {
             <li key={s.code} className="chip via-chip">
               <span className="n">{i + 1}</span>
               {s.name} <span className="code">{s.code}</span>
+              <span className="stay" title="Planned stop here: you get off, and the next train leaves at least this long after you arrive">
+                stop
+                <NumberField
+                  value={s.stay_h ?? 0}
+                  onChange={(h) => onChange(via.map((v) => (v.code === s.code ? { ...v, stay_h: h } : v)))}
+                  step={0.5}
+                  label={`Planned stop at ${s.name} (hours)`}
+                />
+                h
+              </span>
               {i > 0 && (
                 <button type="button" aria-label={`Move ${s.name} earlier`} onClick={() => move(i, -1)}>
                   ↑

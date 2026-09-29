@@ -1,5 +1,7 @@
 export type StationRef = { code: string; name: string };
 export type StationHit = StationRef & { state: string };
+/** A via station, optionally with a planned stop (hours) — e.g. Udupi, 7 h. */
+export type ViaStop = StationHit & { stay_h?: number };
 
 export type WindowKind = "general" | "tatkal_ac" | "tatkal_non_ac";
 export type WindowStatus = "upcoming" | "open" | "departed";
@@ -44,7 +46,7 @@ export type Journey = {
   max_sleep_minutes: number;
 };
 
-export type Transfer = { station: StationRef; wait_minutes: number; tight: boolean };
+export type Transfer = { station: StationRef; wait_minutes: number; planned_stay_minutes: number; tight: boolean };
 
 export type DataSource = {
   kind: "live" | "snapshot" | null;
@@ -64,7 +66,9 @@ export type RouteResponse = {
   from: StationRef & { state: string };
   to: StationRef & { state: string };
   journey_date: string;
-  params: Omit<Tolerance, "extra_hours" | "extra_km" | "no_time_limit" | "no_km_limit" | "sleep_on" | "sleep_hours"> & {
+  params: Omit<Tolerance, "extra_hours" | "extra_km" | "no_time_limit" | "no_km_limit" | "sleep_on" | "sleep_hours" | "no_wait_limit" | "max_wait_hours"> & {
+    via_stay_min: number[];
+    max_wait_min: number | null;
     min_sleep_hours: number | null;
     via: string[];
     extra_hours: number | null;
@@ -95,6 +99,8 @@ export type Tolerance = {
   nearby_km: number;
   min_transfer_min: number;
   include_unreserved: boolean;
+  no_wait_limit: boolean; // true = any wait between trains is fine
+  max_wait_hours: number; // longest wait at a station (on top of a planned stop)
   sleep_on: boolean; // want uninterrupted sleep on one train?
   sleep_hours: number; // how much, starting 21:00-24:00
 };
@@ -125,6 +131,8 @@ export const DEFAULT_TOLERANCE: Tolerance = {
   nearby_km: 15,
   min_transfer_min: 20,
   include_unreserved: false,
+  no_wait_limit: true,
+  max_wait_hours: 4,
   sleep_on: false,
   sleep_hours: 8,
 };

@@ -158,3 +158,53 @@ def test_snapshot_running_days():
 
     assert "17020" in direct_trains("2026-10-24")  # Saturday
     assert "17020" not in direct_trains("2026-10-20")  # Tuesday
+
+
+def test_planned_stay_at_via_station():
+    params = {"from": "SBC", "to": "PUNE", "date": DATE, "via": "UD", "via_stay": "7", "max_changes": 2,
+              "no_time_limit": True, "no_km_limit": True}
+    body = client.get("/api/routes", params=params).json()
+    assert body["params"]["via_stay_min"] == [420]
+    assert body["alternates"], "expected routes that stop at Udupi"
+    for j in body["alternates"]:
+        ud = [t for t in j["transfers"] if t["station"]["code"] == "UD"]
+        assert ud, "must get off at Udupi (a planned stop can't be ridden through)"
+        assert ud[0]["wait_minutes"] >= 420 and ud[0]["planned_stay_minutes"] == 420 and not ud[0]["tight"]
+
+
+def test_planned_stay_does_not_count_against_extra_time():
+    body = client.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": DATE, "via": "UD", "via_stay": "7"}).json()
+    base = body["baseline"]
+    assert base["planned_stay_minutes"] == 420
+    assert base["max_minutes"] == base["minutes"] + 5 * 60 + 420
+
+
+def test_max_wait_at_station():
+    body = client.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": DATE, "max_wait_hours": 1}).json()
+    assert body["params"]["max_wait_min"] == 60
+    waits = [t["wait_minutes"] for j in body["alternates"] for t in j["transfers"]]
+    assert waits and max(waits) <= 60
+    loose = client.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": DATE, "limit": 500}).json()
+    assert max(t["wait_minutes"] for j in loose["alternates"] for t in j["transfers"]) > 60
+
+
+def test_max_wait_counts_on_top_of_planned_stay():
+    params = {"from": "SBC", "to": "PUNE", "date": DATE, "via": "UD", "via_stay": "7", "max_changes": 2,
+              "no_time_limit": True, "no_km_limit": True, "max_wait_hours": 8}
+    body = client.get("/api/routes", params=params).json()
+    for j in body["alternates"]:
+        for t in j["transfers"]:
+            assert t["wait_minutes"] - t["planned_stay_minutes"] <= 8 * 60
+
+
+def test_bad_via_stay():
+    r = client.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": DATE, "via": "UD", "via_stay": "abc"})
+    assert r.status_code == 400
+
+
+def test_station_search_old_and_new_city_names():
+    first = lambda q: client.get("/api/stations", params={"q": q}).json()[0]["code"]  # noqa: E731
+    assert first("bangalore") == first("bengaluru") == "SBC"
+    assert first("bombay") == first("mumbai") == "CSMT"
+    assert first("hubli") == "UBL" and first("poona") == "PUNE" and first("madras") == "MAS"
+    assert client.get("/api/stations", params={"q": "mumbai"}).json()[0]["name"].startswith("Mumbai CSMT")

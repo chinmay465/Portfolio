@@ -68,6 +68,43 @@ def haversine_km(a: Station, b: Station) -> float:
     return 6371 * 2 * math.asin(math.sqrt(h))
 
 
+# Big cities: typing the city (old or new name) lists its main terminals first, busiest first.
+_MUMBAI = ["CSMT", "LTT", "MMCT", "DR", "BDTS", "TNA", "PNVL"]
+_BENGALURU = ["SBC", "SMVB", "YPR", "KJM", "BNC", "BNCE"]
+_DELHI = ["NDLS", "NZM", "DLI", "ANVT", "DEE"]
+_CHENNAI = ["MAS", "MS", "TBM"]
+_KOLKATA = ["HWH", "SDAH", "KOAA", "SHM"]
+_HYDERABAD = ["SC", "HYB", "KCG", "LPI"]
+_PUNE = ["PUNE", "SVJR", "KK", "HDP"]
+_KOCHI = ["ERS", "ERN"]
+CITY_GROUPS: dict[str, list[str]] = {
+    "mumbai": _MUMBAI, "bombay": _MUMBAI,
+    "bengaluru": _BENGALURU, "bangalore": _BENGALURU,
+    "delhi": _DELHI, "new delhi": _DELHI,
+    "chennai": _CHENNAI, "madras": _CHENNAI,
+    "kolkata": _KOLKATA, "calcutta": _KOLKATA,
+    "hyderabad": _HYDERABAD, "secunderabad": ["SC"],
+    "pune": _PUNE, "poona": _PUNE,
+    "kochi": _KOCHI, "cochin": _KOCHI, "ernakulam": _KOCHI,
+    "thiruvananthapuram": ["TVC"], "trivandrum": ["TVC"],
+    "hubballi": ["UBL"], "hubli": ["UBL"], "belagavi": ["BGM"], "belgaum": ["BGM"],
+    "kalaburagi": ["KLBG"], "gulbarga": ["KLBG"], "mysuru": ["MYS"], "mysore": ["MYS"],
+    "mangaluru": ["MAQ", "MAJN"], "mangalore": ["MAQ", "MAJN"],
+    "vadodara": ["BRC"], "baroda": ["BRC"], "kozhikode": ["CLT"], "calicut": ["CLT"],
+    "tiruchirappalli": ["TPJ"], "trichy": ["TPJ"], "visakhapatnam": ["VSKP"], "vizag": ["VSKP"],
+    "gurugram": ["GGN"], "gurgaon": ["GGN"], "varanasi": ["BSB"], "banaras": ["BSB"], "benares": ["BSB"],
+}
+# Timetable names are often abbreviated ("C Shivaji Mah T"); show readable names for the big terminals.
+DISPLAY_NAMES = {
+    "CSMT": "Mumbai CSMT (Chhatrapati Shivaji Maharaj Terminus)", "LTT": "Mumbai LTT (Lokmanya Tilak Terminus)",
+    "MMCT": "Mumbai Central", "BDTS": "Mumbai Bandra Terminus", "DR": "Dadar", "DDR": "Dadar (Western)",
+    "SBC": "KSR Bengaluru (Bangalore City)", "SMVB": "SMVT Bengaluru (Baiyappanahalli)", "YPR": "Yesvantpur",
+    "KJM": "Krishnarajapuram", "MAS": "Chennai Central (MGR)", "KOAA": "Kolkata Terminal (Chitpur)",
+    "UBL": "SSS Hubballi", "CLT": "Kozhikode (Calicut)", "TVC": "Thiruvananthapuram Central",
+    "SVJR": "Pune Shivajinagar", "HDP": "Hadapsar (Pune)", "GGN": "Gurugram (Gurgaon)",
+}
+
+
 class StaticTimetable:
     def __init__(self, path: Path = DEFAULT_DATA) -> None:
         with gzip.open(path, "rt", encoding="utf-8") as fh:
@@ -76,7 +113,8 @@ class StaticTimetable:
         self.meta: dict = raw.get("meta") or {"source": "datameet snapshot (2016-17)", "as_of": "2016", "run_days": False}
 
         self._stations = {
-            code: Station(code, name, lat, lon, state) for code, (name, lat, lon, state) in raw["stations"].items()
+            code: Station(code, DISPLAY_NAMES.get(code, name), lat, lon, state)
+            for code, (name, lat, lon, state) in raw["stations"].items()
         }
         self._trains: dict[str, Train] = {}
         self._at: dict[str, list[tuple[Train, int]]] = {}
@@ -121,8 +159,25 @@ class StaticTimetable:
             else:
                 continue
             scored.append((score, -self._rank.get(s.code, 0), s.name, s))
+        # City names, old or new ("bangalore", "bombay", "hubli"...): that city's main terminals come first.
+        if len(q) >= 3:
+            seen = set()
+            for city, codes in CITY_GROUPS.items():
+                if city.startswith(q) or q.startswith(city):
+                    for i, c in enumerate(codes):
+                        st = self._stations.get(c)
+                        if st and c not in seen:
+                            seen.add(c)
+                            scored.append((-1 + i / 100, 0, st.name, st))
         scored.sort(key=lambda x: x[:3])
-        return [s for *_, s in scored[:limit]]
+        out, seen = [], set()
+        for *_, st in scored:
+            if st.code not in seen:
+                seen.add(st.code)
+                out.append(st)
+            if len(out) == limit:
+                break
+        return out
 
     def nearby(self, code: str, radius_km: float, min_halts: int = 15, limit: int = 6) -> list[tuple[Station, float]]:
         """Stations within radius that enough reserved trains stop at to be worth boarding from."""

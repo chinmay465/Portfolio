@@ -20,7 +20,8 @@ Backend: Python (FastAPI). Frontend: React + TypeScript (Vite).
 | Extra travel time | 5 h | max time over the fastest direct train; any value, or **No limit** |
 | Extra distance | 100 km | max rail km over the shortest direct train; any value, or **No limit** |
 | Max changes | 2 | any number; 0 = direct trains only |
-| Via stations | none | stations the route must pass through, in order (changing there or staying on the train) |
+| Via stations | none | stations the route must pass through, in order (changing there or staying on the train). Each can have a planned **stop** in hours (e.g. Udupi 7 h): you get off there, the next train leaves at least that long after you arrive, and the stop doesn't count against the extra-time limit |
+| Maximum wait at a station | no limit | longest wait between trains at any change, counted on top of a planned stop (Udupi 7 h + max wait 2 h = next train 7–9 h after arrival) |
 | Minimum sleep | off (8 h when on) | one train must let you sleep this long, starting 21:00–24:00 (at 21:00, or at departure if later) |
 | Nearby stations within | 15 km | also board or alight at busy stations nearby (e.g. YPR/BNC/KJM for SBC); any value |
 | Minimum change time | 20 min | for one-change routes; any value. Changes under 45 min are flagged "Tight change" |
@@ -77,7 +78,7 @@ On every push and PR, CI (`.github/workflows/ci.yml`) runs the backend tests, bu
 ## API
 
 - `GET /api/stations?q=pune`
-- `GET /api/routes?from=SBC&to=PUNE&date=2026-10-20&extra_hours=3&extra_km=150&nearby_km=15&min_transfer_min=20&include_unreserved=false&limit=50`. Add `no_time_limit=true` or `no_km_limit=true` to remove either limit, `max_changes=3` for more changes, and `via=SRR,MAQ,TNA` to force stations in order.
+- `GET /api/routes?from=SBC&to=PUNE&date=2026-10-20&extra_hours=3&extra_km=150&nearby_km=15&min_transfer_min=20&include_unreserved=false&limit=50`. Add `no_time_limit=true` or `no_km_limit=true` to remove either limit, `max_changes=3` for more changes, `via=SRR,MAQ,TNA` to force stations in order, `via_stay=0,7,0` for planned stops (hours) at them, and `max_wait_hours=2` to cap waiting at a station.
 - `GET /api/booking-windows?date=2026-10-20&train=12627&board=BPL`
 - `POST /api/seats` with `{"cls": "3A", "quota": "GN", "fresh": false, "legs": [{"train": "17307", "from": "SBC", "to": "SUR", "date": "2026-10-20", "classes": ["2A","3A","SL"]}]}`
 

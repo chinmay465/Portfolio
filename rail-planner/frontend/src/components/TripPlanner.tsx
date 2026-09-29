@@ -3,7 +3,7 @@ import { api } from "../api";
 import { duration, longDay, todayIST } from "../format";
 import { isBookable, journeyPicks, journeySeat, legId, useSeats } from "../seats";
 import { storage, type SavedTrip } from "../storage";
-import type { ClassChoice, ClassMode, Journey, Leg, RouteResponse, SeatPrefs, StationHit, Tolerance } from "../types";
+import type { ClassChoice, ClassMode, Journey, Leg, RouteResponse, SeatPrefs, StationHit, Tolerance, ViaStop } from "../types";
 import { FiltersPanel, filterSummary, type Draft } from "./FiltersPanel";
 import { JourneyCard } from "./JourneyCard";
 import { SourceNote } from "./SourceNote";
@@ -26,7 +26,7 @@ export function TripPlanner() {
 
   // Applied filters (used by searches) and the draft being edited in the panel.
   const [tol, setTol] = useState<Tolerance>(saved.tolerance);
-  const [via, setVia] = useState<StationHit[]>([]);
+  const [via, setVia] = useState<ViaStop[]>([]);
   const [seatPrefs, setSeatPrefs] = useState<SeatPrefs>(saved.seats);
   const [draft, setDraft] = useState<Draft | null>(null);
 
@@ -41,7 +41,7 @@ export function TripPlanner() {
   const ctrl = useRef<AbortController | null>(null);
   const { seats, check, usage } = useSeats();
 
-  const run = async (opts: { f?: StationHit | null; t?: StationHit | null; tl?: Tolerance; v?: StationHit[]; lim?: number } = {}) => {
+  const run = async (opts: { f?: StationHit | null; t?: StationHit | null; tl?: Tolerance; v?: ViaStop[]; lim?: number } = {}) => {
     const f = opts.f ?? from;
     const t = opts.t ?? to;
     const tl = opts.tl ?? tol;
@@ -57,7 +57,7 @@ export function TripPlanner() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.routes(f.code, t.code, date, tl, v.map((s) => s.code), lim, c.signal);
+      const res = await api.routes(f.code, t.code, date, tl, v, lim, c.signal);
       setData(res);
       setLimit(lim);
       storage.remember({ from: f, to: t, date }, tl);
@@ -271,7 +271,7 @@ export function TripPlanner() {
           {data.hidden_by_limits > 0 && (
             <p className="hidden-note">
               {data.hidden_by_limits} more route{data.hidden_by_limits === 1 ? "" : "s"}
-              {data.params.via.length > 0 ? " through your via stations" : ""} exceed your time/distance limits
+              {data.params.via.length > 0 ? " through your via stations" : ""} exceed your time/distance/wait limits
               {data.fastest_hidden_minutes !== null && <> (fastest takes {duration(data.fastest_hidden_minutes)})</>}.{" "}
               <button
                 type="button"
@@ -279,7 +279,7 @@ export function TripPlanner() {
                 disabled={!!draft}
                 title={draft ? "Apply or cancel your filter changes first" : undefined}
                 onClick={() => {
-                  const next = { ...tol, no_time_limit: true, no_km_limit: true };
+                  const next = { ...tol, no_time_limit: true, no_km_limit: true, no_wait_limit: true };
                   setTol(next);
                   storage.saveFilters(next, seatPrefs);
                   run({ tl: next });

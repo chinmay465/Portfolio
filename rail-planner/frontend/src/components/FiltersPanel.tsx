@@ -1,4 +1,4 @@
-import { DEFAULT_SEATS, DEFAULT_TOLERANCE, type SeatPrefs, type StationHit, type Tolerance } from "../types";
+import { DEFAULT_SEATS, DEFAULT_TOLERANCE, type SeatPrefs, type Tolerance, type ViaStop } from "../types";
 import { NumberField, Slider } from "./controls";
 import { ViaPicker } from "./ViaPicker";
 
@@ -10,7 +10,7 @@ const QUOTAS: [string, string][] = [
   ["SS", "Senior citizen"],
 ];
 
-export type Draft = { tol: Tolerance; via: StationHit[]; seats: SeatPrefs };
+export type Draft = { tol: Tolerance; via: ViaStop[]; seats: SeatPrefs };
 
 type Props = {
   draft: Draft;
@@ -47,6 +47,10 @@ export function FiltersPanel({ draft, onChange, onCancel, live, month }: Props) 
         />
         <Slider label="Nearby stations within" unit="km" range={50} step={1} value={tol.nearby_km} onChange={(v) => setTol({ nearby_km: v })} hint="0 turns nearby boarding off" />
         <Slider label="Minimum change time" unit="min" range={180} step={5} integer value={tol.min_transfer_min} onChange={(v) => setTol({ min_transfer_min: v })} hint="at each change" />
+        <Slider
+          label="Maximum wait at a station" unit="h" range={24} step={0.5} value={tol.max_wait_hours} onChange={(v) => setTol({ max_wait_hours: v })}
+          hint="on top of any planned stop" unlimited={tol.no_wait_limit} onUnlimited={(v) => setTol({ no_wait_limit: v })}
+        />
         <label className="check">
           <input type="checkbox" checked={tol.include_unreserved} onChange={(e) => setTol({ include_unreserved: e.target.checked })} />
           Include unreserved passenger / MEMU trains
@@ -136,13 +140,14 @@ function fmtClock(min: number): string {
 }
 
 /** One-line summary of the applied filters, shown while the panel is closed. */
-export function filterSummary(tol: Tolerance, via: StationHit[], seats: SeatPrefs): string[] {
+export function filterSummary(tol: Tolerance, via: ViaStop[], seats: SeatPrefs): string[] {
   const chips = [
     tol.max_changes === 0 ? "Direct only" : `Up to ${tol.max_changes} change${tol.max_changes === 1 ? "" : "s"}`,
     tol.no_time_limit ? "Any duration" : `+${tol.extra_hours} h`,
     tol.no_km_limit ? "Any distance" : `+${tol.extra_km} km`,
   ];
-  if (via.length) chips.push(`Via ${via.map((v) => v.code).join(" → ")}`);
+  if (via.length) chips.push(`Via ${via.map((v) => (v.stay_h ? `${v.code} (${v.stay_h} h stop)` : v.code)).join(" → ")}`);
+  if (!tol.no_wait_limit) chips.push(`Wait ≤ ${tol.max_wait_hours} h`);
   if (tol.sleep_on) chips.push(`Sleep ${tol.sleep_hours} h`);
   if (seats.quota !== "GN") chips.push(QUOTAS.find(([c]) => c === seats.quota)?.[1] ?? seats.quota);
   if (seats.hide_unavailable) chips.push(seats.rac_ok ? "Seats/RAC only" : "Confirmed seats only");

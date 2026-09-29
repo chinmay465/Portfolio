@@ -135,8 +135,16 @@ def multi_search(
     max_km: float,
     make_leg: Callable,
     per_hop: int = 2,
+    via_stays: dict[str, int] | None = None,
+    max_wait_min: float = float("inf"),
 ) -> list[MultiResult]:
-    """All times are integer minutes from 00:00 on the journey date (fast; no datetimes in the loop)."""
+    """All times are integer minutes from 00:00 on the journey date (fast; no datetimes in the loop).
+
+    via_stays: planned stop (minutes) at a via station; the route must get off there and the next
+    train leaves at least that long after arrival. max_wait_min caps waiting at any change, counted
+    on top of a planned stay.
+    """
+    via_stays = via_stays or {}
     nodes = list(dict.fromkeys(nodes))
     via_set = set(via)
     remaining_km = {c: haversine_km(s, dest_station) if (s := tt.station(c)) else 0.0 for c in nodes}
@@ -180,16 +188,20 @@ def multi_search(
                             continue
                         day, changes = 0, 0
                     elif o.train.number == cur[0].train.number:
-                        # Stay on the same run; only worth modelling right after a via station.
-                        if not just_hit_via or o.dep < cur[0].arr:
+                        # Stay on the same run; only worth modelling right after a via station,
+                        # and not when you planned to stop there.
+                        if not just_hit_via or o.dep < cur[0].arr or via_stays.get(st.station, 0) > 0:
                             continue
                         day, changes = cur[1] + (o.dep // 1440 - cur[0].dep // 1440), st.changes
                     else:
                         if st.changes >= max_changes:
                             continue
-                        day = first_after(o, st.arrive + min_transfer_min)
+                        stay = via_stays.get(st.station, 0) if just_hit_via else 0
+                        day = first_after(o, st.arrive + max(min_transfer_min, stay))
                         if day is None:
                             continue
+                        if day * 1440 + o.dep % 1440 - st.arrive - stay > max_wait_min:
+                            continue  # waiting too long at this station
                         changes = st.changes + 1
                     dep = day * 1440 + o.dep % 1440
                     arr = dep + (o.arr - o.dep)

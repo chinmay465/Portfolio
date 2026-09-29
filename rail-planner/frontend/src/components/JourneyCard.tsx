@@ -8,8 +8,17 @@ const KIND_LABEL = { direct: "Direct", nearby: "Nearby station", connection: "Ch
 
 function changeLabel(j: Journey): string {
   const t = j.transfers;
-  if (t.length === 1) return `Change at ${t[0].station.name} · ${duration(t[0].wait_minutes)} wait`;
+  if (t.length === 1)
+    return t[0].planned_stay_minutes
+      ? `Stop at ${t[0].station.name} · ${duration(t[0].wait_minutes)}`
+      : `Change at ${t[0].station.name} · ${duration(t[0].wait_minutes)} wait`;
   return `${t.length} changes: ${t.map((x) => x.station.name).join(", ")}`;
+}
+
+function transferLine(t: Journey["transfers"][number]): string {
+  if (t.planned_stay_minutes)
+    return `Stop at ${t.station.name} · ${duration(t.wait_minutes)} (planned ${duration(t.planned_stay_minutes)})`;
+  return `Change at ${t.station.name} · ${duration(t.wait_minutes)} wait`;
 }
 
 type Props = {
@@ -96,8 +105,8 @@ export function JourneyCard({ j, route, seats, choice, quota, onPickClass, onChe
         {j.legs.map((l, i) => (
           <li key={l.train.number + l.depart_at}>
             {i > 0 && j.transfers[i - 1] && (
-              <div className={`wait ${j.transfers[i - 1].tight ? "tight" : ""}`}>
-                Change at {j.transfers[i - 1].station.name} · {duration(j.transfers[i - 1].wait_minutes)} wait
+              <div className={`wait ${j.transfers[i - 1].tight ? "tight" : ""} ${j.transfers[i - 1].planned_stay_minutes ? "stay" : ""}`}>
+                {transferLine(j.transfers[i - 1])}
               </div>
             )}
             <div className="leg-train">

@@ -278,3 +278,6 @@ sup { font-size: 11px; color: var(--warn); margin-left: 2px; font-weight: 600; }
 .badge.sleepb { background: color-mix(in srgb, #6366f1 14%, transparent); color: #4f46e5; }
 @media (prefers-color-scheme: dark) { .badge.sleepb { color: #a5b4fc; } }
 .link:disabled { color: var(--muted); cursor: not-allowed; }
+.via-chip .stay { display: inline-flex; gap: 4px; align-items: center; font-size: 12px; color: var(--muted); margin-left: 4px; }
+.via-chip .stay input { width: 52px; padding: 2px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); font-size: 12px; text-align: right; }
+.legs .wait.stay { color: var(--accent); }

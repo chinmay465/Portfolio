@@ -104,6 +104,8 @@ def routes(
     max_changes: int = Query(2, ge=0),
     min_sleep_hours: float | None = Query(None, ge=0, description="Only routes where one train allows this much sleep, starting 21:00-24:00"),
     via: str = Query("", description="Comma-separated station codes to pass through, in order"),
+    via_stay: str = Query("", description="Comma-separated planned stop at each via station, in hours (e.g. 0,7)"),
+    max_wait_hours: float | None = Query(None, ge=0, description="Longest wait at any change; on top of a planned stay"),
 ) -> dict:
     params = SearchParams(
         from_code=from_code.upper(),
@@ -117,7 +119,9 @@ def routes(
         limit=limit,
         max_changes=max_changes,
         min_sleep_hours=min_sleep_hours,
-        via=tuple(c.strip().upper() for c in via.split(",") if c.strip()),
+        via=(via_codes := tuple(c.strip().upper() for c in via.split(",") if c.strip())),
+        via_stay_min=_stays(via_stay, len(via_codes)),
+        max_wait_min=None if max_wait_hours is None else max_wait_hours * 60,
     )
     try:
         res = search(timetable(), params, timetable_live())
@@ -147,6 +151,18 @@ def _schedule(number: str, warnings: list[str]) -> dict | None:
         return None
     stops = [(s.code, timetable().station(s.code).name, s.dep) for s in t.stops if s.dep is not None]
     return {"meta": t, "stops": stops, "source": "snapshot"}
+
+
+def _stays(raw: str, n: int) -> tuple[int, ...]:
+    parts = [x.strip() for x in raw.split(",")] if raw.strip() else []
+    try:
+        hours = [float(x) if x else 0.0 for x in parts]
+    except ValueError as e:
+        raise HTTPException(400, "via_stay must be comma-separated hours, e.g. 0,7") from e
+    if any(h < 0 for h in hours):
+        raise HTTPException(400, "via_stay can't be negative")
+    hours = (hours + [0.0] * n)[:n]
+    return tuple(int(round(h * 60)) for h in hours)
 
 
 @app.get("/api/booking-windows")

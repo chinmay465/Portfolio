@@ -54,6 +54,16 @@ class SearchParams:
     max_changes: int = 2
     min_sleep_hours: float | None = None  # None = don't care; else one train must allow this much sleep from 21-24h
     via: tuple[str, ...] = ()  # stations the route must pass through, in order
+    via_stay_min: tuple[int, ...] = ()  # planned stop at each via station (minutes, 0 = just pass/change)
+    max_wait_min: float | None = None  # longest wait at any change (on top of a planned stay); None = no limit
+
+    @property
+    def stays(self) -> dict[str, int]:
+        return {c.upper(): m for c, m in zip(self.via, self.via_stay_min) if m > 0}
+
+    @property
+    def wait_cap(self) -> float:
+        return INF if self.max_wait_min is None else self.max_wait_min
 
     @property
     def extra_min(self) -> float:
@@ -200,6 +210,8 @@ def _snap_connections(
                 s2k, s2j = t2.stops[k], t2.stops[j]
                 leg2 = _next_leg((t2, s2k.code, s2j.code, s2k.dep, s2j.arr, s2j.km - s2k.km), ready)
                 if leg2 is None or _minutes(leg1.depart_at, leg2.arrive_at) > max_total:
+                    continue
+                if _minutes(leg1.arrive_at, leg2.depart_at) > p.wait_cap:
                     continue
                 _keep_best(best, Journey("connection", [leg1, leg2]), origin, dest)
     return list(best.values())
@@ -355,6 +367,8 @@ def _live_candidates(tt, live: RailRadar, a, b, near_a, near_b, p, usage: Usage,
                 leg2 = _next_leg((o2.train, o2.from_code, o2.to_code, o2.dep, o2.arr, o2.km), ready)
                 if leg2 is None or _minutes(leg1.depart_at, leg2.arrive_at) > max_total:
                     continue
+                if _minutes(leg1.arrive_at, leg2.depart_at) > p.wait_cap:
+                    continue
                 _keep_best(best, Journey("connection", [leg1, leg2]), origin, dest)
     return direct, all_direct, list(best.values()), boards
 
@@ -428,20 +442,23 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
             src = SnapshotLegs(tt, lambda t: _eligible(t, p))
             nodes = [*origins, *dests, *suggest_hubs(tt, a, b, p, k=SNAPSHOT_MULTI_HUBS), *multi_hubs, *via]
             starts = list(origins)
-        max_total = INF if base_min is None else base_min + p.extra_min
+        planned = sum(p.stays.values())  # your planned stops don't count against the extra-time limit
+        max_total = INF if base_min is None else base_min + p.extra_min + planned
         max_km = INF if base_km is None else base_km + p.extra_dist
 
-        def run_multi(t_cap, km_cap_):
+        def run_multi(t_cap, km_cap_, wait_cap=p.wait_cap):
             return multi_search(
                 src, tt, nodes, starts, dests, b, p.journey_date, p.max_changes, p.min_transfer_min, via,
                 t_cap, km_cap_,
                 make_leg=lambda o, day: Leg(o.train, o.from_code, o.to_code, o.dep, o.arr, o.km, day),
+                via_stays=p.stays,
+                max_wait_min=wait_cap,
             )
 
         found = run_multi(max_total, max_km)
-        if via and not found and (max_total < INF or max_km < INF):
+        if via and not found and (max_total < INF or max_km < INF or p.wait_cap < INF):
             # Nothing fits the limits: look without them so the UI can say what's out there.
-            beyond = [r for r in run_multi(INF, INF) if len(r.legs) > 1 or via]
+            beyond = [r for r in run_multi(INF, INF, INF) if len(r.legs) > 1 or via]
             if beyond:
                 durations = [
                     (r.legs[-1].arrive_at - r.legs[0].depart_at).total_seconds() / 60 for r in beyond
@@ -472,7 +489,7 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
 
     alternates: list[Journey] = []
     if base_min is not None:
-        max_min = base_min + p.extra_min
+        max_min = base_min + p.extra_min + (sum(p.stays.values()) if via else 0)
         max_km = base_km + p.extra_dist
         alternates = [j for j in pool if j.minutes <= max_min and j.km <= max_km]
     hidden_by_limits = len(pool) - len(alternates) if base_min is not None else 0
@@ -507,6 +524,8 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
             "max_changes": p.max_changes,
             "min_sleep_hours": p.min_sleep_hours,
             "via": list(p.via),
+            "via_stay_min": list(p.via_stay_min),
+            "max_wait_min": p.max_wait_min,
         },
         "data_source": {
             "kind": source,
@@ -528,15 +547,16 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
             "minutes": base_min,
             "km": base_km,
             "source": "direct" if direct else "best_alternate",
-            "max_minutes": None if p.extra_hours is None else base_min + p.extra_min,
+            "max_minutes": None if p.extra_hours is None else base_min + p.extra_min + (sum(p.stays.values()) if via else 0),
+            "planned_stay_minutes": sum(p.stays.values()) if via else 0,
             "max_km": None if p.extra_km is None else base_km + p.extra_dist,
         },
         "nearby_stations": {
             "from": [{"code": c, "name": tt.station(c).name, "distance_km": round(d, 1)} for c, d in near_a.items()],
             "to": [{"code": c, "name": tt.station(c).name, "distance_km": round(d, 1)} for c, d in near_b.items()],
         },
-        "direct": [_journey(tt, j, base_min, base_km, now, near_a, near_b, p.min_sleep_hours) for j in direct],
-        "alternates": [_journey(tt, j, base_min, base_km, now, near_a, near_b, p.min_sleep_hours) for j in alternates],
+        "direct": [_journey(tt, j, base_min, base_km, now, near_a, near_b, p.min_sleep_hours, p.stays) for j in direct],
+        "alternates": [_journey(tt, j, base_min, base_km, now, near_a, near_b, p.min_sleep_hours, p.stays) for j in alternates],
     }
 
 
@@ -577,7 +597,7 @@ def _name(tt: StaticTimetable, code: str) -> str:
     return s.name if s else code
 
 
-def _journey(tt, j: Journey, base_min, base_km, now, near_a, near_b, sleep_hours=None) -> dict:
+def _journey(tt, j: Journey, base_min, base_km, now, near_a, near_b, sleep_hours=None, stays=None) -> dict:
     first, last = j.legs[0], j.legs[-1]
     out = {
         "kind": j.kind,
@@ -597,8 +617,14 @@ def _journey(tt, j: Journey, base_min, base_km, now, near_a, near_b, sleep_hours
     transfers = []
     for x, y in zip(j.legs, j.legs[1:]):
         wait = int((y.depart_at - x.arrive_at).total_seconds() // 60)
+        stay = (stays or {}).get(x.to_code, 0)
         transfers.append(
-            {"station": {"code": x.to_code, "name": _name(tt, x.to_code)}, "wait_minutes": wait, "tight": wait < TIGHT_CHANGE_MIN}
+            {
+                "station": {"code": x.to_code, "name": _name(tt, x.to_code)},
+                "wait_minutes": wait,
+                "planned_stay_minutes": stay,
+                "tight": stay == 0 and wait < TIGHT_CHANGE_MIN,  # a planned stop isn't a tight connection
+            }
         )
     out["transfers"] = transfers
     out["changes"] = len(transfers)
