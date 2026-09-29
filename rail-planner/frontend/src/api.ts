@@ -37,7 +37,8 @@ export const api = {
     t: Tolerance,
     via: ViaStop[],
     q: ListQuery,
-    limit: number,
+    limit: number, // 0 = all
+    offset: number,
     signal?: AbortSignal,
   ) => {
     const { sleep_on, sleep_hours, no_wait_limit, max_wait_hours, ...rest } = t;
@@ -52,6 +53,7 @@ export const api = {
         via_stay: via.some((v) => v.stay_h) ? via.map((v) => v.stay_h ?? 0).join(",") : undefined,
         max_wait_hours: no_wait_limit ? undefined : max_wait_hours,
         limit,
+        offset,
         sort: q.sort,
         order: q.order,
         kind: q.kind,

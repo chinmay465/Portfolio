@@ -9,7 +9,16 @@ import { JourneyCard } from "./JourneyCard";
 import { SourceNote } from "./SourceNote";
 import { StationInput } from "./StationInput";
 
-const PAGE = 50;
+const PAGE_SIZES = [10, 25, 50, 100, 0]; // 0 = all on one page
+const pageSizeKey = "rail-planner:page-size";
+function savedPageSize(): number {
+  try {
+    const n = Number(localStorage.getItem(pageSizeKey));
+    return PAGE_SIZES.includes(n) && localStorage.getItem(pageSizeKey) !== null ? n : 25;
+  } catch {
+    return 25;
+  }
+}
 
 type Sort = SortKey;
 type Dir = SortOrder;
@@ -48,19 +57,29 @@ export function TripPlanner() {
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<Sort>("duration");
   const [dir, setDir] = useState<Dir>("asc");
-  const [limit, setLimit] = useState(PAGE);
+  const [pageSize, setPageSize] = useState(savedPageSize);
+  const [page, setPage] = useState(0);
   const ctrl = useRef<AbortController | null>(null);
   const { seats, check, usage } = useSeats();
 
   const run = async (
-    opts: { f?: StationHit | null; t?: StationHit | null; tl?: Tolerance; v?: ViaStop[]; lim?: number; q?: Partial<ListQuery> } = {},
+    opts: {
+      f?: StationHit | null;
+      t?: StationHit | null;
+      tl?: Tolerance;
+      v?: ViaStop[];
+      q?: Partial<ListQuery>;
+      size?: number;
+      pg?: number; // page index; any change other than paging goes back to page 0
+    } = {},
   ) => {
     const q: ListQuery = { sort, order: dir, kind: filter, ...opts.q };
     const f = opts.f ?? from;
     const t = opts.t ?? to;
     const tl = opts.tl ?? tol;
     const v = opts.v ?? via;
-    const lim = opts.lim ?? PAGE;
+    const size = opts.size ?? pageSize;
+    const pg = opts.pg ?? 0;
     if (!f || !t) {
       setError("Pick both stations from the suggestions.");
       return;
@@ -71,9 +90,9 @@ export function TripPlanner() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.routes(f.code, t.code, date, tl, v, q, lim, c.signal);
+      const res = await api.routes(f.code, t.code, date, tl, v, q, size, pg * size, c.signal);
       setData(res);
-      setLimit(lim);
+      setPage(pg);
       storage.remember({ from: f, to: t, date }, tl);
       setRecent(storage.load().recent);
     } catch (e) {
@@ -351,6 +370,16 @@ export function TripPlanner() {
                   </button>
                 </div>
               </div>
+              <p className="muted small sorted-note">
+                {data.total} route{data.total === 1 ? "" : "s"}, sorted by {SORTS[data.sort.by].label.toLowerCase()},{" "}
+                {SORTS[data.sort.by][data.sort.order]}
+                {data.total > data.results.length && (
+                  <>
+                    {" "}
+                    · showing {data.offset + 1}–{data.offset + data.results.length}
+                  </>
+                )}
+              </p>
             </>
           )}
 
@@ -409,13 +438,71 @@ export function TripPlanner() {
               />
             ))}
           </div>
-          {data.total > data.results.length && (
-            <button type="button" className="more" disabled={loading || !!draft} onClick={() => run({ lim: limit + PAGE })}>
-              {loading ? "Loading…" : `Show more (${data.total - data.results.length} left)`}
-            </button>
-          )}
+          <Pager
+            total={data.total}
+            offset={data.offset}
+            count={data.results.length}
+            page={page}
+            pageSize={pageSize}
+            disabled={loading || !!draft}
+            onPage={(pg) => {
+              run({ pg });
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            onPageSize={(n) => {
+              setPageSize(n);
+              try {
+                localStorage.setItem(pageSizeKey, String(n));
+              } catch {
+                /* storage unavailable */
+              }
+              run({ size: n });
+            }}
+          />
         </section>
       )}
     </div>
+  );
+}
+
+function Pager(props: {
+  total: number;
+  offset: number;
+  count: number;
+  page: number;
+  pageSize: number;
+  disabled: boolean;
+  onPage: (pg: number) => void;
+  onPageSize: (n: number) => void;
+}) {
+  const { total, offset, count, page, pageSize, disabled, onPage, onPageSize } = props;
+  const pages = pageSize === 0 ? 1 : Math.max(1, Math.ceil(total / pageSize));
+  if (total === 0) return null;
+  return (
+    <nav className="pager" aria-label="Results pages">
+      <label className="page-size">
+        Results per page
+        <select value={pageSize} disabled={disabled} onChange={(e) => onPageSize(Number(e.target.value))}>
+          {PAGE_SIZES.map((n) => (
+            <option key={n} value={n}>
+              {n === 0 ? `All (${total})` : n}
+            </option>
+          ))}
+        </select>
+      </label>
+      {pages > 1 && (
+        <div className="pages">
+          <button type="button" disabled={disabled || page === 0} onClick={() => onPage(page - 1)}>
+            ‹ Prev
+          </button>
+          <span>
+            Page {page + 1} of {pages} · {offset + 1}–{offset + count} of {total}
+          </span>
+          <button type="button" disabled={disabled || page >= pages - 1} onClick={() => onPage(page + 1)}>
+            Next ›
+          </button>
+        </div>
+      )}
+    </nav>
   );
 }

@@ -1,4 +1,4 @@
-import { StrictMode, useState } from "react";
+import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { BookingCalendar } from "./components/BookingCalendar";
 import { TripPlanner } from "./components/TripPlanner";
@@ -6,6 +6,13 @@ import "./styles.css";
 
 function App() {
   const [tab, setTab] = useState<"plan" | "calendar">("plan");
+  const [build, setBuild] = useState<string | null>(null);
+  useEffect(() => {
+    fetch("/api/status")
+      .then((r) => r.json())
+      .then((s) => setBuild(s.version ?? null))
+      .catch(() => {});
+  }, []);
   return (
     <>
       <header className="top">
@@ -30,6 +37,7 @@ function App() {
       <main>{tab === "plan" ? <TripPlanner /> : <BookingCalendar />}</main>
       <footer>
         Always confirm times on IRCTC or RailOne before booking. Booking rules as of September 2026.
+        {build && <span className="build"> · build {build}</span>}
       </footer>
     </>
   );

@@ -282,3 +282,10 @@ sup { font-size: 11px; color: var(--warn); margin-left: 2px; font-weight: 600; }
 .via-chip .stay input { width: 52px; padding: 2px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); font-size: 12px; text-align: right; }
 .legs .wait.stay { color: var(--accent); }
 .sort-dir { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 10px; min-height: 36px; cursor: pointer; font-size: 13px; color: var(--text); white-space: nowrap; }
+.pager { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; margin-top: 14px; font-size: 14px; }
+.pager .page-size { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 13px; }
+.pager select { min-height: 36px; padding: 6px 10px; width: auto; }
+.pager .pages { display: flex; gap: 10px; align-items: center; }
+.pager .pages button { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 12px; min-height: 36px; cursor: pointer; color: var(--accent); font-weight: 600; }
+.pager .pages button:disabled { color: var(--muted); cursor: default; opacity: 0.6; }
+.sorted-note { margin: -4px 0 10px; }

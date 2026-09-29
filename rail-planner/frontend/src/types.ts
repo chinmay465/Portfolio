@@ -88,7 +88,9 @@ export type RouteResponse = {
   nearby_stations: { from: NearbyStation[]; to: NearbyStation[] };
   sort: { by: SortKey; order: SortOrder; kind: KindFilter };
   counts: { all: number; direct: number; nearby: number; connection: number };
-  total: number; // routes matching `kind`, before the page limit
+  total: number; // routes matching `kind`, before paging
+  offset: number;
+  limit: number; // 0 = all
   results: Journey[]; // sorted and filtered by the server
 };
 

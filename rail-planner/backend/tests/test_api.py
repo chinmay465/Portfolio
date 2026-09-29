@@ -243,3 +243,17 @@ def test_server_sorts_and_filters_before_limiting():
 
 def test_bad_sort_key():
     assert client.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": DATE, "sort": "price"}).status_code == 422
+
+
+def test_paging_and_show_all():
+    base = {"from": "SBC", "to": "PUNE", "date": DATE, "sort": "departure", "order": "desc"}
+    everything = client.get("/api/routes", params={**base, "limit": 0}).json()
+    assert everything["limit"] == 0 and len(everything["results"]) == everything["total"] > 20
+    page2 = client.get("/api/routes", params={**base, "limit": 10, "offset": 10}).json()
+    assert page2["offset"] == 10 and len(page2["results"]) == 10
+    assert [j["depart_at"] for j in page2["results"]] == [j["depart_at"] for j in everything["results"][10:20]]
+
+
+def test_page_is_not_cached_but_assets_are():
+    r = client.get("/api/status")
+    assert "version" in r.json()

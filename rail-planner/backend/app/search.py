@@ -56,6 +56,7 @@ class SearchParams:
     via: tuple[str, ...] = ()  # stations the route must pass through, in order
     via_stay_min: tuple[int, ...] = ()  # planned stop at each via station (minutes, 0 = just pass/change)
     max_wait_min: float | None = None  # longest wait at any change (on top of a planned stay); None = no limit
+    offset: int = 0  # paging: skip this many sorted results (limit 0 = all)
     sort: str = "duration"  # duration | departure | arrival | distance | changes
     order: str = "asc"  # asc | desc
     kind: str = "all"  # all | direct | nearby | connection  (connection includes "through")
@@ -522,7 +523,7 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
     chosen.sort(key=_sort_key(p.sort, p.order))
     total = len(chosen)
     # Strict order the user asked for, every route reachable by paging (no variety caps dropping routes).
-    results = chosen[: p.limit]
+    results = chosen[p.offset :] if p.limit == 0 else chosen[p.offset : p.offset + p.limit]
 
     now = datetime.now(IST)
     return {
@@ -572,6 +573,8 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
         "sort": {"by": p.sort, "order": p.order, "kind": p.kind},
         "counts": counts,
         "total": total,
+        "offset": p.offset,
+        "limit": p.limit,
         "results": [_journey(tt, j, base_min, base_km, now, near_a, near_b, p.min_sleep_hours, p.stays) for j in results],
     }
 

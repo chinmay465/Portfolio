@@ -72,6 +72,7 @@ def health() -> dict:
 def status() -> dict:
     client, meta = live(), timetable().meta
     return {
+        "version": os.getenv("RENDER_GIT_COMMIT", "dev")[:7],  # Render sets this to the deployed commit
         "source": "live" if timetable_live() else "snapshot",
         "provider": "RailRadar" if timetable_live() else meta.get("source"),
         "as_of": None if timetable_live() else meta.get("as_of"),
@@ -100,7 +101,8 @@ def routes(
     nearby_km: float = Query(15.0, ge=0),
     min_transfer_min: int = Query(20, ge=0),
     include_unreserved: bool = False,
-    limit: int = Query(50, ge=1),
+    limit: int = Query(50, ge=0, description="Results per page; 0 = all"),
+    offset: int = Query(0, ge=0),
     sort: str = Query("duration", pattern="^(duration|departure|arrival|distance|changes)$"),
     order: str = Query("asc", pattern="^(asc|desc)$"),
     kind: str = Query("all", pattern="^(all|direct|nearby|connection)$"),
@@ -120,6 +122,7 @@ def routes(
         min_transfer_min=min_transfer_min,
         include_unreserved=include_unreserved,
         limit=limit,
+        offset=offset,
         sort=sort,
         order=order,
         kind=kind,
@@ -284,6 +287,16 @@ def seat_one(
 _dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 if _dist.exists():
     app.mount("/assets", StaticFiles(directory=_dist / "assets"), name="assets")
+
+    @app.middleware("http")
+    async def cache_headers(request, call_next):
+        # Hashed bundles never change; the page itself must be re-checked so a new deploy shows up at once.
+        res = await call_next(request)
+        if request.url.path.startswith("/assets/"):
+            res.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        elif not request.url.path.startswith("/api/"):
+            res.headers["Cache-Control"] = "no-cache"
+        return res
 
     @app.get("/{path:path}", include_in_schema=False)
     def spa(path: str) -> FileResponse:
