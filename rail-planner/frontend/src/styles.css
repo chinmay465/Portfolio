@@ -277,3 +277,4 @@ sup { font-size: 11px; color: var(--warn); margin-left: 2px; font-weight: 600; }
 .cls-pick { width: auto; min-height: 0; padding: 1px 4px; font-size: 12px; font-family: ui-monospace, Menlo, monospace; border-radius: 6px; }
 .badge.sleepb { background: color-mix(in srgb, #6366f1 14%, transparent); color: #4f46e5; }
 @media (prefers-color-scheme: dark) { .badge.sleepb { color: #a5b4fc; } }
+.link:disabled { color: var(--muted); cursor: not-allowed; }

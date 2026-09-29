@@ -15,14 +15,14 @@ export type Draft = { tol: Tolerance; via: StationHit[]; seats: SeatPrefs };
 type Props = {
   draft: Draft;
   onChange: (d: Draft) => void;
-  onApply: () => void;
+  onApply?: () => void; // Apply is the form's submit button; the parent handles it
   onCancel: () => void;
   live?: boolean;
   month?: number;
 };
 
 /** Filters are edited here as a draft; nothing is searched until Apply. */
-export function FiltersPanel({ draft, onChange, onApply, onCancel, live, month }: Props) {
+export function FiltersPanel({ draft, onChange, onCancel, live, month }: Props) {
   const { tol, via, seats } = draft;
   const setTol = (patch: Partial<Tolerance>) => onChange({ ...draft, tol: { ...tol, ...patch } });
   const setSeats = (patch: Partial<SeatPrefs>) => onChange({ ...draft, seats: { ...seats, ...patch } });
@@ -121,8 +121,8 @@ export function FiltersPanel({ draft, onChange, onApply, onCancel, live, month }
         <button type="button" className="ghost" onClick={onCancel}>
           Cancel
         </button>
-        <button type="button" className="primary" onClick={onApply}>
-          Apply
+        <button type="submit" className="primary">
+          Apply &amp; find trains
         </button>
       </div>
     </div>

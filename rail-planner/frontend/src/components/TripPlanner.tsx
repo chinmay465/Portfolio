@@ -157,7 +157,9 @@ export function TripPlanner() {
         className="card search"
         onSubmit={(e) => {
           e.preventDefault();
-          run();
+          // One trigger at a time: while filters are open, Enter means Apply.
+          if (draft) applyDraft();
+          else run();
         }}
       >
         <div className="row stations">
@@ -178,12 +180,14 @@ export function TripPlanner() {
             <label htmlFor="date">Journey date</label>
             <input id="date" type="date" value={date} min={todayIST()} onChange={(e) => setDate(e.target.value)} />
           </div>
-          <button type="submit" className="primary" disabled={loading}>
-            {loading ? "Searching…" : "Find trains"}
-          </button>
+          {!draft && (
+            <button type="submit" className="primary" disabled={loading}>
+              {loading ? "Searching…" : "Find trains"}
+            </button>
+          )}
         </div>
 
-        {recent.length > 0 && (
+        {!draft && recent.length > 0 && (
           <div className="recent">
             <span className="muted small">Recent</span>
             {recent.map((r) => (
@@ -272,6 +276,8 @@ export function TripPlanner() {
               <button
                 type="button"
                 className="link"
+                disabled={!!draft}
+                title={draft ? "Apply or cancel your filter changes first" : undefined}
                 onClick={() => {
                   const next = { ...tol, no_time_limit: true, no_km_limit: true };
                   setTol(next);
@@ -385,7 +391,7 @@ export function TripPlanner() {
             ))}
           </div>
           {data.alternates.length >= limit && (
-            <button type="button" className="more" disabled={loading} onClick={() => run({ lim: limit + PAGE })}>
+            <button type="button" className="more" disabled={loading || !!draft} onClick={() => run({ lim: limit + PAGE })}>
               {loading ? "Loading…" : "Show more alternates"}
             </button>
           )}
