@@ -7,6 +7,15 @@ from app.rules import IST
 from app.sleep import sleep_block
 
 
+def _direct(body):
+    return [j for j in body["results"] if j["kind"] == "direct"]
+
+
+def _alts(body):
+    return [j for j in body["results"] if j["kind"] != "direct"]
+
+
+
 class _T:
     number = "1"
 
@@ -57,10 +66,10 @@ def test_api_filters_routes_by_sleep():
     all_ = c.get("/api/routes", params=base).json()
     slept = c.get("/api/routes", params={**base, "min_sleep_hours": 8}).json()
     assert slept["params"]["min_sleep_hours"] == 8
-    n_all = len(all_["direct"]) + len(all_["alternates"])
-    n_slept = len(slept["direct"]) + len(slept["alternates"])
+    n_all = len(_direct(all_)) + len(_alts(all_))
+    n_slept = len(_direct(slept)) + len(_alts(slept))
     assert 0 < n_slept < n_all and slept["hidden_by_sleep"] > 0
-    for j in slept["direct"] + slept["alternates"]:
+    for j in _direct(slept) + _alts(slept):
         s = j["sleep"]
         start, end = datetime.fromisoformat(s["start"]), datetime.fromisoformat(s["end"])
         leg = j["legs"][s["leg"]]

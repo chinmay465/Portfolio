@@ -5,6 +5,15 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 
+
+def _direct(body):
+    return [j for j in body["results"] if j["kind"] == "direct"]
+
+
+def _alts(body):
+    return [j for j in body["results"] if j["kind"] != "direct"]
+
+
 client = TestClient(app)
 DATE = "2026-10-20"
 
@@ -32,8 +41,8 @@ def test_alternates_respect_tolerance(pair):
     body = client.get("/api/routes", params={"from": pair[0], "to": pair[1], "date": DATE}).json()
     base = body["baseline"]
     assert base is not None
-    assert body["alternates"], "expected at least one alternate"
-    for j in body["alternates"]:
+    assert _alts(body), "expected at least one alternate"
+    for j in _alts(body):
         assert j["minutes"] <= base["max_minutes"]
         assert j["km"] <= base["max_km"]
         assert j["kind"] in {"nearby", "connection"}
@@ -42,12 +51,12 @@ def test_alternates_respect_tolerance(pair):
 def test_tighter_tolerance_returns_fewer_alternates():
     loose = client.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": DATE, "extra_hours": 6, "extra_km": 300}).json()
     tight = client.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": DATE, "extra_hours": 0.5, "extra_km": 20}).json()
-    assert len(tight["alternates"]) < len(loose["alternates"])
+    assert len(_alts(tight)) < len(_alts(loose))
 
 
 def test_connections_are_physically_consistent():
     body = client.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": DATE, "min_transfer_min": 60, "max_changes": 1}).json()
-    conns = [j for j in body["alternates"] if j["kind"] == "connection"]
+    conns = [j for j in _alts(body) if j["kind"] == "connection"]
     assert conns
     for j in conns:
         l1, l2 = j["legs"]
@@ -61,7 +70,7 @@ def test_connections_are_physically_consistent():
 
 def test_each_reserved_leg_has_booking_windows():
     body = client.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": DATE}).json()
-    for j in body["direct"] + body["alternates"]:
+    for j in _direct(body) + _alts(body):
         for leg in j["legs"]:
             kinds = {w["kind"] for w in leg["booking_windows"]}
             assert "general" in kinds
@@ -97,8 +106,8 @@ def test_no_limit_flags():
     assert body["params"]["extra_hours"] is None and body["params"]["extra_km"] is None
     assert body["baseline"]["max_minutes"] is None and body["baseline"]["max_km"] is None
     capped = client.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": DATE, "limit": 1000}).json()
-    assert len(body["alternates"]) >= len(capped["alternates"])
-    assert max(j["minutes"] for j in body["alternates"]) > capped["baseline"]["max_minutes"]
+    assert len(_alts(body)) >= len(_alts(capped))
+    assert max(j["minutes"] for j in _alts(body)) > capped["baseline"]["max_minutes"]
 
 
 def test_long_layovers_allowed_when_time_is_unlimited():
@@ -106,7 +115,7 @@ def test_long_layovers_allowed_when_time_is_unlimited():
         "/api/routes",
         params={"from": "SBC", "to": "PUNE", "date": DATE, "no_time_limit": True, "no_km_limit": True, "limit": 500},
     ).json()
-    waits = [j["transfer"]["wait_minutes"] for j in body["alternates"] if j["transfer"]]
+    waits = [j["transfer"]["wait_minutes"] for j in _alts(body) if j["transfer"]]
     assert max(waits) > 12 * 60  # the old hidden 12-hour layover cap is gone
 
 
@@ -116,11 +125,11 @@ def _trains(j):
 
 def test_max_changes_is_respected():
     zero = client.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": DATE, "max_changes": 0}).json()
-    assert all(j["changes"] == 0 for j in zero["alternates"])
+    assert all(j["changes"] == 0 for j in _alts(zero))
     two = client.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": DATE, "max_changes": 2}).json()
-    assert all(j["changes"] <= 2 for j in two["alternates"])
-    assert any(j["changes"] == 2 for j in two["alternates"])
-    for j in two["alternates"]:
+    assert all(j["changes"] <= 2 for j in _alts(two))
+    assert any(j["changes"] == 2 for j in _alts(two))
+    for j in _alts(two):
         codes = [leg["from"]["code"] for leg in j["legs"]] + [j["legs"][-1]["to"]["code"]]
         assert len(codes) == len(set(codes)), "no station visited twice"
         for t in j["transfers"]:
@@ -131,8 +140,8 @@ def test_via_kerala_mangaluru_thane():
     params = {"from": "SBC", "to": "PUNE", "date": DATE, "max_changes": 3, "via": "SRR,MAQ,TNA",
               "no_time_limit": True, "no_km_limit": True}
     body = client.get("/api/routes", params=params).json()
-    assert body["alternates"], "expected a route through Shoranur, Mangaluru and Thane"
-    for j in body["alternates"]:
+    assert _alts(body), "expected a route through Shoranur, Mangaluru and Thane"
+    for j in _alts(body):
         path = []
         for leg in j["legs"]:
             path += [leg["from"]["code"], *(x["code"] for x in leg["passes"])]
@@ -142,7 +151,7 @@ def test_via_kerala_mangaluru_thane():
         assert j["changes"] <= 3
 
     limited = client.get("/api/routes", params={k: v for k, v in params.items() if not k.startswith("no_")}).json()
-    assert not limited["alternates"] and limited["hidden_by_limits"] > 0
+    assert not _alts(limited) and limited["hidden_by_limits"] > 0
 
 
 def test_bad_via():
@@ -154,7 +163,7 @@ def test_snapshot_running_days():
     """17020 Hyderabad -> Hisar is weekly (Saturday) in the stored timetable."""
     def direct_trains(day):
         body = client.get("/api/routes", params={"from": "HYB", "to": "HSR", "date": day, "max_changes": 0}).json()
-        return {j["legs"][0]["train"]["number"] for j in body["direct"]}
+        return {j["legs"][0]["train"]["number"] for j in _direct(body)}
 
     assert "17020" in direct_trains("2026-10-24")  # Saturday
     assert "17020" not in direct_trains("2026-10-20")  # Tuesday
@@ -165,8 +174,8 @@ def test_planned_stay_at_via_station():
               "no_time_limit": True, "no_km_limit": True}
     body = client.get("/api/routes", params=params).json()
     assert body["params"]["via_stay_min"] == [420]
-    assert body["alternates"], "expected routes that stop at Udupi"
-    for j in body["alternates"]:
+    assert _alts(body), "expected routes that stop at Udupi"
+    for j in _alts(body):
         ud = [t for t in j["transfers"] if t["station"]["code"] == "UD"]
         assert ud, "must get off at Udupi (a planned stop can't be ridden through)"
         assert ud[0]["wait_minutes"] >= 420 and ud[0]["planned_stay_minutes"] == 420 and not ud[0]["tight"]
@@ -182,17 +191,17 @@ def test_planned_stay_does_not_count_against_extra_time():
 def test_max_wait_at_station():
     body = client.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": DATE, "max_wait_hours": 1}).json()
     assert body["params"]["max_wait_min"] == 60
-    waits = [t["wait_minutes"] for j in body["alternates"] for t in j["transfers"]]
+    waits = [t["wait_minutes"] for j in _alts(body) for t in j["transfers"]]
     assert waits and max(waits) <= 60
     loose = client.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": DATE, "limit": 500}).json()
-    assert max(t["wait_minutes"] for j in loose["alternates"] for t in j["transfers"]) > 60
+    assert max(t["wait_minutes"] for j in _alts(loose) for t in j["transfers"]) > 60
 
 
 def test_max_wait_counts_on_top_of_planned_stay():
     params = {"from": "SBC", "to": "PUNE", "date": DATE, "via": "UD", "via_stay": "7", "max_changes": 2,
               "no_time_limit": True, "no_km_limit": True, "max_wait_hours": 8}
     body = client.get("/api/routes", params=params).json()
-    for j in body["alternates"]:
+    for j in _alts(body):
         for t in j["transfers"]:
             assert t["wait_minutes"] - t["planned_stay_minutes"] <= 8 * 60
 
@@ -208,3 +217,29 @@ def test_station_search_old_and_new_city_names():
     assert first("bombay") == first("mumbai") == "CSMT"
     assert first("hubli") == "UBL" and first("poona") == "PUNE" and first("madras") == "MAS"
     assert client.get("/api/stations", params={"q": "mumbai"}).json()[0]["name"].startswith("Mumbai CSMT")
+
+
+def test_server_sorts_and_filters_before_limiting():
+    base = {"from": "SBC", "to": "PUNE", "date": DATE}
+    everything = client.get("/api/routes", params={**base, "limit": 1000}).json()["results"]
+    assert len(everything) > 10
+    earliest = min(j["depart_at"] for j in everything)
+    latest = max(j["depart_at"] for j in everything)
+
+    asc = client.get("/api/routes", params={**base, "sort": "departure", "order": "asc", "limit": 5}).json()
+    desc = client.get("/api/routes", params={**base, "sort": "departure", "order": "desc", "limit": 5}).json()
+    assert asc["results"][0]["depart_at"] == earliest  # not just the earliest of the 5 fastest
+    assert desc["results"][0]["depart_at"] == latest
+    assert [j["depart_at"] for j in asc["results"]] == sorted(j["depart_at"] for j in asc["results"])
+    assert asc["total"] == len(everything) and asc["sort"] == {"by": "departure", "order": "asc", "kind": "all"}
+
+    slow = client.get("/api/routes", params={**base, "sort": "duration", "order": "desc", "limit": 3}).json()["results"]
+    assert slow[0]["minutes"] == max(j["minutes"] for j in everything)
+
+    only = client.get("/api/routes", params={**base, "kind": "direct"}).json()
+    assert only["results"] and {j["kind"] for j in only["results"]} == {"direct"}
+    assert only["total"] == only["counts"]["direct"] and only["counts"]["all"] == len(everything)
+
+
+def test_bad_sort_key():
+    assert client.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": DATE, "sort": "price"}).status_code == 422

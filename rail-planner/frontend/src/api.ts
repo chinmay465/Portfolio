@@ -1,4 +1,4 @@
-import type { RouteResponse, SeatsResponse, StationHit, Tolerance, ViaStop, WindowsResponse } from "./types";
+import type { ListQuery, RouteResponse, SeatsResponse, StationHit, Tolerance, ViaStop, WindowsResponse } from "./types";
 
 const BASE = import.meta.env.VITE_API_BASE ?? "";
 
@@ -30,7 +30,16 @@ export type SeatLegReq = { train: string; from: string; to: string; date: string
 export const api = {
   seats: (quota: string, legs: SeatLegReq[], fresh = false) => post<SeatsResponse>("/api/seats", { quota, legs, fresh }),
   stations: (q: string, signal?: AbortSignal) => get<StationHit[]>("/api/stations", { q, limit: 8 }, signal),
-  routes: (from: string, to: string, date: string, t: Tolerance, via: ViaStop[], limit: number, signal?: AbortSignal) => {
+  routes: (
+    from: string,
+    to: string,
+    date: string,
+    t: Tolerance,
+    via: ViaStop[],
+    q: ListQuery,
+    limit: number,
+    signal?: AbortSignal,
+  ) => {
     const { sleep_on, sleep_hours, no_wait_limit, max_wait_hours, ...rest } = t;
     return get<RouteResponse>(
       "/api/routes",
@@ -43,6 +52,9 @@ export const api = {
         via_stay: via.some((v) => v.stay_h) ? via.map((v) => v.stay_h ?? 0).join(",") : undefined,
         max_wait_hours: no_wait_limit ? undefined : max_wait_hours,
         limit,
+        sort: q.sort,
+        order: q.order,
+        kind: q.kind,
         min_sleep_hours: sleep_on ? sleep_hours : undefined,
       },
       signal,

@@ -56,6 +56,9 @@ class SearchParams:
     via: tuple[str, ...] = ()  # stations the route must pass through, in order
     via_stay_min: tuple[int, ...] = ()  # planned stop at each via station (minutes, 0 = just pass/change)
     max_wait_min: float | None = None  # longest wait at any change (on top of a planned stay); None = no limit
+    sort: str = "duration"  # duration | departure | arrival | distance | changes
+    order: str = "asc"  # asc | desc
+    kind: str = "all"  # all | direct | nearby | connection  (connection includes "through")
 
     @property
     def stays(self) -> dict[str, int]:
@@ -507,8 +510,19 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
         alternates = [j for j in alternates if sleep_block(j.legs, p.min_sleep_hours)]
         hidden_by_sleep = before - len(direct) - len(alternates)
 
-    alternates = alternates[: p.limit] if via else _diversify(alternates, p.limit)
-    direct.sort(key=lambda j: j.depart_at)
+    # One list, sorted and filtered here over *every* route found, then cut to the page size.
+    everything = direct + alternates
+    counts = {
+        "all": len(everything),
+        "direct": sum(j.kind == "direct" for j in everything),
+        "nearby": sum(j.kind == "nearby" for j in everything),
+        "connection": sum(j.kind in ("connection", "through") for j in everything),
+    }
+    chosen = [j for j in everything if _kind_matches(j, p.kind)]
+    chosen.sort(key=_sort_key(p.sort, p.order))
+    total = len(chosen)
+    # Strict order the user asked for, every route reachable by paging (no variety caps dropping routes).
+    results = chosen[: p.limit]
 
     now = datetime.now(IST)
     return {
@@ -555,9 +569,41 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
             "from": [{"code": c, "name": tt.station(c).name, "distance_km": round(d, 1)} for c, d in near_a.items()],
             "to": [{"code": c, "name": tt.station(c).name, "distance_km": round(d, 1)} for c, d in near_b.items()],
         },
-        "direct": [_journey(tt, j, base_min, base_km, now, near_a, near_b, p.min_sleep_hours, p.stays) for j in direct],
-        "alternates": [_journey(tt, j, base_min, base_km, now, near_a, near_b, p.min_sleep_hours, p.stays) for j in alternates],
+        "sort": {"by": p.sort, "order": p.order, "kind": p.kind},
+        "counts": counts,
+        "total": total,
+        "results": [_journey(tt, j, base_min, base_km, now, near_a, near_b, p.min_sleep_hours, p.stays) for j in results],
     }
+
+
+SORTS = ("duration", "departure", "arrival", "distance", "changes")
+KINDS = ("all", "direct", "nearby", "connection")
+
+
+def _kind_matches(j: Journey, kind: str) -> bool:
+    if kind == "all":
+        return True
+    if kind == "connection":
+        return j.kind in ("connection", "through")
+    return j.kind == kind
+
+
+def _sort_key(by: str, order: str):
+    """Main key flips with the order; ties always fall back to fastest, then shortest."""
+    sign = -1 if order == "desc" else 1
+
+    def main(j: Journey) -> float:
+        if by == "departure":
+            return j.depart_at.timestamp()
+        if by == "arrival":
+            return j.arrive_at.timestamp()
+        if by == "distance":
+            return j.km
+        if by == "changes":
+            return len(j.legs) - 1
+        return j.minutes
+
+    return lambda j: (sign * main(j), j.minutes, j.km)
 
 
 def _best_per_train(items: list[Journey]) -> list[Journey]:
@@ -567,25 +613,6 @@ def _best_per_train(items: list[Journey]) -> list[Journey]:
         if n not in best or j.minutes < best[n].minutes:
             best[n] = j
     return list(best.values())
-
-
-def _diversify(items: list[Journey], limit: int) -> list[Journey]:
-    """Stop one busy transfer hub or one first train from crowding out everything else."""
-    per_hub: dict[str, int] = {}
-    per_first: dict[str, int] = {}
-    out = []
-    for j in items:
-        if j.kind == "connection":
-            hub = j.legs[0].to_code
-            first = j.legs[0].train.number
-            if per_hub.get(hub, 0) >= 3 or per_first.get(first, 0) >= 3:
-                continue
-            per_hub[hub] = per_hub.get(hub, 0) + 1
-            per_first[first] = per_first.get(first, 0) + 1
-        out.append(j)
-        if len(out) >= limit:
-            break
-    return out
 
 
 def _station(s: Station) -> dict:

@@ -30,6 +30,8 @@ Routes with 2 or more changes, or with via stations, come from a round-by-round 
 
 Filters are hidden behind **+ Add filters** and edited as a draft. Nothing is searched until you press **Apply** (or **Find trains**). Every number field accepts 0 (Max changes 0 = direct trains only).
 
+**Sorting and tabs are server-side.** `GET /api/routes` takes `sort` (`duration`, `departure`, `arrival`, `distance`, `changes`), `order` (`asc`/`desc`) and `kind` (`all`, `direct`, `nearby`, `connection`). The server sorts and filters *every* route found, then returns the first `limit` as `results`, with `counts` per tab and `total` for paging. The page never re-sorts.
+
 There are no built-in upper bounds, and no hidden layover cap: the wait between trains is limited only by your total-time setting. Results come back 50 at a time, fastest first, and "Show more alternates" loads the next 50.
 
 Alternates are either a direct train from or to a nearby station, or a two-train route with one change. If no direct train exists, the best alternate becomes the baseline. When you change the inputs, results refresh automatically. The last trip, recent trips and your tolerance settings are saved in the browser.

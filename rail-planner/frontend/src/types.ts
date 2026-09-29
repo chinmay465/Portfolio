@@ -86,8 +86,10 @@ export type RouteResponse = {
     max_km: number | null;
   };
   nearby_stations: { from: NearbyStation[]; to: NearbyStation[] };
-  direct: Journey[];
-  alternates: Journey[];
+  sort: { by: SortKey; order: SortOrder; kind: KindFilter };
+  counts: { all: number; direct: number; nearby: number; connection: number };
+  total: number; // routes matching `kind`, before the page limit
+  results: Journey[]; // sorted and filtered by the server
 };
 
 export type Tolerance = {
@@ -186,3 +188,8 @@ export type ClassChoice = {
 
 export const seatKey = (train: string, from: string, to: string, date: string, cls: string, quota: string) =>
   [train, from, to, date, cls, quota].join("|");
+
+export type SortKey = "duration" | "departure" | "arrival" | "distance" | "changes";
+export type SortOrder = "asc" | "desc";
+export type KindFilter = "all" | "direct" | "nearby" | "connection";
+export type ListQuery = { sort: SortKey; order: SortOrder; kind: KindFilter };

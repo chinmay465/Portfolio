@@ -3,7 +3,7 @@ import { api } from "../api";
 import { duration, longDay, todayIST } from "../format";
 import { isBookable, journeyPicks, journeySeat, legId, useSeats } from "../seats";
 import { storage, type SavedTrip } from "../storage";
-import type { ClassChoice, ClassMode, Journey, Leg, RouteResponse, SeatPrefs, StationHit, Tolerance, ViaStop } from "../types";
+import type { ClassChoice, ClassMode, KindFilter, Leg, ListQuery, RouteResponse, SeatPrefs, SortKey, SortOrder, StationHit, Tolerance, ViaStop } from "../types";
 import { FiltersPanel, filterSummary, type Draft } from "./FiltersPanel";
 import { JourneyCard } from "./JourneyCard";
 import { SourceNote } from "./SourceNote";
@@ -11,9 +11,9 @@ import { StationInput } from "./StationInput";
 
 const PAGE = 50;
 
-type Filter = "all" | "direct" | "nearby" | "connection";
-type Sort = "duration" | "departure" | "arrival" | "distance" | "changes";
-type Dir = "asc" | "desc";
+type Sort = SortKey;
+type Dir = SortOrder;
+type Filter = KindFilter;
 
 // Each sort, with what ascending/descending mean for it.
 const SORTS: Record<Sort, { label: string; asc: string; desc: string }> = {
@@ -52,7 +52,10 @@ export function TripPlanner() {
   const ctrl = useRef<AbortController | null>(null);
   const { seats, check, usage } = useSeats();
 
-  const run = async (opts: { f?: StationHit | null; t?: StationHit | null; tl?: Tolerance; v?: ViaStop[]; lim?: number } = {}) => {
+  const run = async (
+    opts: { f?: StationHit | null; t?: StationHit | null; tl?: Tolerance; v?: ViaStop[]; lim?: number; q?: Partial<ListQuery> } = {},
+  ) => {
+    const q: ListQuery = { sort, order: dir, kind: filter, ...opts.q };
     const f = opts.f ?? from;
     const t = opts.t ?? to;
     const tl = opts.tl ?? tol;
@@ -68,7 +71,7 @@ export function TripPlanner() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.routes(f.code, t.code, date, tl, v, lim, c.signal);
+      const res = await api.routes(f.code, t.code, date, tl, v, q, lim, c.signal);
       setData(res);
       setLimit(lim);
       storage.remember({ from: f, to: t, date }, tl);
@@ -99,21 +102,15 @@ export function TripPlanner() {
     setChoice((c) => ({ mode: "custom", base: c.mode === "custom" ? c.base : c.mode, overrides: { ...c.overrides, [legId(leg)]: cls } }));
   };
 
-  const sorted = useMemo(() => {
-    if (!data) return [];
-    let items: Journey[] = [...data.direct, ...data.alternates];
-    if (filter !== "all") items = items.filter((j) => j.kind === filter || (filter === "connection" && j.kind === "through"));
-    const key: Record<Sort, (a: Journey, b: Journey) => number> = {
-      duration: (a, b) => a.minutes - b.minutes,
-      departure: (a, b) => a.depart_at.localeCompare(b.depart_at),
-      arrival: (a, b) => a.arrive_at.localeCompare(b.arrive_at),
-      distance: (a, b) => a.km - b.km,
-      changes: (a, b) => a.changes - b.changes,
-    };
-    const sign = dir === "asc" ? 1 : -1;
-    // Ties fall back to fastest, then shortest, whichever direction the main sort runs.
-    return items.sort((a, b) => sign * key[sort](a, b) || a.minutes - b.minutes || a.km - b.km);
-  }, [data, filter, sort, dir]);
+  // Sorting and the Direct / Nearby / With-changes tabs are done by the server over every route;
+  // the page shows them in the order received.
+  const sorted = useMemo(() => data?.results ?? [], [data]);
+  const setQuery = (q: Partial<ListQuery>) => {
+    if (q.sort) setSort(q.sort);
+    if (q.order) setDir(q.order);
+    if (q.kind) setFilter(q.kind);
+    if (data) run({ q });
+  };
 
   // Seat checks need a RailRadar key, whichever source the timetable came from.
   const live = !!data?.data_source.live_configured;
@@ -159,12 +156,7 @@ export function TripPlanner() {
     [seats],
   );
 
-  const counts = data && {
-    all: data.direct.length + data.alternates.length,
-    direct: data.direct.length,
-    nearby: data.alternates.filter((j) => j.kind === "nearby").length,
-    connection: data.alternates.filter((j) => j.kind === "connection" || j.kind === "through").length,
-  };
+  const counts = data?.counts;
 
   return (
     <div className="planner">
@@ -333,14 +325,14 @@ export function TripPlanner() {
               <div className="toolbar">
                 <div className="tabs" role="tablist">
                   {(["all", "direct", "nearby", "connection"] as Filter[]).map((f) => (
-                    <button key={f} role="tab" aria-selected={filter === f} className={filter === f ? "on" : ""} onClick={() => setFilter(f)} disabled={counts[f] === 0 && f !== "all"}>
+                    <button key={f} role="tab" aria-selected={filter === f} className={filter === f ? "on" : ""} onClick={() => setQuery({ kind: f })} disabled={!!draft || (counts[f] === 0 && f !== "all")}>
                       {{ all: "All", direct: "Direct", nearby: "Nearby station", connection: "With changes" }[f]} <span className="n">{counts[f]}</span>
                     </button>
                   ))}
                 </div>
                 <div className="sort">
                   <label htmlFor="sort-key">Sort</label>
-                  <select id="sort-key" value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
+                  <select id="sort-key" value={sort} disabled={!!draft} onChange={(e) => setQuery({ sort: e.target.value as Sort })}>
                     {(Object.keys(SORTS) as Sort[]).map((k) => (
                       <option key={k} value={k}>
                         {SORTS[k].label}
@@ -350,7 +342,8 @@ export function TripPlanner() {
                   <button
                     type="button"
                     className="sort-dir"
-                    onClick={() => setDir((d) => (d === "asc" ? "desc" : "asc"))}
+                    disabled={!!draft}
+                    onClick={() => setQuery({ order: dir === "asc" ? "desc" : "asc" })}
                     aria-label={`Sort ${dir === "asc" ? "ascending" : "descending"}: ${SORTS[sort][dir]}. Click to reverse.`}
                     title="Reverse order"
                   >
@@ -416,9 +409,9 @@ export function TripPlanner() {
               />
             ))}
           </div>
-          {data.alternates.length >= limit && (
+          {data.total > data.results.length && (
             <button type="button" className="more" disabled={loading || !!draft} onClick={() => run({ lim: limit + PAGE })}>
-              {loading ? "Loading…" : "Show more alternates"}
+              {loading ? "Loading…" : `Show more (${data.total - data.results.length} left)`}
             </button>
           )}
         </section>

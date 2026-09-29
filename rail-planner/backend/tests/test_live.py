@@ -16,6 +16,15 @@ from app.railradar import Usage
 from app.search import SearchParams, _live_candidates, search
 from app.timetable import StaticTimetable
 
+
+def _direct(body):
+    return [j for j in body["results"] if j["kind"] == "direct"]
+
+
+def _alts(body):
+    return [j for j in body["results"] if j["kind"] != "direct"]
+
+
 TT = StaticTimetable()
 TUESDAY = date(2026, 10, 20)
 assert TUESDAY.weekday() == 1
@@ -155,7 +164,8 @@ def client_for(fake, tmp_path):
 
 
 def numbers(res, key):
-    return {leg["train"]["number"] for j in res[key] for leg in j["legs"]}
+    group = _direct(res) if key == "direct" else _alts(res)
+    return {leg["train"]["number"] for j in group for leg in j["legs"]}
 
 
 def test_live_uses_current_trains_and_running_days(tmp_path):
@@ -166,8 +176,8 @@ def test_live_uses_current_trains_and_running_days(tmp_path):
     assert NEW_TRAIN["number"] in direct  # new train appears
     assert WITHDRAWN not in direct  # withdrawn train gone
     assert NOT_TUESDAY not in direct  # doesn't run on Tuesdays
-    assert res["alternates"], "expected live alternates"
-    new = next(j for j in res["direct"] if j["legs"][0]["train"]["number"] == NEW_TRAIN["number"])
+    assert _alts(res), "expected live alternates"
+    new = next(j for j in _direct(res) if j["legs"][0]["train"]["number"] == NEW_TRAIN["number"])
     assert new["legs"][0]["train"]["runs_on"] == ["Tue", "Sun"]
     assert new["depart_at"].startswith("2026-10-20T05:30")
 
@@ -175,7 +185,7 @@ def test_live_uses_current_trains_and_running_days(tmp_path):
 def test_every_live_leg_runs_on_its_date(tmp_path):
     res = search(TT, SearchParams("SBC", "PUNE", TUESDAY), client_for(Fake(), tmp_path))
     names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-    for j in res["direct"] + res["alternates"]:
+    for j in _direct(res) + _alts(res):
         for leg in j["legs"]:
             origin = date.fromisoformat(leg["origin_date"])
             assert names[origin.weekday()] in leg["train"]["runs_on"]
@@ -199,7 +209,7 @@ def test_bad_key_falls_back_to_snapshot(tmp_path):
     res = search(TT, SearchParams("SBC", "PUNE", TUESDAY), client_for(Fake(status=401), tmp_path))
     assert res["data_source"]["kind"] == "snapshot"
     assert "refused the request (HTTP 401)" in res["data_source"]["warnings"][0]
-    assert res["direct"]
+    assert _direct(res)
 
 
 def test_classes_from_coach_position():
@@ -282,8 +292,8 @@ def test_live_multi_change_via(tmp_path):
     p = SearchParams("SBC", "PUNE", TUESDAY, extra_hours=None, extra_km=None, max_changes=3, via=("SRR", "MAQ", "TNA"))
     res = search(TT, p, client_for(fake, tmp_path))
     assert res["data_source"]["kind"] == "live"
-    assert res["alternates"], "expected a live route via SRR, MAQ, TNA"
-    for j in res["alternates"]:
+    assert _alts(res), "expected a live route via SRR, MAQ, TNA"
+    for j in _alts(res):
         assert j["changes"] <= 3
         for leg in j["legs"]:
             origin = date.fromisoformat(leg["origin_date"])
