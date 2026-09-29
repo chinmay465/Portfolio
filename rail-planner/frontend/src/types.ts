@@ -48,6 +48,9 @@ export type Transfer = { station: StationRef; wait_minutes: number; tight: boole
 
 export type DataSource = {
   kind: "live" | "snapshot" | null;
+  provider?: string | null;
+  as_of?: string | null;
+  run_days?: boolean;
   live_configured?: boolean;
   requests?: number;
   cache_hits?: number;

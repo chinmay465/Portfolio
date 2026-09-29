@@ -12,7 +12,8 @@ from fastapi.testclient import TestClient
 
 from app import main
 from app.railradar import RailRadar, classes_from_coaches
-from app.search import SearchParams, search
+from app.railradar import Usage
+from app.search import SearchParams, _live_candidates, search
 from app.timetable import StaticTimetable
 
 TT = StaticTimetable()
@@ -211,6 +212,7 @@ def test_classes_from_coach_position():
 def api_with_live(tmp_path, monkeypatch):
     rr = client_for(Fake(), tmp_path)
     monkeypatch.setattr(main, "live", lambda: rr)
+    monkeypatch.setenv("TIMETABLE_SOURCE", "live")
     return TestClient(main.app)
 
 
@@ -228,26 +230,51 @@ def test_status_endpoint(api_with_live):
     assert api_with_live.get("/api/status").json()["source"] == "live"
 
 
+def test_default_timetable_is_snapshot_but_seats_stay_live(tmp_path, monkeypatch):
+    """Routes come from the stored timetable (no RailRadar calls); seat checks still use the key."""
+    fake = Fake()
+    rr = client_for(fake, tmp_path)
+    monkeypatch.setattr(main, "live", lambda: rr)
+    monkeypatch.delenv("TIMETABLE_SOURCE", raising=False)
+    api = TestClient(main.app)
+    body = api.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": "2026-10-20"}).json()
+    assert body["data_source"]["kind"] == "snapshot"
+    assert body["data_source"]["run_days"] is True
+    assert body["data_source"]["live_configured"] is True
+    assert fake.calls == 0
+    status = api.get("/api/status").json()
+    assert status["source"] == "snapshot" and status["seats"] == "RailRadar"
+    seats = api.get("/api/seats", params={"train": "17307", "from": "SBC", "to": "SUR", "date": "2026-10-20"}).json()
+    assert seats["source"] == "live" and fake.calls == 1
+
+
+def _connections(p: SearchParams, tmp_path):
+    """Live one-change candidates, before the results list caps routes per change station."""
+    a, b = TT.station(p.from_code), TT.station(p.to_code)
+    near_a = {s.code for s, _ in TT.nearby(a.code, p.nearby_km)}
+    near_b = {s.code for s, _ in TT.nearby(b.code, p.nearby_km)}
+    rr = client_for(Fake(), tmp_path)
+    return _live_candidates(TT, rr, a, b, near_a, near_b, p, Usage(), [])[2]
+
+
 def test_basava_hutatma_change_at_solapur(tmp_path):
     """Regression: 17307 SBC 16:40 -> SUR 06:10, then 12158 SUR 06:30 -> PUNE 10:30 (20-minute change).
 
     The snapshot's 2016 timings made this change impossible, which used to drop Solapur from the
     live hub list; the default 45-minute change time also hid it.
     """
-    res = search(TT, SearchParams("SBC", "PUNE", TUESDAY), client_for(Fake(), tmp_path))
     match = [
-        j for j in res["alternates"]
-        if [leg["train"]["number"] for leg in j["legs"]] == ["17307", "12158"]
+        j for j in _connections(SearchParams("SBC", "PUNE", TUESDAY), tmp_path)
+        if [leg.train.number for leg in j.legs] == ["17307", "12158"]
     ]
     assert match, "Basava -> Hutatma via Solapur missing"
     j = match[0]
-    assert j["transfer"]["station"]["code"] == "SUR"
-    assert j["transfer"]["wait_minutes"] == 20 and j["transfer"]["tight"] is True
-    assert j["legs"][0]["from"]["code"] == "SBC"
-    assert j["depart_at"].startswith("2026-10-20T16:40") and j["arrive_at"].startswith("2026-10-21T10:30")
+    assert j.legs[0].to_code == "SUR" and j.legs[0].from_code == "SBC"
+    assert (j.legs[1].depart_at - j.legs[0].arrive_at).total_seconds() == 20 * 60
+    assert j.depart_at.isoformat().startswith("2026-10-20T16:40") and j.arrive_at.isoformat().startswith("2026-10-21T10:30")
 
-    strict = search(TT, SearchParams("SBC", "PUNE", TUESDAY, min_transfer_min=30), client_for(Fake(), tmp_path / "b"))
-    assert not any([l["train"]["number"] for l in j2["legs"]] == ["17307", "12158"] for j2 in strict["alternates"])
+    strict = _connections(SearchParams("SBC", "PUNE", TUESDAY, min_transfer_min=30), tmp_path / "b")
+    assert not any([l.train.number for l in j2.legs] == ["17307", "12158"] for j2 in strict)
 
 
 def test_live_multi_change_via(tmp_path):

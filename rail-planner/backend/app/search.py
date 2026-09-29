@@ -13,7 +13,7 @@ Alternate types:
     connection  two trains with one change at a common station
 
 Two data paths produce the same candidates:
-    snapshot    the bundled open-data timetable, searched exhaustively (stale; every train daily)
+    snapshot    the bundled open-data timetable, searched exhaustively (Sep 2024, with running days)
     live        RailRadar. The snapshot's network only suggests which stations are worth
                 changing at; every train, time, distance and running day comes from the API.
 """
@@ -510,6 +510,9 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
         },
         "data_source": {
             "kind": source,
+            "provider": "RailRadar" if source == "live" else tt.meta.get("source"),
+            "as_of": None if source == "live" else tt.meta.get("as_of"),
+            "run_days": True if source == "live" else bool(tt.meta.get("run_days")),
             "live_configured": live is not None,
             "requests": usage.requests,
             "cache_hits": usage.cache_hits,

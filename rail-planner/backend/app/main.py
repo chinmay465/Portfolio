@@ -54,6 +54,15 @@ def live() -> RailRadar | None:
     return railradar.from_env(class_hint)
 
 
+def timetable_live() -> RailRadar | None:
+    """RailRadar for timetables too, only when TIMETABLE_SOURCE=live.
+
+    By default routes and the booking calendar use the bundled snapshot (which has running days)
+    and RailRadar is kept for seat availability, so a route search spends none of its rate limit.
+    """
+    return live() if os.getenv("TIMETABLE_SOURCE", "snapshot").strip().lower() == "live" else None
+
+
 @app.get("/api/health")
 def health() -> dict:
     return {"ok": True}
@@ -61,10 +70,12 @@ def health() -> dict:
 
 @app.get("/api/status")
 def status() -> dict:
-    client = live()
+    client, meta = live(), timetable().meta
     return {
-        "source": "live" if client else "snapshot",
-        "provider": "RailRadar" if client else "datameet snapshot (2016-17)",
+        "source": "live" if timetable_live() else "snapshot",
+        "provider": "RailRadar" if timetable_live() else meta.get("source"),
+        "as_of": None if timetable_live() else meta.get("as_of"),
+        "seats": "RailRadar" if client else None,
         "month_requests": client.month_requests() if client else None,
     }
 
@@ -109,16 +120,18 @@ def routes(
         via=tuple(c.strip().upper() for c in via.split(",") if c.strip()),
     )
     try:
-        return search(timetable(), params, live())
+        res = search(timetable(), params, timetable_live())
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
+    res["data_source"]["live_configured"] = live() is not None  # seat checks work with either timetable source
+    return res
 
 
 def _schedule(number: str, warnings: list[str]) -> dict | None:
     """Train meta plus boardable halts as (code, name, dep_minutes_from_origin_midnight)."""
-    if live():
+    if timetable_live():
         try:
-            t = live().train(number)
+            t = timetable_live().train(number)
             if t:
                 m = t["meta"]
                 stops = [

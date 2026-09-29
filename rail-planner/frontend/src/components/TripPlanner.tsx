@@ -100,7 +100,8 @@ export function TripPlanner() {
     return items.sort(by[sort]);
   }, [data, filter, sort]);
 
-  const live = data?.data_source.kind === "live";
+  // Seat checks need a RailRadar key, whichever source the timetable came from.
+  const live = !!data?.data_source.live_configured;
   const q = seatPrefs.quota;
 
   // Hide routes whose seats are known to be waitlisted / regret / missing the class. Unchecked routes stay.
