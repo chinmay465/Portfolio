@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
-import { duration, longDay, todayIST } from "../format";
+import { clock, day, duration, longDay, todayIST } from "../format";
 import { isBookable, journeyPicks, journeySeat, legId, useSeats } from "../seats";
 import { storage, type SavedTrip } from "../storage";
 import type { ClassChoice, ClassMode, KindFilter, Leg, ListQuery, RouteResponse, SeatPrefs, SortKey, SortOrder, StationHit, Tolerance, TrainRef, ViaStop } from "../types";
@@ -354,6 +354,16 @@ export function TripPlanner() {
             <p className="hidden-note">
               {data.hidden_by_sleep} route{data.hidden_by_sleep === 1 ? "" : "s"} hidden: no train on them allows {data.params.min_sleep_hours} h of sleep
               starting 9 pm–midnight.
+            </p>
+          )}
+
+          {data.results.length === 0 && (data.params.depart_after || data.params.arrive_by) && (
+            <p className="hidden-note">
+              No routes
+              {data.params.depart_after && <> leave at or after {data.params.depart_after}</>}
+              {data.params.depart_after && data.params.arrive_by && " and"}
+              {data.params.arrive_by && <> reach {data.to.name} by {day(data.params.arrive_by)} {clock(data.params.arrive_by)}</>} within your
+              other filters. Try an earlier start, a later deadline, or more changes.
             </p>
           )}
 

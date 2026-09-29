@@ -60,6 +60,43 @@ export function FiltersPanel({ draft, onChange, onCancel, live, month }: Props) 
         </label>
       </fieldset>
 
+      <fieldset className="tolerance timing-set">
+        <legend>Timing</legend>
+        <div className="field">
+          <label htmlFor="depart-after">Leave no earlier than</label>
+          <span className="inline">
+            <input id="depart-after" type="time" value={tol.depart_after} onChange={(e) => setTol({ depart_after: e.target.value })} />
+            {tol.depart_after && (
+              <button type="button" className="link" onClick={() => setTol({ depart_after: "" })}>
+                Any time
+              </button>
+            )}
+          </span>
+          <span className="hint small">on your journey date</span>
+        </div>
+        <div className="field">
+          <label htmlFor="arrive-by-date">Reach by</label>
+          <span className="inline">
+            <input id="arrive-by-date" type="date" value={tol.arrive_by_date} onChange={(e) => setTol({ arrive_by_date: e.target.value })} />
+            <input
+              id="arrive-by-time"
+              type="time"
+              aria-label="Reach by time"
+              value={tol.arrive_by_time}
+              onChange={(e) => setTol({ arrive_by_time: e.target.value })}
+            />
+            {(tol.arrive_by_date || tol.arrive_by_time) && (
+              <button type="button" className="link" onClick={() => setTol({ arrive_by_date: "", arrive_by_time: "" })}>
+                No deadline
+              </button>
+            )}
+          </span>
+          <span className="hint small">
+            {tol.arrive_by_time && !tol.arrive_by_date ? "Pick a date too" : "date and time at the destination"}
+          </span>
+        </div>
+      </fieldset>
+
       <fieldset className="tolerance sleep-set">
         <legend>Sleep</legend>
         <label className="switch">
@@ -156,6 +193,11 @@ export function filterSummary(tol: Tolerance, via: ViaStop[], seats: SeatPrefs):
         .join(" → ")}`,
     );
   if (!tol.no_wait_limit) chips.push(`Wait ≤ ${tol.max_wait_hours} h`);
+  if (tol.depart_after) chips.push(`Leave ≥ ${tol.depart_after}`);
+  if (tol.arrive_by_date) {
+    const d = new Date(`${tol.arrive_by_date}T12:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+    chips.push(`Reach by ${d} ${tol.arrive_by_time || "23:59"}`);
+  }
   if (tol.sleep_on) chips.push(`Sleep ${tol.sleep_hours} h`);
   if (seats.quota !== "GN") chips.push(QUOTAS.find(([c]) => c === seats.quota)?.[1] ?? seats.quota);
   if (seats.hide_unavailable) chips.push(seats.rac_ok ? "Seats/RAC only" : "Confirmed seats only");

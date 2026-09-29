@@ -111,6 +111,8 @@ def routes(
     limit: int = Query(50, ge=0, description="Results per page; 0 = all"),
     offset: int = Query(0, ge=0),
     trains: str = Query("", description="Comma-separated train numbers; only routes using at least one of them"),
+    depart_after: str = Query("", pattern=r"^$|^([01]\d|2[0-3]):[0-5]\d$", description="HH:MM on the journey date"),
+    arrive_by: str = Query("", description="YYYY-MM-DDTHH:MM (IST): reach the destination by then"),
     sort: str = Query("duration", pattern="^(duration|departure|arrival|distance|changes)$"),
     order: str = Query("asc", pattern="^(asc|desc)$"),
     kind: str = Query("all", pattern="^(all|direct|nearby|connection)$"),
@@ -133,6 +135,8 @@ def routes(
         limit=limit,
         offset=offset,
         trains=tuple(t.strip() for t in trains.split(",") if t.strip()),
+        depart_after=datetime.strptime(depart_after, "%H:%M").time() if depart_after else None,
+        arrive_by=_arrive_by(arrive_by),
         sort=sort,
         order=order,
         kind=kind,
@@ -171,6 +175,16 @@ def _schedule(number: str, warnings: list[str]) -> dict | None:
         return None
     stops = [(s.code, timetable().station(s.code).name, s.dep) for s in t.stops if s.dep is not None]
     return {"meta": t, "stops": stops, "source": "snapshot"}
+
+
+def _arrive_by(raw: str) -> datetime | None:
+    if not raw:
+        return None
+    try:
+        dt = datetime.fromisoformat(raw)
+    except ValueError as e:
+        raise HTTPException(400, "arrive_by must look like 2026-10-21T10:00") from e
+    return dt if dt.tzinfo else dt.replace(tzinfo=IST)
 
 
 def _numbers(raw: str, n: int, name: str) -> tuple[float, ...]:

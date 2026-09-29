@@ -61,6 +61,8 @@ class SearchParams:
     max_wait_min: float | None = None  # longest wait at any change (on top of a planned stay); None = no limit
     offset: int = 0  # paging: skip this many sorted results (limit 0 = all)
     trains: tuple[str, ...] = ()  # only routes that use at least one of these trains (empty = any)
+    depart_after: time | None = None  # leave no earlier than this on the journey date
+    arrive_by: datetime | None = None  # reach the destination by this moment (IST)
     sort: str = "duration"  # duration | departure | arrival | distance | changes
     order: str = "asc"  # asc | desc
     kind: str = "all"  # all | direct | nearby | connection  (connection includes "through")
@@ -471,6 +473,11 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
         max_total = INF if base_min is None else base_min + p.extra_min + planned
         max_km = INF if base_km is None else base_km + p.extra_dist
 
+        earliest_dep = p.depart_after.hour * 60 + p.depart_after.minute if p.depart_after else 0
+        latest_arr = (
+            (p.arrive_by - datetime.combine(p.journey_date, time(0), IST)).total_seconds() / 60 if p.arrive_by else INF
+        )
+
         def run_multi(t_cap, km_cap_, wait_cap=p.wait_cap):
             return multi_search(
                 src, tt, nodes, starts, dests, b, p.journey_date, p.max_changes, p.min_transfer_min, via,
@@ -478,6 +485,8 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
                 make_leg=lambda o, day: Leg(o.train, o.from_code, o.to_code, o.dep, o.arr, o.km, day),
                 via_stays=stays,
                 via_groups=[set(g) for g in via_groups],
+                earliest_dep=earliest_dep,
+                latest_arr=latest_arr,
                 max_wait_min=wait_cap,
             )
 
@@ -543,6 +552,15 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
     # One list, sorted and filtered here over *every* route found, then cut to the page size.
     # With via stations, only routes through them are listed; direct trains still set the time baseline.
     everything = alternates if via else direct + alternates
+    # Time window: leave no earlier than / reach by. (The multi-change search already prunes to it,
+    # so there's no meaningful "hidden" count; the page just says when nothing fits.)
+    if p.depart_after or p.arrive_by:
+        day0 = datetime.combine(p.journey_date, time(0), IST)
+        lo = day0 + timedelta(hours=p.depart_after.hour, minutes=p.depart_after.minute) if p.depart_after else None
+        everything = [
+            j for j in everything
+            if (lo is None or j.depart_at >= lo) and (p.arrive_by is None or j.arrive_at <= p.arrive_by)
+        ]
     if pinned:
         everything = [j for j in everything if any(l.train.number in pinned for l in j.legs)]
         limited = max_min_used < INF or p.extra_km is not None or p.wait_cap < INF
@@ -585,6 +603,8 @@ def search(tt: StaticTimetable, p: SearchParams, live: RailRadar | None = None) 
             "via_stay_min": list(p.via_stay_min),
             "max_wait_min": p.max_wait_min,
             "trains": sorted(pinned),
+            "depart_after": p.depart_after.strftime("%H:%M") if p.depart_after else None,
+            "arrive_by": p.arrive_by.isoformat() if p.arrive_by else None,
         },
         "data_source": {
             "kind": source,

@@ -308,3 +308,28 @@ def test_via_buffer_accepts_nearby_stations():
 def test_bad_via_radius():
     r = client.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": DATE, "via": "UD", "via_radius": "x"})
     assert r.status_code == 400
+
+
+def test_depart_after_and_arrive_by():
+    base = {"from": "SBC", "to": "PUNE", "date": DATE, "limit": 0}
+    body = client.get("/api/routes", params={**base, "depart_after": "18:00", "arrive_by": "2026-10-21T12:00"}).json()
+    assert body["params"]["depart_after"] == "18:00" and body["params"]["arrive_by"].startswith("2026-10-21T12:00")
+    assert body["results"]
+    for j in body["results"]:
+        assert j["depart_at"] >= "2026-10-20T18:00" and j["arrive_at"] <= "2026-10-21T12:00:00+05:30"
+    everything = client.get("/api/routes", params=base).json()
+    assert body["total"] < everything["total"]
+
+
+def test_time_window_prunes_multi_change_search():
+    # A late start must still find late-starting multi-change routes (not crowded out by earlier ones).
+    body = client.get("/api/routes", params={"from": "SBC", "to": "PUNE", "date": DATE, "max_changes": 2,
+                                             "depart_after": "21:00", "no_time_limit": True, "limit": 0}).json()
+    assert body["results"] and all(j["depart_at"] >= "2026-10-20T21:00" for j in body["results"])
+    assert any(j["changes"] == 2 for j in body["results"])
+
+
+def test_bad_time_window():
+    base = {"from": "SBC", "to": "PUNE", "date": DATE}
+    assert client.get("/api/routes", params={**base, "depart_after": "25:00"}).status_code == 422
+    assert client.get("/api/routes", params={**base, "arrive_by": "tomorrow"}).status_code == 400

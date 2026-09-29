@@ -138,6 +138,8 @@ def multi_search(
     via_stays: dict[str, int] | None = None,
     max_wait_min: float = float("inf"),
     via_groups: list[set[str]] | None = None,
+    earliest_dep: int = 0,  # minutes from journey-date 00:00; first train may not leave earlier
+    latest_arr: float = float("inf"),  # minutes from journey-date 00:00; must arrive by then
 ) -> list[MultiResult]:
     """All times are integer minutes from 00:00 on the journey date (fast; no datetimes in the loop).
 
@@ -191,7 +193,7 @@ def multi_search(
                 cands = []
                 for o in legs_src.options(st.station, y):
                     if cur is None:
-                        if not runs(o, 0):
+                        if not runs(o, 0) or o.dep % 1440 < earliest_dep:
                             continue
                         day, changes = 0, 0
                     elif o.train.number == cur[0].train.number:
@@ -214,7 +216,7 @@ def multi_search(
                     arr = dep + (o.arr - o.dep)
                     start = dep if cur is None else st.start
                     km = st.km + o.km
-                    if arr - start + lb_min > max_total_min or km + lb_km > max_km:
+                    if arr - start + lb_min > max_total_min or km + lb_km > max_km or arr + lb_min > latest_arr:
                         continue
                     cands.append((arr, km, o, day, changes, start))
 

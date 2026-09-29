@@ -66,7 +66,9 @@ export type RouteResponse = {
   from: StationRef & { state: string };
   to: StationRef & { state: string };
   journey_date: string;
-  params: Omit<Tolerance, "extra_hours" | "extra_km" | "no_time_limit" | "no_km_limit" | "sleep_on" | "sleep_hours" | "no_wait_limit" | "max_wait_hours"> & {
+  params: Omit<Tolerance, "extra_hours" | "extra_km" | "no_time_limit" | "no_km_limit" | "sleep_on" | "sleep_hours" | "no_wait_limit" | "max_wait_hours" | "depart_after" | "arrive_by_date" | "arrive_by_time"> & {
+    depart_after: string | null;
+    arrive_by: string | null;
     via_stay_min: number[];
     via_groups: { code: string; radius_km: number; stations: StationRef[] }[];
     trains: string[];
@@ -107,6 +109,9 @@ export type Tolerance = {
   include_unreserved: boolean;
   no_wait_limit: boolean; // true = any wait between trains is fine
   max_wait_hours: number; // longest wait at a station (on top of a planned stop)
+  depart_after: string; // "HH:MM" on the journey date, "" = any time
+  arrive_by_date: string; // "YYYY-MM-DD", "" = no deadline
+  arrive_by_time: string; // "HH:MM" (defaults to 23:59 when only a date is set)
   sleep_on: boolean; // want uninterrupted sleep on one train?
   sleep_hours: number; // how much, starting 21:00-24:00
 };
@@ -139,6 +144,9 @@ export const DEFAULT_TOLERANCE: Tolerance = {
   include_unreserved: false,
   no_wait_limit: true,
   max_wait_hours: 4,
+  depart_after: "",
+  arrive_by_date: "",
+  arrive_by_time: "",
   sleep_on: false,
   sleep_hours: 8,
 };

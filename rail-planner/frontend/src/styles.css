@@ -297,3 +297,8 @@ sup { font-size: 11px; color: var(--warn); margin-left: 2px; font-weight: 600; }
 .pin:disabled { cursor: not-allowed; opacity: 0.5; }
 .train-chip { display: inline-flex; gap: 6px; align-items: center; }
 .train-chip button { border: 0; background: none; cursor: pointer; color: var(--muted); padding: 0 2px; font-size: 14px; }
+.timing-set { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.timing-set .field { flex: none; }
+.timing-set .inline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.timing-set input[type="time"], .timing-set input[type="date"] { width: auto; min-height: 38px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.timing-set .hint { color: var(--muted); }

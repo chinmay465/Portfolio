@@ -43,7 +43,7 @@ export const api = {
     offset: number,
     signal?: AbortSignal,
   ) => {
-    const { sleep_on, sleep_hours, no_wait_limit, max_wait_hours, ...rest } = t;
+    const { sleep_on, sleep_hours, no_wait_limit, max_wait_hours, depart_after, arrive_by_date, arrive_by_time, ...rest } = t;
     return get<RouteResponse>(
       "/api/routes",
       {
@@ -62,6 +62,8 @@ export const api = {
         order: q.order,
         kind: q.kind,
         min_sleep_hours: sleep_on ? sleep_hours : undefined,
+        depart_after: depart_after || undefined,
+        arrive_by: arrive_by_date ? `${arrive_by_date}T${arrive_by_time || "23:59"}` : undefined,
       },
       signal,
     );
