@@ -9,6 +9,9 @@ since later runs rank stations on the grown timetable and scan different boards)
     RAILRADAR_API_KEY=rr_live_... python scripts/crawl_railradar.py --max 900
     # re-run until it says "complete", then commit data/timetable.json.gz
 
+    # Only add trains that started since the snapshot (cheap: boards + the new trains):
+    RAILRADAR_API_KEY=rr_live_... python scripts/crawl_railradar.py --new-only --stations 300
+
 Every response is cached in data/railradar-crawl.sqlite3 (git-ignored, kept 45 days), so the
 crawl can be stopped and resumed and spread over several days or months of quota: each run only
 spends requests on trains it hasn't fetched yet. After every run the output is rewritten:
@@ -121,7 +124,7 @@ class Crawler:
         return out
 
 
-def merge(base: dict, fetched: dict[str, dict | None], total: int) -> dict:
+def merge(base: dict, fetched: dict[str, dict | None], total: int, new_only: bool = False) -> dict:
     trains = dict(base["trains"])
     stations = {c: list(v) for c, v in base["stations"].items()}
     names: dict[str, str] = {}
@@ -145,6 +148,18 @@ def merge(base: dict, fetched: dict[str, dict | None], total: int) -> dict:
     crawled = sum(1 for d in fetched.values() if d)
     today = datetime.now().strftime("%Y-%m-%d")
     base_meta = base.get("meta") or {}
+    if new_only:
+        # Existing trains untouched; record which trains were added and when.
+        added = sorted(n for n in fetched if n not in base["trains"] and n in trains)
+        meta = {
+            **base_meta,
+            "built": today,
+            "new_trains_checked": today,
+            "added": sorted(set(base_meta.get("added", [])) | set(added)),
+            "trains": len(trains),
+            "stations": len(used),
+        }
+        return {"meta": meta, "stations": {c: v for c, v in stations.items() if c in used}, "trains": trains}
     origin = base_meta.get("base") or base_meta.get("source") or "the previous snapshot"  # stays put across resumed runs
     complete = len(fetched) >= total
     meta = {
@@ -171,21 +186,33 @@ def busiest(base: dict, n: int) -> list[str]:
     return sorted(count, key=lambda c: -count[c])[:n]
 
 
-def run(rr: RailRadar, base: dict, out: Path, rpm: float, budget: int, stations: int, sleep=time.sleep, log=print) -> dict:
+def run(
+    rr: RailRadar, base: dict, out: Path, rpm: float, budget: int, stations: int, sleep=time.sleep, log=print,
+    new_only: bool = False,
+) -> dict:
     crawler = Crawler(rr, rpm, budget, sleep, log)
-    numbers = sorted(base["trains"])
+    known = set(base["trains"])
+    numbers = [] if new_only else sorted(known)
     if stations:
         log(f"Looking for new trains on the boards of the {stations} busiest stations")
-        numbers += sorted(crawler.discover(busiest(base, stations)) - set(numbers))
+        new = sorted(crawler.discover(busiest(base, stations)) - known)
+        log(f"  {len(new)} train numbers not in the timetable yet")
+        numbers += new
     log(f"Fetching {len(numbers)} trains at {rpm:g} requests/min")
     fetched = crawler.trains(numbers)
-    data = merge(base, fetched, len(numbers))
+    data = merge(base, fetched, len(numbers), new_only)
     out.parent.mkdir(parents=True, exist_ok=True)
     with gzip.open(out, "wt", encoding="utf-8") as fh:
         json.dump(data, fh, separators=(",", ":"))
     m = data["meta"]
-    state = "complete" if m["complete"] else f"stopped: {crawler.stopped}. Run again to continue"
-    log(f"{len(fetched)}/{len(numbers)} trains done, {m['withdrawn']} withdrawn, {crawler.spent} requests this run; {state}")
+    done = len(fetched) >= len(numbers) and not crawler.stopped
+    state = "complete" if done else f"stopped: {crawler.stopped}. Run again to continue"
+    if new_only:
+        added = [n for n in fetched if n not in known and n in data["trains"]]
+        log(f"Added {len(added)} new trains ({', '.join(added[:30])}{'…' if len(added) > 30 else ''}); "
+            f"{crawler.spent} requests this run; {state}")
+    else:
+        log(f"{len(fetched)}/{len(numbers)} trains done, {m['withdrawn']} withdrawn, {crawler.spent} requests this run; {state}")
     log(f"Wrote {m['trains']} trains, {m['stations']} stations -> {out}")
     return data
 
@@ -197,6 +224,7 @@ def main() -> None:
     ap.add_argument("--rpm", type=float, default=9, help="requests per minute (RailRadar allows 10)")
     ap.add_argument("--max", type=int, default=900, help="stop after this many requests (monthly quota)")
     ap.add_argument("--stations", type=int, default=0, help="also scan the N busiest station boards for new trains")
+    ap.add_argument("--new-only", action="store_true", help="only add trains not in the timetable yet (needs --stations)")
     ap.add_argument("--base", type=Path, default=DEFAULT_DATA, help="snapshot to start from")
     ap.add_argument("--out", type=Path, default=DEFAULT_DATA)
     ap.add_argument("--ttl-days", type=float, default=45, help="re-fetch trains cached longer ago than this")
@@ -208,7 +236,9 @@ def main() -> None:
     with gzip.open(args.base, "rt", encoding="utf-8") as fh:
         base = json.load(fh)
     rr = RailRadar(key, cache_path=CACHE, ttl_seconds=int(args.ttl_days * 86400))
-    run(rr, base, args.out, args.rpm, args.max, args.stations)
+    if args.new_only and not args.stations:
+        sys.exit("--new-only needs --stations N (new trains are found on station boards)")
+    run(rr, base, args.out, args.rpm, args.max, args.stations, new_only=args.new_only)
 
 
 if __name__ == "__main__":

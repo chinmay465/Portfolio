@@ -65,3 +65,15 @@ def test_crawl_stops_on_quota(tmp_path):
     data = crawl.run(rr, BASE, tmp_path / "tt.json.gz", rpm=9, budget=100, stations=0, sleep=lambda s: None, log=lambda m: None)
     assert not data["meta"]["complete"]
     assert set(data["trains"]) == set(BASE["trains"])  # nothing lost
+
+
+def test_new_only_adds_new_trains_and_leaves_the_rest(tmp_path):
+    fake = Fake()
+    rr = client_for(fake, tmp_path)
+    data = crawl.run(rr, BASE, tmp_path / "tt.json.gz", rpm=9, budget=100_000, stations=200,
+                     sleep=lambda s: None, log=lambda m: None, new_only=True)
+    assert NEW_TRAIN["number"] in data["trains"]
+    assert NEW_TRAIN["number"] in data["meta"]["added"]
+    for n, t in BASE["trains"].items():  # existing trains untouched, even the withdrawn one
+        assert data["trains"][n] == t
+    assert data["meta"]["as_of"] == "2024-09" and data["meta"]["new_trains_checked"]

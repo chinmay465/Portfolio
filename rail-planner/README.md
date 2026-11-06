@@ -103,6 +103,8 @@ git clone --depth 1 https://github.com/datameet/railways.git /tmp/railways
 python backend/scripts/build_timetable_2024.py /tmp/rstgcn/Indian-Railway-Network-and-Delays /tmp/railways backend/data/timetable.json.gz
 ```
 
+**Add newly introduced trains (GitHub Action):** `.github/workflows/refresh-timetable.yml` scans the 300 busiest stations' RailRadar boards, fetches only the trains not in the file yet (`crawl_railradar.py --new-only`), and commits the result, which redeploys the app. It runs on the 1st of every month and on demand (Actions → Refresh timetable → Run workflow; choose `full` to refresh every train instead). It needs the repo secret `RAILRADAR_API_KEY`. A run costs about 300 requests plus one per new train; existing trains are left as they are, and the file's `meta.added` lists what was added.
+
 **Refresh it to today's timetable with RailRadar:** `backend/scripts/crawl_railradar.py` fetches `GET /v1/trains/{number}` for every train in the file (one request each) and writes the result back to the same file.
 - It paces itself (9 requests/min by default), stops at `--max` requests per run (default 900) and stops cleanly on a quota or key error.
 - Every response is cached in `backend/data/railradar-crawl.sqlite3` (git-ignored, 45 days), so re-running continues where it stopped and never re-fetches. A full crawl of about 4,000 trains is about 7.5 hours of requests, so spread it over as many runs or months as your quota needs.
