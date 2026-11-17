@@ -3,7 +3,7 @@ import { PaperCard } from './components/PaperCard'
 import { CITIES, PAPERS, type CityId, type Lang, type Paper } from './data/papers'
 import { t } from './i18n'
 import { dayKey, formatDate, matchesQuery, num } from './lib/format'
-import { parseIssueDate, toIssueDate } from './lib/links'
+import { isAvailableIn, parseIssueDate, toIssueDate } from './lib/links'
 import { useStoredState } from './lib/storage'
 
 type Theme = 'light' | 'dark'
@@ -33,7 +33,7 @@ export default function App() {
   const [lang, setLang] = useStoredState<Lang>('ank:lang', 'mr')
   const [theme, setTheme] = useStoredState<Theme>('ank:theme', prefersDark() ? 'dark' : 'light')
   const [favs, setFavs] = useStoredState<string[]>('ank:favs', [])
-  const [city, setCity] = useStoredState<CityId | null>('ank:city', null)
+  const [city, setCity] = useStoredState<CityId | null>('ank:city', 'pune')
   const [log, setLog] = useStoredState<ReadLog>('ank:read', { day: '', ids: [] })
   const [query, setQuery] = useState('')
   const [issueValue, setIssueValue] = useState('')
@@ -65,10 +65,12 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  // Search hides papers; the city only greys out the ones with no edition there,
+  // which sort after the ones that do.
   const visible = useMemo(
     () =>
-      PAPERS.filter(
-        (p) => matchesQuery([p.name.mr, p.name.en], query) && (!city || p.cities.includes(city)),
+      PAPERS.filter((p) => matchesQuery([p.name.mr, p.name.en], query)).sort(
+        (a, b) => Number(!isAvailableIn(a, city)) - Number(!isAvailableIn(b, city)),
       ),
     [query, city],
   )
@@ -102,6 +104,7 @@ export default function App() {
           lang={lang}
           city={city}
           date={issueDate}
+          unavailable={!isAvailableIn(p, city)}
           isFav={favs.includes(p.id)}
           isRead={readIds.includes(p.id)}
           onToggleFav={() => toggleFav(p.id)}
@@ -237,8 +240,6 @@ export default function App() {
               className="button"
               onClick={() => {
                 setQuery('')
-                setCity(null)
-                setIssueValue('')
               }}
             >
               {t('clear', lang)}

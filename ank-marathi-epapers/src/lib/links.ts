@@ -12,6 +12,11 @@ export interface ResolvedLink {
   kind: LinkKind
 }
 
+/** True when no city is picked or the paper publishes an edition for it. */
+export function isAvailableIn(paper: Paper, city: CityId | null): boolean {
+  return !city || paper.cities.includes(city)
+}
+
 export function resolveLink(paper: Paper, city: CityId | null, date: IssueDate): ResolvedLink {
   const edition = city ? paper.editions?.[city] : undefined
   if (!edition || !paper.editionUrl) return { href: paper.url, kind: 'home' }

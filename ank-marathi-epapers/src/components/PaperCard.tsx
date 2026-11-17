@@ -9,6 +9,8 @@ interface Props {
   lang: Lang
   city: CityId | null
   date: IssueDate
+  /** The paper has no edition for the selected city: shown greyed out, links to its home page. */
+  unavailable: boolean
   isFav: boolean
   isRead: boolean
   onToggleFav: () => void
@@ -16,20 +18,31 @@ interface Props {
   onUnread: () => void
 }
 
-export function PaperCard({ paper, lang, city, date, isFav, isRead, onToggleFav, onOpen, onUnread }: Props) {
+export function PaperCard({ paper, lang, city, date, unavailable, isFav, isRead, onToggleFav, onOpen, onUnread }: Props) {
   const style = { '--hue': paper.hue } as CSSProperties
   const other: Lang = lang === 'mr' ? 'en' : 'mr'
   const link = resolveLink(paper, city, date)
   const cityName = city ? CITIES[city][lang] : ''
 
+  const tooltipId = `${paper.id}-unavailable`
+
   let linkNote: string
-  if (link.kind === 'dated') linkNote = t('opensDated', lang)(cityName, formatShortDate(date, lang))
+  if (unavailable) linkNote = t('opensHome', lang)
+  else if (link.kind === 'dated') linkNote = t('opensDated', lang)(cityName, formatShortDate(date, lang))
   else if (link.kind === 'latest') linkNote = t('opensLatest', lang)(cityName)
   else if (city) linkNote = t('pickOnSite', lang)(cityName)
   else linkNote = t('editions', lang)(num(paper.cities.length, lang))
 
   return (
-    <article className={`paper${isRead ? ' is-read' : ''}`} style={style}>
+    <article
+      className={`paper${isRead ? ' is-read' : ''}${unavailable ? ' is-unavailable' : ''}`}
+      style={style}
+    >
+      {unavailable && (
+        <span className="paper__tooltip" role="tooltip" id={tooltipId}>
+          {t('notInCity', lang)(cityName)}
+        </span>
+      )}
       <div className="paper__masthead" aria-hidden="true">
         {paper.name.mr}
       </div>
@@ -41,6 +54,7 @@ export function PaperCard({ paper, lang, city, date, isFav, isRead, onToggleFav,
             href={link.href}
             target="_blank"
             rel="noopener noreferrer"
+            aria-describedby={unavailable ? tooltipId : undefined}
             onClick={onOpen}
           >
             {paper.name[lang]}
@@ -58,7 +72,9 @@ export function PaperCard({ paper, lang, city, date, isFav, isRead, onToggleFav,
             <dd>{CITIES[paper.hq][lang]}</dd>
           </div>
         </dl>
-        <p className={`paper__editions${city && link.kind === 'home' ? ' paper__editions--fallback' : ''}`}>{linkNote}</p>
+        <p className={`paper__editions${city && link.kind === 'home' && !unavailable ? ' paper__editions--fallback' : ''}`}>
+          {linkNote}
+        </p>
 
         <span className="paper__cta" aria-hidden="true">{t('open', lang)}</span>
       </div>

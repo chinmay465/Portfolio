@@ -541,6 +541,59 @@ select {
   color: hsl(var(--hue) 10% var(--tint-l) / var(--tint-a));
 }
 
+/* Paper with no edition in the selected city: greyed out, still clickable. */
+.paper.is-unavailable {
+  border-style: dashed;
+}
+
+.paper.is-unavailable > :not(.paper__tooltip, .paper__actions) {
+  opacity: 0.45;
+  filter: grayscale(1);
+  transition: opacity 0.2s;
+}
+
+.paper.is-unavailable:hover > :not(.paper__tooltip, .paper__actions),
+.paper.is-unavailable:focus-within > :not(.paper__tooltip, .paper__actions) {
+  opacity: 0.7;
+}
+
+.paper.is-unavailable:hover,
+.paper.is-unavailable:focus-within {
+  border-color: var(--muted);
+}
+
+.paper__tooltip {
+  position: absolute;
+  top: 0.85rem;
+  left: 1rem;
+  z-index: 2;
+  max-width: calc(100% - 5rem);
+  padding: 0.35rem 0.7rem;
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 0.8rem;
+  font-weight: 600;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+.paper.is-unavailable:hover .paper__tooltip,
+.paper.is-unavailable:focus-within .paper__tooltip {
+  opacity: 1;
+  transform: none;
+}
+
+/* No hover on touch screens: keep the reason visible. */
+@media (hover: none) {
+  .paper.is-unavailable .paper__tooltip {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* ── Empty state ────────────────────────────────────────── */
 .empty {
   padding: 4rem 0;

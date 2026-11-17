@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { PAPERS } from '../data/papers'
-import { parseIssueDate, resolveLink } from './links'
+import { isAvailableIn, parseIssueDate, resolveLink } from './links'
 
 const paper = (id: string) => PAPERS.find((p) => p.id === id)!
 const date = { y: 2026, m: 11, d: 7 }
@@ -55,6 +55,21 @@ describe('resolveLink', () => {
         expect(p.cities, `${p.id} → ${city}`).toContain(city)
       }
     }
+  })
+})
+
+describe('isAvailableIn', () => {
+  it('checks the paper publishes in the city', () => {
+    expect(isAvailableIn(paper('tarun-bharat'), 'pune')).toBe(false)
+    expect(isAvailableIn(paper('tarun-bharat'), 'kolhapur')).toBe(true)
+    expect(isAvailableIn(paper('tarun-bharat'), null)).toBe(true)
+  })
+
+  it('sends unavailable papers to their home page', () => {
+    expect(resolveLink(paper('tarun-bharat'), 'pune', date)).toEqual({
+      href: 'https://epaper.tarunbharat.com/',
+      kind: 'home',
+    })
   })
 })
 
