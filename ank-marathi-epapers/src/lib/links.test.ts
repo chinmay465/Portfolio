@@ -43,10 +43,17 @@ describe('resolveLink', () => {
     )
   })
 
+  it('opens Maharashtra Times city pages', () => {
+    expect(resolveLink(paper('maharashtra-times'), 'pune', date)).toEqual({
+      href: 'https://epaper.indiatimes.com/timesepaper/publication-maharashtra-times,city-pune.cms',
+      kind: 'latest',
+    })
+  })
+
   it('falls back to the home page without a city or a known edition', () => {
     expect(resolveLink(paper('sakal'), null, date)).toEqual({ href: 'https://epaper.esakal.com/', kind: 'home' })
     expect(resolveLink(paper('pudhari'), 'satara', date).kind).toBe('home')
-    expect(resolveLink(paper('maharashtra-times'), 'pune', date).kind).toBe('home')
+    expect(resolveLink(paper('maharashtra-times'), 'nagpur', date).kind).toBe('home')
   })
 
   it('only lists editions for cities the paper publishes in', () => {

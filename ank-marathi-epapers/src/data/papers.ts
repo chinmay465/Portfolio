@@ -61,8 +61,7 @@ export interface Paper {
 
 /*
  * Edition URL formats were read off each publisher's own epaper site (November 2026).
- * Maharashtra Times could not be checked, and Punya Nagari's epaper site had no
- * editions up, so those two open the paper's epaper home.
+ * Punya Nagari's epaper site had no editions up, so it opens the paper's epaper home.
  */
 export const PAPERS: Paper[] = [
   {
@@ -105,7 +104,12 @@ export const PAPERS: Paper[] = [
     url: 'https://epaper.maharashtratimes.com/',
     founded: 1962,
     hq: 'mumbai',
-    cities: ['mumbai', 'thane', 'pune', 'nashik', 'nagpur', 'kolhapur', 'sambhajinagar'],
+    cities: ['mumbai', 'thane', 'pune', 'nashik', 'nagpur', 'sambhajinagar'],
+    // Times epaper city pages always show the latest issue. Only confirmed city slugs are listed.
+    editions: { pune: 'pune', nashik: 'nashik' },
+    editionUrl: (slug) =>
+      `https://epaper.indiatimes.com/timesepaper/publication-maharashtra-times,city-${slug}.cms`,
+    dated: false,
     hue: 222,
   },
   {
