@@ -282,6 +282,35 @@ select {
   flex: 0 1 18rem;
 }
 
+.field--date {
+  flex: 0 1 17rem;
+}
+
+.field--date input {
+  flex: 1;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+:root[data-theme='dark'] .field--date input::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
+.field__reset {
+  border: 0;
+  background: transparent;
+  color: var(--paithani);
+  font-weight: 650;
+  font-size: var(--step--1);
+  cursor: pointer;
+  padding: 0.25rem;
+}
+
+.paper__editions--fallback {
+  font-style: italic;
+}
+
 .field__label {
   color: var(--muted);
   font-size: var(--step--1);
@@ -563,7 +592,8 @@ select {
     align-items: flex-start;
     padding-bottom: 0;
   }
-  .field--city {
+  .field--city,
+  .field--date {
     flex: 1 1 100%;
   }
   .field kbd {

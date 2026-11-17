@@ -3,6 +3,7 @@ import { PaperCard } from './components/PaperCard'
 import { CITIES, PAPERS, type CityId, type Lang, type Paper } from './data/papers'
 import { t } from './i18n'
 import { dayKey, formatDate, matchesQuery, num } from './lib/format'
+import { parseIssueDate, toIssueDate } from './lib/links'
 import { useStoredState } from './lib/storage'
 
 type Theme = 'light' | 'dark'
@@ -35,12 +36,17 @@ export default function App() {
   const [city, setCity] = useStoredState<CityId | null>('ank:city', null)
   const [log, setLog] = useStoredState<ReadLog>('ank:read', { day: '', ids: [] })
   const [query, setQuery] = useState('')
+  const [issueValue, setIssueValue] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
 
   const now = useToday()
   const today = dayKey(now)
   const readIds = log.day === today ? log.ids : []
   const { weekday, date } = formatDate(now, lang)
+  // Empty or invalid input (or a future date) means "today's issue".
+  const picked = parseIssueDate(issueValue)
+  const issueDate = picked && issueValue <= today ? picked : toIssueDate(now)
+  const isToday = !picked || issueValue >= today
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -95,6 +101,7 @@ export default function App() {
           paper={p}
           lang={lang}
           city={city}
+          date={issueDate}
           isFav={favs.includes(p.id)}
           isRead={readIds.includes(p.id)}
           onToggleFav={() => toggleFav(p.id)}
@@ -187,6 +194,24 @@ export default function App() {
             <kbd aria-hidden="true" title={t('shortcut', lang)}>/</kbd>
           </label>
 
+          <div className="field field--date">
+            <label className="field__label" htmlFor="issue-date">
+              {t('issueDate', lang)}
+            </label>
+            <input
+              id="issue-date"
+              type="date"
+              max={today}
+              value={isToday ? today : issueValue}
+              onChange={(e) => setIssueValue(e.target.value)}
+            />
+            {!isToday && (
+              <button type="button" className="field__reset" onClick={() => setIssueValue('')}>
+                {t('today', lang)}
+              </button>
+            )}
+          </div>
+
           <label className="field field--city">
             <span className="field__label">{t('city', lang)}</span>
             <select
@@ -213,6 +238,7 @@ export default function App() {
               onClick={() => {
                 setQuery('')
                 setCity(null)
+                setIssueValue('')
               }}
             >
               {t('clear', lang)}
