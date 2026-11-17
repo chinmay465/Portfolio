@@ -9,7 +9,7 @@ A bilingual (Marathi / English) hub for today's Marathi epapers. Pick a paper an
 - Today's date in Marathi, with Devanagari numerals and Marathi month and weekday names
 - **Read today:** a paper is marked as read when you open it, and the marks reset at midnight. A progress row in the header tracks what you've read
 - **Favourites:** pinned to the top and saved across visits
-- **City and date links:** pick a city and an issue date, and each paper opens straight to that city's edition for that date. Sakal, Lokmat and Pudhari support this. Tarun Bharat and Loksatta open the city's latest issue (their links can't pick a date). The others open their epaper home, because their sites didn't expose edition links
+- **City and date links:** pick a city and an issue date, and each paper opens straight to that city's edition for that date. Sakal, Lokmat and Pudhari support this. Tarun Bharat, Loksatta and Maharashtra Times open the city's latest issue (their links can't pick a date). The others open their epaper home, because their sites didn't expose edition links
 - **City filter:** Pune by default. Papers with no edition in your city are greyed out, with a "Not available for Pune" tooltip, and open their main epaper if clicked
 - Search in either script (`लोक` or `lok` both work); press `/` to focus search
 - Light and dark themes, a Marathi/English UI toggle, and an installable PWA manifest
