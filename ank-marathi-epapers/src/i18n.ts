@@ -33,6 +33,11 @@ const strings = {
     mr: (c: string) => `${c} आवृत्ती साइटवर निवडा`,
     en: (c: string) => `Pick the ${c} edition on the site`,
   },
+  notInCity: {
+    mr: (c: string) => `${c} साठी उपलब्ध नाही`,
+    en: (c: string) => `Not available for ${c}`,
+  },
+  opensHome: { mr: 'मुख्य ई-पेपर उघडेल', en: 'Opens the main epaper' },
   issueDate: { mr: 'अंकाची तारीख', en: 'Issue date' },
   today: { mr: 'आज', en: 'Today' },
   addFav: { mr: 'आवडत्यांमध्ये जोडा', en: 'Add to favourites' },
@@ -41,10 +46,10 @@ const strings = {
   markUnread: { mr: 'न वाचलेले करा', en: 'Mark as unread' },
   emptyTitle: { mr: 'काही सापडले नाही', en: 'No papers match' },
   emptyBody: {
-    mr: 'शोध बदला किंवा शहर "सर्व शहरे" करा.',
-    en: 'Try another search, or set the city to "All cities".',
+    mr: 'दुसरे नाव शोधून पाहा.',
+    en: 'Try a different name.',
   },
-  clear: { mr: 'फिल्टर काढा', en: 'Clear filters' },
+  clear: { mr: 'शोध काढा', en: 'Clear search' },
   theme: { mr: 'रंगसंगती बदला', en: 'Switch theme' },
   language: { mr: 'Switch to English', en: 'मराठीत पाहा' },
   footer: {
