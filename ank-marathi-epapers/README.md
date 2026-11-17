@@ -1,0 +1,46 @@
+# अंक · Ank
+
+A bilingual (Marathi / English) hub for today's Marathi epapers. Pick a paper and it opens on the publisher's official site.
+
+**Papers:** Sakal, Lokmat, Maharashtra Times, Loksatta, Pudhari, Punya Nagari, Tarun Bharat
+
+## Features
+
+- Today's date in Marathi, with Devanagari numerals and Marathi month and weekday names
+- **Read today:** a paper is marked as read when you open it, and the marks reset at midnight. A progress row in the header tracks what you've read
+- **Favourites:** pinned to the top and saved across visits
+- **City filter:** shows only the papers that publish an edition for your city
+- Search in either script (`लोक` or `lok` both work); press `/` to focus search
+- Light and dark themes, a Marathi/English UI toggle, and an installable PWA manifest
+- Responsive layout, visible keyboard focus and reduced-motion support
+
+## Stack
+
+React 19, TypeScript, Vite and Vitest. Fonts are self-hosted with Fontsource: Tiro Devanagari Marathi for the mastheads and Anek Devanagari for the UI. There's no UI library; the styles are hand-written CSS built on design tokens.
+
+```
+src/
+  data/papers.ts        paper + city catalogue (add a paper here)
+  i18n.ts               typed Marathi/English strings
+  lib/format.ts         Devanagari numerals, Marathi dates, search matching (+ tests)
+  lib/storage.ts        localStorage-backed state with in-memory fallback
+  components/PaperCard.tsx
+  App.tsx
+```
+
+## Run
+
+```bash
+npm install
+npm run dev      # http://localhost:5173
+npm test
+npm run build    # static output in dist/ — deploy to Vercel, Netlify or GitHub Pages
+```
+
+## Adding a paper
+
+Add an entry to `PAPERS` in `src/data/papers.ts` with the official epaper URL, founding year, headquarters, edition cities and a hue for the masthead tint.
+
+## Note
+
+Ank only links to each publisher's official epaper. Some papers need a free sign-up or a subscription to read the full issue.
