@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ank:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ank-marathi-epapers
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ank-marathi-epapers/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - name: Smoke test
+        run: |
+          npx vite preview --port 4173 &
+          for i in $(seq 1 20); do curl -fs localhost:4173/ > /dev/null && break; sleep 1; done
+          curl -fs localhost:4173/ | grep -q '<div id="root">'
