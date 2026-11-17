@@ -61,8 +61,8 @@ export interface Paper {
 
 /*
  * Edition URL formats were read off each publisher's own epaper site (November 2026).
- * Maharashtra Times and Loksatta could not be checked, and Punya Nagari's epaper
- * site had no editions up, so those three open the paper's epaper home.
+ * Maharashtra Times could not be checked, and Punya Nagari's epaper site had no
+ * editions up, so those two open the paper's epaper home.
  */
 export const PAPERS: Paper[] = [
   {
@@ -114,7 +114,18 @@ export const PAPERS: Paper[] = [
     url: 'https://epaper.loksatta.com/',
     founded: 1948,
     hq: 'mumbai',
-    cities: ['mumbai', 'pune', 'nagpur', 'sambhajinagar', 'ahilyanagar'],
+    cities: ['mumbai', 'pune', 'nagpur', 'nashik', 'sambhajinagar', 'ahilyanagar'],
+    // Issue URLs carry a per-issue ID that can't be predicted, so link each city's
+    // fixed "latest issue" page instead ("titleId:Name", from the epaper home page).
+    editions: {
+      mumbai: '92:Mumbai', pune: '643:Pune', nagpur: '8490:Nagpur', nashik: '5356:Nasik',
+      sambhajinagar: '28138:Chhatrapati-Sambhajinagar', ahilyanagar: '28139:Ahilyanagar',
+    },
+    editionUrl: (edition) => {
+      const [titleId, name] = edition.split(':')
+      return `https://epaper.loksatta.com/t/${titleId}/latest/${name}`
+    },
+    dated: false,
     hue: 200,
   },
   {

@@ -33,10 +33,20 @@ describe('resolveLink', () => {
     })
   })
 
+  it('opens Loksatta cities on their fixed latest-issue pages', () => {
+    expect(resolveLink(paper('loksatta'), 'pune', date)).toEqual({
+      href: 'https://epaper.loksatta.com/t/643/latest/Pune',
+      kind: 'latest',
+    })
+    expect(resolveLink(paper('loksatta'), 'sambhajinagar', date).href).toBe(
+      'https://epaper.loksatta.com/t/28138/latest/Chhatrapati-Sambhajinagar',
+    )
+  })
+
   it('falls back to the home page without a city or a known edition', () => {
     expect(resolveLink(paper('sakal'), null, date)).toEqual({ href: 'https://epaper.esakal.com/', kind: 'home' })
     expect(resolveLink(paper('pudhari'), 'satara', date).kind).toBe('home')
-    expect(resolveLink(paper('loksatta'), 'pune', date).kind).toBe('home')
+    expect(resolveLink(paper('maharashtra-times'), 'pune', date).kind).toBe('home')
   })
 
   it('only lists editions for cities the paper publishes in', () => {
