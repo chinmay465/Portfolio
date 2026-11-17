@@ -9,6 +9,7 @@ A bilingual (Marathi / English) hub for today's Marathi epapers. Pick a paper an
 - Today's date in Marathi, with Devanagari numerals and Marathi month and weekday names
 - **Read today:** a paper is marked as read when you open it, and the marks reset at midnight. A progress row in the header tracks what you've read
 - **Favourites:** pinned to the top and saved across visits
+- **City and date links:** pick a city and an issue date, and each paper opens straight to that city's edition for that date. Sakal, Lokmat and Pudhari support this. Tarun Bharat opens the city's latest issue. The others open their epaper home, because their sites didn't expose edition links
 - **City filter:** shows only the papers that publish an edition for your city
 - Search in either script (`लोक` or `lok` both work); press `/` to focus search
 - Light and dark themes, a Marathi/English UI toggle, and an installable PWA manifest
@@ -49,7 +50,7 @@ On every push and PR, CI (`.github/workflows/ci.yml`) runs the tests, builds the
 
 ## Adding a paper
 
-Add an entry to `PAPERS` in `src/data/papers.ts` with the official epaper URL, founding year, headquarters, edition cities and a hue for the masthead tint.
+Add an entry to `PAPERS` in `src/data/papers.ts` with the official epaper URL, founding year, headquarters, edition cities and a hue for the masthead tint. To link straight to editions, add `editions` (the publisher's code for each city) and `editionUrl` (how their URL is built). `src/lib/links.test.ts` checks each format.
 
 ## Note
 

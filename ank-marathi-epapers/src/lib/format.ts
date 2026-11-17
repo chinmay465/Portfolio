@@ -1,4 +1,4 @@
-import type { Lang } from '../data/papers'
+import type { IssueDate, Lang } from '../data/papers'
 
 const DEVANAGARI_DIGITS = ['०', '१', '२', '३', '४', '५', '६', '७', '८', '९']
 
@@ -30,6 +30,13 @@ export function formatDate(d: Date, lang: Lang): DateParts {
     }
   }
   return { weekday: DAYS_EN[d.getDay()], date: `${day} ${MONTHS_EN[d.getMonth()]} ${year}` }
+}
+
+const MONTHS_EN_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** "१७ नोव्हेंबर" / "17 Nov" */
+export function formatShortDate({ m, d }: IssueDate, lang: Lang): string {
+  return lang === 'mr' ? `${toDevanagari(d)} ${MONTHS_MR[m - 1]}` : `${d} ${MONTHS_EN_SHORT[m - 1]}`
 }
 
 /** Local calendar day key, e.g. 2026-11-17. Used to reset "read today" at midnight. */
