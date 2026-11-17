@@ -34,8 +34,18 @@ src/
 npm install
 npm run dev      # http://localhost:5173
 npm test
-npm run build    # static output in dist/ — deploy to Vercel, Netlify or GitHub Pages
+npm run build    # static output in dist/
 ```
+
+## Deploy
+
+**Render (free static site, redeploys on every push to `main`)**
+1. Go to [dashboard.render.com](https://dashboard.render.com) → **New → Blueprint** and pick the Portfolio repo.
+2. Render reads `render.yaml` at the repo root, builds this folder and serves `dist/`. After that, `git push` is the deploy.
+
+Static sites on Render don't sleep, so there's no cold start.
+
+On every push and PR, CI (`.github/workflows/ci.yml`) runs the tests, builds the app and smoke-tests the built page.
 
 ## Adding a paper
 
