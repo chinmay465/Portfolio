@@ -1,0 +1,9 @@
+{
+  "name": "Ank — Marathi epapers",
+  "short_name": "Ank",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#eef1ec",
+  "theme_color": "#16213d",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
