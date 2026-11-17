@@ -21,10 +21,20 @@ const strings = {
     mr: (n: string) => `${n} आवृत्त्या`,
     en: (n: string) => `${n} editions`,
   },
-  cityEdition: {
-    mr: (c: string) => `${c} आवृत्ती उपलब्ध`,
-    en: (c: string) => `${c} edition available`,
+  opensDated: {
+    mr: (c: string, d: string) => `${c} आवृत्ती, ${d}`,
+    en: (c: string, d: string) => `${c} edition, ${d}`,
   },
+  opensLatest: {
+    mr: (c: string) => `${c} आवृत्ती, ताजा अंक`,
+    en: (c: string) => `${c} edition, latest issue`,
+  },
+  pickOnSite: {
+    mr: (c: string) => `${c} आवृत्ती साइटवर निवडा`,
+    en: (c: string) => `Pick the ${c} edition on the site`,
+  },
+  issueDate: { mr: 'अंकाची तारीख', en: 'Issue date' },
+  today: { mr: 'आज', en: 'Today' },
   addFav: { mr: 'आवडत्यांमध्ये जोडा', en: 'Add to favourites' },
   removeFav: { mr: 'आवडत्यांमधून काढा', en: 'Remove from favourites' },
   readToday: { mr: 'आज वाचले', en: 'Read today' },

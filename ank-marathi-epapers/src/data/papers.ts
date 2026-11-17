@@ -4,7 +4,7 @@ export type Bilingual = Record<Lang, string>
 export type CityId =
   | 'mumbai' | 'thane' | 'pune' | 'nashik' | 'nagpur' | 'kolhapur'
   | 'sambhajinagar' | 'ahilyanagar' | 'solapur' | 'satara' | 'sangli'
-  | 'ratnagiri' | 'sindhudurg' | 'jalgaon' | 'akola' | 'nanded'
+  | 'ratnagiri' | 'sindhudurg' | 'jalgaon' | 'akola' | 'nanded' | 'dhule'
   | 'belagavi' | 'goa'
 
 export const CITIES: Record<CityId, Bilingual> = {
@@ -24,23 +24,46 @@ export const CITIES: Record<CityId, Bilingual> = {
   jalgaon: { mr: 'जळगाव', en: 'Jalgaon' },
   akola: { mr: 'अकोला', en: 'Akola' },
   nanded: { mr: 'नांदेड', en: 'Nanded' },
+  dhule: { mr: 'धुळे', en: 'Dhule' },
   belagavi: { mr: 'बेळगाव', en: 'Belagavi' },
   goa: { mr: 'गोवा', en: 'Goa' },
 }
 
+/** Calendar date in the reader's timezone, e.g. { y: 2026, m: 11, d: 17 }. */
+export interface IssueDate {
+  y: number
+  m: number
+  d: number
+}
+
+const pad = (n: number) => String(n).padStart(2, '0')
+const isoDate = ({ y, m, d }: IssueDate) => `${y}-${pad(m)}-${pad(d)}`
+const compactDate = ({ y, m, d }: IssueDate) => `${y}${pad(m)}${pad(d)}`
+
 export interface Paper {
   id: string
   name: Bilingual
-  /** Official ePaper home. The publisher's own viewer handles editions, dates and sign-in. */
+  /** Official ePaper home. Used when no city is picked or a city has no known edition link. */
   url: string
   founded: number
   hq: CityId
   /** Cities the paper publishes editions from (used for the city filter). */
   cities: CityId[]
+  /** Publisher's own identifier for each city's edition, as it appears in their URLs. */
+  editions?: Partial<Record<CityId, string>>
+  /** Builds the publisher's URL for one edition. */
+  editionUrl?: (edition: string, date: IssueDate) => string
+  /** False when the publisher's edition URL has no date in it (it always opens the latest issue). */
+  dated?: boolean
   /** Hue (0–360) used for the masthead tint. Not a brand colour. */
   hue: number
 }
 
+/*
+ * Edition URL formats were read off each publisher's own epaper site (November 2026).
+ * Maharashtra Times and Loksatta could not be checked, and Punya Nagari's epaper
+ * site had no editions up, so those three open the paper's epaper home.
+ */
 export const PAPERS: Paper[] = [
   {
     id: 'sakal',
@@ -48,7 +71,15 @@ export const PAPERS: Paper[] = [
     url: 'https://epaper.esakal.com/',
     founded: 1932,
     hq: 'pune',
-    cities: ['pune', 'mumbai', 'kolhapur', 'nashik', 'nagpur', 'solapur', 'satara', 'sangli', 'ahilyanagar', 'sambhajinagar', 'jalgaon', 'goa'],
+    cities: ['pune', 'mumbai', 'kolhapur', 'nashik', 'nagpur', 'solapur', 'satara', 'sangli', 'ahilyanagar', 'sambhajinagar', 'jalgaon', 'akola', 'nanded', 'dhule', 'ratnagiri', 'sindhudurg', 'belagavi'],
+    editions: {
+      pune: 'Pune', mumbai: 'Mumbai', kolhapur: 'Kolhapur', nashik: 'Nashik', nagpur: 'Nagpur',
+      solapur: 'Solapur', satara: 'Satara', sangli: 'Sangli', ahilyanagar: 'Nagar',
+      sambhajinagar: 'Chh_Sambhajinagar', jalgaon: 'Jalgaon', akola: 'Akola', nanded: 'Nanded',
+      dhule: 'Dhule', ratnagiri: 'Ratnagiri', sindhudurg: 'Sindhudurg', belagavi: 'Belgaum',
+    },
+    editionUrl: (location, date) =>
+      `https://epaper.esakal.com/smartepaper/ui/home.aspx?q=${location}/Main/${isoDate(date)}`,
     hue: 18,
   },
   {
@@ -57,7 +88,15 @@ export const PAPERS: Paper[] = [
     url: 'https://epaper.lokmat.com/',
     founded: 1971,
     hq: 'nagpur',
-    cities: ['nagpur', 'mumbai', 'pune', 'nashik', 'kolhapur', 'sambhajinagar', 'jalgaon', 'ahilyanagar', 'solapur', 'akola', 'nanded', 'goa'],
+    cities: ['nagpur', 'mumbai', 'pune', 'nashik', 'kolhapur', 'sambhajinagar', 'jalgaon', 'ahilyanagar', 'solapur', 'akola', 'goa'],
+    editions: {
+      mumbai: 'Mumbai Main', pune: 'Pune Main', nagpur: 'Nagpur Main',
+      sambhajinagar: 'Chhatrapati Sambhajinagar Main', kolhapur: 'Kolhapur Main', nashik: 'Nashik Main',
+      jalgaon: 'Jalgaon Main', akola: 'Akola Main', solapur: 'Solapur Main',
+      ahilyanagar: 'Ahilyanagar Main', goa: 'Goa Main',
+    },
+    editionUrl: (edition, date) =>
+      `https://epaper.lokmat.com/main-editions/${encodeURIComponent(edition)}/${isoDate(date)}/1`,
     hue: 352,
   },
   {
@@ -84,13 +123,22 @@ export const PAPERS: Paper[] = [
     url: 'https://epaper.pudhari.news/',
     founded: 1937,
     hq: 'kolhapur',
-    cities: ['kolhapur', 'mumbai', 'pune', 'ahilyanagar', 'belagavi', 'sangli', 'satara', 'solapur', 'ratnagiri', 'sindhudurg', 'goa'],
+    cities: ['kolhapur', 'mumbai', 'thane', 'pune', 'ahilyanagar', 'belagavi', 'sangli', 'satara', 'solapur', 'ratnagiri', 'sindhudurg', 'goa', 'nashik', 'sambhajinagar', 'nanded'],
+    // "Name:CODE". Only the codes read off the site are listed; other cities open the home page.
+    editions: {
+      pune: 'Pune:PUN', kolhapur: 'Kolhapur:KOL', mumbai: 'Mumbai:MUM',
+      thane: 'Thane:THE', ahilyanagar: 'Ahilyanagar:AHM',
+    },
+    editionUrl: (edition, date) => {
+      const [name, code] = edition.split(':')
+      return `https://epaper.pudhari.news/edition/${name}/PUDHARI_${code}/PUDHARI_${code}_${compactDate(date)}/page/1`
+    },
     hue: 30,
   },
   {
     id: 'punya-nagari',
     name: { mr: 'पुण्यनगरी', en: 'Punya Nagari' },
-    url: 'https://www.epunyanagari.com/',
+    url: 'https://epaper.punyanagari.in/',
     founded: 1999,
     hq: 'mumbai',
     cities: ['mumbai', 'thane', 'pune', 'nashik', 'nanded', 'ahilyanagar', 'nagpur'],
@@ -102,7 +150,13 @@ export const PAPERS: Paper[] = [
     url: 'https://epaper.tarunbharat.com/',
     founded: 1919,
     hq: 'belagavi',
-    cities: ['belagavi', 'kolhapur', 'goa', 'ratnagiri', 'sangli', 'satara'],
+    cities: ['belagavi', 'kolhapur', 'goa', 'ratnagiri', 'sangli', 'satara', 'sindhudurg', 'mumbai', 'solapur'],
+    editions: {
+      belagavi: '503', goa: '505', sindhudurg: '28240', kolhapur: '31522', sangli: '31523',
+      satara: '31526', ratnagiri: '31525', mumbai: '31496', solapur: '31527',
+    },
+    editionUrl: (titleId) => `https://epaper.tarunbharat.com/t/${titleId}`,
+    dated: false,
     hue: 160,
   },
 ]

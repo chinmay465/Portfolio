@@ -1,12 +1,14 @@
 import type { CSSProperties } from 'react'
-import { CITIES, type CityId, type Lang, type Paper } from '../data/papers'
+import { CITIES, type CityId, type IssueDate, type Lang, type Paper } from '../data/papers'
 import { t } from '../i18n'
-import { num } from '../lib/format'
+import { formatShortDate, num } from '../lib/format'
+import { resolveLink } from '../lib/links'
 
 interface Props {
   paper: Paper
   lang: Lang
   city: CityId | null
+  date: IssueDate
   isFav: boolean
   isRead: boolean
   onToggleFav: () => void
@@ -14,9 +16,17 @@ interface Props {
   onUnread: () => void
 }
 
-export function PaperCard({ paper, lang, city, isFav, isRead, onToggleFav, onOpen, onUnread }: Props) {
+export function PaperCard({ paper, lang, city, date, isFav, isRead, onToggleFav, onOpen, onUnread }: Props) {
   const style = { '--hue': paper.hue } as CSSProperties
   const other: Lang = lang === 'mr' ? 'en' : 'mr'
+  const link = resolveLink(paper, city, date)
+  const cityName = city ? CITIES[city][lang] : ''
+
+  let linkNote: string
+  if (link.kind === 'dated') linkNote = t('opensDated', lang)(cityName, formatShortDate(date, lang))
+  else if (link.kind === 'latest') linkNote = t('opensLatest', lang)(cityName)
+  else if (city) linkNote = t('pickOnSite', lang)(cityName)
+  else linkNote = t('editions', lang)(num(paper.cities.length, lang))
 
   return (
     <article className={`paper${isRead ? ' is-read' : ''}`} style={style}>
@@ -28,7 +38,7 @@ export function PaperCard({ paper, lang, city, isFav, isRead, onToggleFav, onOpe
         <h3 className="paper__name">
           <a
             className="paper__link"
-            href={paper.url}
+            href={link.href}
             target="_blank"
             rel="noopener noreferrer"
             onClick={onOpen}
@@ -48,9 +58,7 @@ export function PaperCard({ paper, lang, city, isFav, isRead, onToggleFav, onOpe
             <dd>{CITIES[paper.hq][lang]}</dd>
           </div>
         </dl>
-        <p className="paper__editions">
-          {city ? t('cityEdition', lang)(CITIES[city][lang]) : t('editions', lang)(num(paper.cities.length, lang))}
-        </p>
+        <p className={`paper__editions${city && link.kind === 'home' ? ' paper__editions--fallback' : ''}`}>{linkNote}</p>
 
         <span className="paper__cta" aria-hidden="true">{t('open', lang)}</span>
       </div>
