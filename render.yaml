@@ -1,9 +1,24 @@
-# Render Blueprint: New > Blueprint > pick this repo. Redeploys on every push to main.
+# Render Blueprint: New > Blueprint > pick this repo. One static site per project folder; each redeploys on every push to main.
 services:
   - type: web
     name: ank-marathi-epapers
     runtime: static
     rootDir: ank-marathi-epapers
+    branch: main
+    autoDeploy: true
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+    headers:
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+  - type: web
+    name: ekatra-streaming-hub
+    runtime: static
+    rootDir: ekatra-streaming-hub
     branch: main
     autoDeploy: true
     buildCommand: npm ci && npm run build
