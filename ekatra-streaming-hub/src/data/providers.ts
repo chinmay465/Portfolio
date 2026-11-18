@@ -8,7 +8,7 @@ export interface Provider {
   /** Badge colour. */
   color: string
   home: string
-  /** Builds a search URL on the service, when the service has one we can link to. */
+  /** Builds a search URL on the service, for services whose search link works when opened from outside. */
   search?: (query: string) => string
   /** Matches the provider's name in TMDB's watch-provider list for India. */
   tmdbName: RegExp
@@ -21,7 +21,6 @@ export const PROVIDERS: Provider[] = [
     short: 'NETFLIX',
     color: '#d81f26',
     home: 'https://www.netflix.com/',
-    search: (q) => `https://www.netflix.com/search?q=${encodeURIComponent(q)}`,
     tmdbName: /^netflix$/i,
   },
   {

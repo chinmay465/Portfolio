@@ -100,3 +100,52 @@ export const DEMO_CATALOG: Title[] = [
   t('rangbaaz', 'Rangbaaz', 'series', 2018, ['Crime', 'Action'], 'hi', 'zee5', 0.45, ['gangster', 'uttar-pradesh', 'true-story'], 'A Gorakhpur student turns into one of UP’s most feared gangsters.'),
   t('the-broken-news', 'The Broken News', 'series', 2022, ['Drama'], 'hi', 'zee5', 0.4, ['journalism', 'mumbai'], 'Two rival news channels, one ethical and one loud, in a fight for ratings.'),
 ]
+
+/**
+ * Title pages, checked by hand.
+ * Netflix: netflix.com/title/<id> opens the title (and the app on phones).
+ * JioHotstar: its title URLs need a content id we can't look up from outside India, so these point to
+ * JustWatch India's page for the show, whose "Watch now" button opens the exact title in JioHotstar.
+ */
+const NETFLIX_IDS: Record<string, string> = {
+  'sacred-games': '80115328',
+  'delhi-crime': '81076756',
+  'kota-factory': '81249783',
+  jamtara: '81183491',
+  kohrra: '81443393',
+  heeramandi: '81122198',
+  scoop: '81417638',
+  'jaane-jaan': '81586376',
+  'stranger-things': '80057281',
+  'money-heist': '80192098',
+  'squid-game': '81040344',
+  dark: '80100172',
+  'the-crown': '80025678',
+  wednesday: '81231974',
+  narcos: '80025172',
+  mindhunter: '80114855',
+  'black-mirror': '70264888',
+  'glass-onion': '81458416',
+  'the-irishman': '80175798',
+}
+
+const JUSTWATCH_IN: Record<string, string> = {
+  'special-ops': 'tv-show/special-ops',
+  aarya: 'tv-show/aarya',
+  'criminal-justice': 'tv-show/criminal-justice-2019',
+  'the-night-manager-in': 'tv-show/the-night-manager-2023',
+  asur: 'tv-show/asur',
+  'house-of-the-dragon': 'tv-show/house-of-the-dragon',
+  'the-last-of-us': 'tv-show/the-last-of-us',
+  succession: 'tv-show/succession',
+  loki: 'tv-show/loki',
+  'the-mandalorian': 'tv-show/the-mandalorian',
+  'the-bear': 'tv-show/the-bear',
+  shogun: 'tv-show/shogun-2024',
+}
+
+for (const t of DEMO_CATALOG) {
+  const slug = t.id.slice('demo:'.length)
+  if (NETFLIX_IDS[slug]) t.links = { netflix: `https://www.netflix.com/title/${NETFLIX_IDS[slug]}` }
+  if (JUSTWATCH_IN[slug]) t.links = { jiohotstar: `https://www.justwatch.com/in/${JUSTWATCH_IN[slug]}` }
+}
