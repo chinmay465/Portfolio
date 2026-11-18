@@ -42,6 +42,8 @@ export interface Title {
   poster?: string
   /** TMDB's "where to watch" page for India (TMDB only). */
   watchLink?: string
+  /** Verified per-service title pages (demo catalog only). */
+  links?: Partial<Record<ProviderId, string>>
 }
 
 /** What the user has told us. Keys are Title ids. */
