@@ -702,6 +702,12 @@ h3 {
   filter: brightness(1.1);
 }
 
+.play-btn__via {
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0.8;
+}
+
 .sheet__actions {
   display: flex;
   flex-wrap: wrap;

@@ -68,5 +68,5 @@ Render deploys it from the repo-root `render.yaml`, alongside Ank, as a free sta
 
 - Ekatra doesn't host, embed or play any content.
 - The demo catalog lists each service's own originals, since licensed titles move between services often. Live mode uses current TMDB/JustWatch availability for India.
-- Netflix and Prime Video links search for the exact title. JioHotstar, SonyLIV and ZEE5 open their home pages, and "All streaming options" goes to TMDB's watch page (live mode) or a JustWatch search (demo mode).
+- **Opening a title:** Netflix titles open on their own `netflix.com/title/<id>` page, which opens the app on phones. JioHotstar's title links need a content id that can't be looked up from outside India, so those buttons go to the show's JustWatch India page, whose "Watch now" button opens the exact title in JioHotstar. Prime Video uses its own search. Everything else, and every live-mode title without a known page, goes to TMDB's watch page or a JustWatch search, both of which link straight to the title on each service.
 - This product uses the TMDB API but is not endorsed or certified by TMDB.
