@@ -70,6 +70,7 @@ export function TitleSheet({ title, pool, services, signals, tmdbKey, onReact, o
             style={{ '--tint': PROVIDER_BY_ID[l.provider].color } as React.CSSProperties}
           >
             <span aria-hidden="true">▶</span> {l.label}
+            {l.via && <small className="play-btn__via">via {l.via}</small>}
           </a>
         ))}
         <a className="text-link" href={whereToWatch(full)} target="_blank" rel="noopener noreferrer">
