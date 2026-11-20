@@ -142,7 +142,7 @@ export default function App() {
           <option value="">auto</option>
           {(config?.engines ?? []).map((en) => (
             <option key={en} value={en}>
-              {en}
+              {en === 'google' ? 'google (via Startpage)' : en}
             </option>
           ))}
         </select>

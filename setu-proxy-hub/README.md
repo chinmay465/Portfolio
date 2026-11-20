@@ -93,10 +93,15 @@ Response headers `X-Setu-Proxy`, `X-Setu-Exit-Ip` and `X-Setu-Final-Url` say whi
 proxy served it. `format=json` returns `{ meta, body }`, and `format=reader` returns
 `{ meta, page: { title, blocks, links } }`.
 
-**Search API**: `GET /api/search?q=…&engine=duckduckgo|ddg-lite|bing|yahoo|mojeek` returns
+**Search API**: `GET /api/search?q=…&engine=google|duckduckgo|ddg-lite|bing|yahoo|mojeek` returns
 `{ engine, results: [{ title, url, snippet }], proxy, exitIp }`. Search engines bot-check
 free proxy IPs, so each engine tries up to 5 different proxies. Without `engine`, all
 engines run in parallel and the first one that returns results wins.
+
+`google` returns Google's results via Startpage. Google's own result pages have needed
+JavaScript since January 2025, so they can't be fetched as plain HTML, and Google's Custom
+Search JSON API is closed to new users. For google.com itself, open it in a real browser
+through the local tunnel (VPN-like mode).
 
 **Pool**: `GET /api/pool`, `POST /api/pool/refresh`, `GET /api/tunnel`.
 
