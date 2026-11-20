@@ -1,7 +1,7 @@
 import type { IncomingHttpHeaders } from 'node:http'
 import { checkTarget, GuardError } from './guard.ts'
 import type { GuardOptions } from './guard.ts'
-import { requestViaProxy } from './httpClient.ts'
+import { isInterception, requestViaProxy } from './httpClient.ts'
 import type { ProxyPool } from './pool.ts'
 
 export const BROWSER_UA =
@@ -18,6 +18,8 @@ export interface ProxiedFetchOptions {
   maxRedirects?: number
   /** Keep the same proxy per key (e.g. a hostname) so a site sees one IP. */
   stickyKey?: string
+  /** Proxy ids not to use (already tried by the caller). Ids used here are added to it. */
+  exclude?: Set<string>
   guard: GuardOptions
 }
 
@@ -45,7 +47,8 @@ const RETRY_STATUS = new Set([403, 407, 429, 502, 503, 504])
 export async function proxiedFetch(pool: ProxyPool, rawUrl: string, opts: ProxiedFetchOptions): Promise<ProxiedResponse> {
   const attempts = opts.attempts ?? 4
   const maxRedirects = opts.maxRedirects ?? 5
-  const tried = new Set<string>()
+  const tried = opts.exclude ?? new Set<string>()
+  const triedBefore = tried.size
   let lastError: Error | null = null
   let lastResponse: ProxiedResponse | null = null
 
@@ -110,13 +113,14 @@ export async function proxiedFetch(pool: ProxyPool, rawUrl: string, opts: Proxie
       // A guard failure on a redirect is the caller's problem, not the proxy's.
       if (err instanceof GuardError) throw err
       lastError = err instanceof Error ? err : new Error(String(err))
-      pool.reportFailure(proxy.id, true)
+      if (isInterception(err)) pool.ban(proxy.id)
+      else pool.reportFailure(proxy.id, true)
     }
   }
 
   if (lastResponse) return lastResponse
-  if (!tried.size) {
+  if (tried.size === triedBefore) {
     throw new NoProxyError(pool.refreshing ? 'Proxy pool is still warming up — try again in a few seconds.' : 'No working proxies in the pool. Refresh it.')
   }
-  throw new Error(`All ${tried.size} proxies failed. Last error: ${lastError?.message ?? 'unknown'}`)
+  throw new Error(`All ${tried.size - triedBefore} proxies failed. Last error: ${lastError?.message ?? 'unknown'}`)
 }

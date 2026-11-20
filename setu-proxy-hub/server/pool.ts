@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { requestViaProxy } from './httpClient.ts'
+import { isInterception, requestViaProxy } from './httpClient.ts'
 import { fetchSource } from './sources.ts'
 import type { ProxyAddress, ProxySource } from './sources.ts'
 
@@ -60,6 +60,8 @@ export interface PoolSnapshot {
   nextRefreshAt: number | null
   sources: SourceStat[]
   alive: number
+  /** Proxies caught intercepting HTTPS (bad certificate) — never used again. */
+  banned: number
   proxies: Array<Omit<PoolEntry, 'host' | 'port'> & { address: string }>
 }
 
@@ -83,6 +85,7 @@ export const score = (e: PoolEntry) => e.latencyMs * (1 + (2 * e.failures) / (e.
 export class ProxyPool extends EventEmitter {
   readonly opts: PoolOptions
   private entries = new Map<string, PoolEntry>()
+  private banned = new Set<string>()
   private stickies = new Map<string, { id: string; until: number }>()
   private refreshPromise: Promise<void> | null = null
   private timer: ReturnType<typeof setInterval> | null = null
@@ -188,7 +191,7 @@ export class ProxyPool extends EventEmitter {
     // Re-check what we already have, then try fresh candidates. Proxies listed
     // by several sources go first — they tend to be the ones still alive.
     const known = [...this.entries.values()].filter((e) => !e.pinned).map((e) => ({ addr: { host: e.host, port: e.port }, sources: e.sources }))
-    const fresh = shuffle([...found.values()].filter((f) => !this.entries.has(idOf(f.addr))))
+    const fresh = shuffle([...found.values()].filter((f) => !this.entries.has(idOf(f.addr)) && !this.banned.has(idOf(f.addr))))
       .sort((a, b) => b.sources.length - a.sources.length)
       .slice(0, this.opts.maxCandidates)
     const queue = [...known, ...fresh]
@@ -201,6 +204,7 @@ export class ProxyPool extends EventEmitter {
     const worker = async () => {
       while (next < queue.length && alive.size < this.opts.targetSize) {
         const item = queue[next++]
+        if (this.banned.has(idOf(item.addr))) continue
         const checked = await this.check(item.addr)
         this.progress.checked++
         if (checked) {
@@ -240,7 +244,8 @@ export class ProxyPool extends EventEmitter {
       if (!/^[\d.]+$|^[\da-f:]+$/i.test(ip)) return null
       if (this.directIp && ip === this.directIp) return null // transparent proxy: leaks our IP
       return { latencyMs: Date.now() - t0, exitIp: ip }
-    } catch {
+    } catch (err) {
+      if (isInterception(err)) this.banned.add(idOf(addr))
       return null
     }
   }
@@ -299,6 +304,23 @@ export class ProxyPool extends EventEmitter {
     }
   }
 
+  /**
+   * Permanently drop a proxy that tampered with traffic (e.g. served its own
+   * TLS certificate). Pinned proxies are left alone — they're yours.
+   */
+  ban(id: string): void {
+    const e = this.entries.get(id)
+    if (e?.pinned) return
+    this.banned.add(id)
+    this.entries.delete(id)
+    this.emit('update')
+    this.maybeRefill()
+  }
+
+  isBanned(id: string): boolean {
+    return this.banned.has(id)
+  }
+
   private maybeRefill(): void {
     if (!this.refreshing && this.entries.size < this.opts.minAlive && this.opts.sources.length) void this.refresh()
   }
@@ -315,6 +337,7 @@ export class ProxyPool extends EventEmitter {
       nextRefreshAt: this.timer && this.lastRefreshAt ? this.lastRefreshAt + this.opts.refreshMs : null,
       sources: this.sourceStats,
       alive: this.entries.size,
+      banned: this.banned.size,
       proxies,
     }
   }
