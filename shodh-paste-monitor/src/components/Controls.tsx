@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { KeyboardEvent } from 'react'
+import { getCapabilities } from '../lib/api.ts'
 import type { Mode, SourceSpec, StartBody } from '../lib/types.ts'
 
 interface Props {
@@ -22,7 +23,15 @@ export default function Controls({ running, notice, onStart, onStop }: Props) {
   const [htmlArchive, setHtmlArchive] = useState('')
   const [htmlLink, setHtmlLink] = useState('')
   const [htmlContent, setHtmlContent] = useState('')
+  const [htmlViaSetu, setHtmlViaSetu] = useState(false)
+  const [setuAvailable, setSetuAvailable] = useState(false)
   const [localNotice, setLocalNotice] = useState('')
+
+  useEffect(() => {
+    getCapabilities()
+      .then((c) => setSetuAvailable(c.setu))
+      .catch(() => setSetuAvailable(false))
+  }, [])
 
   function addKeyword(raw: string) {
     const parts = raw.split(',').map((s) => s.trim()).filter(Boolean)
@@ -58,6 +67,7 @@ export default function Controls({ running, notice, onStart, onStop }: Props) {
           archiveUrl: htmlArchive.trim(),
           linkSelector: htmlLink.trim(),
           contentSelector: htmlContent.trim() || 'body',
+          viaSetu: htmlViaSetu,
         },
       })
     }
@@ -196,6 +206,20 @@ export default function Controls({ running, notice, onStart, onStop }: Props) {
           <span>Content selector</span>
           <input type="text" placeholder="pre, body" value={htmlContent} disabled={running} onChange={(e) => setHtmlContent(e.target.value)} />
         </label>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={htmlViaSetu}
+            disabled={running || !setuAvailable}
+            onChange={(e) => setHtmlViaSetu(e.target.checked)}
+          />
+          Route through Setu proxies
+        </label>
+        <small>
+          {setuAvailable
+            ? 'Fetches archive and item pages from rotating free proxies instead of this server’s IP.'
+            : 'Set SETU_URL (and SETU_TOKEN) on the Shodh server to enable.'}
+        </small>
         <small>Only use on sites whose ToS and robots.txt permit it.</small>
       </details>
 
