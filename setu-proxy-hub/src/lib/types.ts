@@ -27,6 +27,7 @@ export interface PoolSnapshot {
   nextRefreshAt: number | null
   sources: Array<{ name: string; count: number; error: string | null }>
   alive: number
+  banned: number
   proxies: ProxyRow[]
 }
 

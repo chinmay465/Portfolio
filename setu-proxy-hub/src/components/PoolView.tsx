@@ -33,6 +33,7 @@ export default function PoolView({ pool, onRefreshed }: Props) {
         <dl className="stats">
           <div><dt>Live</dt><dd>{pool.alive}</dd></div>
           <div><dt>Last check</dt><dd>{ago(pool.lastRefreshAt)}</dd></div>
+          <div title="Caught intercepting HTTPS with a fake certificate — never used again"><dt>Banned</dt><dd>{pool.banned}</dd></div>
           <div><dt>Progress</dt><dd>{pool.refreshing ? `${pool.progress.checked}/${pool.progress.total}` : 'idle'}</dd></div>
         </dl>
         {err && <p className="error">{err}</p>}
@@ -52,7 +53,7 @@ export default function PoolView({ pool, onRefreshed }: Props) {
         </table>
         <p className="muted small">
           Each listed proxy must tunnel HTTPS to a judge, return a valid response and hide your IP before it joins the pool.
-          Typically only 2–10% of a free list passes. Proxies that fail 3 times in a row are dropped; the pool re-checks every 15 minutes.
+          Typically only 2–10% of a free list passes. Proxies that fail 3 times in a row are dropped, any proxy caught showing a fake HTTPS certificate is banned for good, and the pool re-checks every 15 minutes.
         </p>
       </section>
 
