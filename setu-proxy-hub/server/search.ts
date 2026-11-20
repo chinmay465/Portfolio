@@ -3,8 +3,8 @@ import { proxiedFetch } from './fetcher.ts'
 import type { GuardOptions } from './guard.ts'
 import type { ProxyPool } from './pool.ts'
 
-export type Engine = 'duckduckgo' | 'ddg-lite' | 'bing' | 'yahoo' | 'mojeek'
-export const ENGINES: Engine[] = ['duckduckgo', 'ddg-lite', 'bing', 'yahoo', 'mojeek']
+export type Engine = 'google' | 'duckduckgo' | 'ddg-lite' | 'bing' | 'yahoo' | 'mojeek'
+export const ENGINES: Engine[] = ['google', 'duckduckgo', 'ddg-lite', 'bing', 'yahoo', 'mojeek']
 
 /** Free-proxy IPs get bot-checked a lot, so each engine gets several different proxies. */
 const PROXIES_PER_ENGINE = 5
@@ -127,6 +127,29 @@ export function parseYahoo(html: string): SearchResult[] {
   return out
 }
 
+/**
+ * Google results, served by Startpage. Google's own result pages need
+ * JavaScript (since Jan 2025), so they can't be fetched as HTML; Startpage
+ * returns Google's results as plain HTML. Covers both its current and older markup.
+ */
+export function parseStartpage(html: string): SearchResult[] {
+  const $ = cheerio.load(html)
+  const out: SearchResult[] = []
+  const seen = new Set<string>()
+  $('.w-gl__result, div.result').each((_, el) => {
+    const r = $(el)
+    const a = r.find('a.w-gl__result-title, a.result-title, a.result-link').first()
+    const url = a.attr('href') ?? ''
+    const host = URL.parse(url)?.hostname ?? ''
+    if (!isWeb(url) || !host || /(^|\.)startpage\.com$/.test(host) || seen.has(url)) return
+    seen.add(url)
+    const title = a.find('h2, h3').first().text() || a.text()
+    const snippet = r.find('.w-gl__description, p.description').first().text()
+    out.push({ title: squash(title), url, snippet: squash(snippet) })
+  })
+  return out
+}
+
 export function parseMojeek(html: string): SearchResult[] {
   const $ = cheerio.load(html)
   const out: SearchResult[] = []
@@ -146,6 +169,10 @@ interface EngineSpec {
 }
 
 const SPECS: Record<Engine, EngineSpec> = {
+  google: {
+    request: (q) => ({ url: `https://www.startpage.com/sp/search?query=${encodeURIComponent(q)}&cat=web&language=english&lui=english`, method: 'GET' }),
+    parse: parseStartpage,
+  },
   // DuckDuckGo's HTML endpoints expect a form POST; GETs are bot-checked (HTTP 202) much more often.
   duckduckgo: {
     request: (q) => ({ url: 'https://html.duckduckgo.com/html/', method: 'POST', body: `q=${encodeURIComponent(q)}&kl=in-en`, headers: { Referer: 'https://html.duckduckgo.com/' } }),

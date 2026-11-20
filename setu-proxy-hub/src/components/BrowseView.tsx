@@ -41,7 +41,7 @@ export default function BrowseView({ state, onOpen }: Props) {
     const d = state.data
     return (
       <section className="panel">
-        <Via proxy={d.proxy} exitIp={d.exitIp} ms={d.ms} extra={`${d.engine}${d.tried.length ? ` (after ${d.tried.map((t) => t.engine).join(', ')} failed)` : ''}`} />
+        <Via proxy={d.proxy} exitIp={d.exitIp} ms={d.ms} extra={`${d.engine === 'google' ? 'Google results via Startpage' : d.engine}${d.tried.length ? ` (after ${d.tried.map((t) => t.engine).join(', ')} failed)` : ''}`} />
         <ol className="results">
           {d.results.map((r) => (
             <li key={r.url}>
