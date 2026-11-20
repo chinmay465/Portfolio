@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { checkTarget, GuardError } from './guard.ts'
 import { toReader } from './reader.ts'
-import { parseBing, parseDdgLite, parseDuckDuckGo, parseMojeek, parseYahoo, unwrapBing, unwrapYahoo } from './search.ts'
+import { parseBing, parseDdgLite, parseStartpage, parseDuckDuckGo, parseMojeek, parseYahoo, unwrapBing, unwrapYahoo } from './search.ts'
 import { parseProxyList, sourcesFromEnv } from './sources.ts'
 
 const strict = { allowHttp: false, allowPrivate: false }
@@ -99,6 +99,16 @@ describe('more engines', () => {
       { title: 'TypeScript Documentation', url: 'https://www.typescriptlang.org/docs/', snippet: 'Find TypeScript starter projects.' },
     ])
     expect(unwrapYahoo('https://search.yahoo.com/search?p=x')).toBeNull()
+  })
+
+  it('parses Google results from Startpage (current and older markup)', () => {
+    const current = `<div class="result css-1"><a class="result-title result-link css-2" href="https://react.dev/">
+      <h2 class="wgl-title css-3">React</h2></a><p class="description css-4">The library for web and   native UIs.</p></div>
+      <div class="result"><a class="result-link" href="https://www.startpage.com/do/settings">Settings</a></div>`
+    const older = `<div class="w-gl__result"><a class="w-gl__result-title" href="https://vitejs.dev/"><h3>Vite</h3></a>
+      <p class="w-gl__description">Next generation frontend tooling.</p></div>`
+    expect(parseStartpage(current)).toEqual([{ title: 'React', url: 'https://react.dev/', snippet: 'The library for web and native UIs.' }])
+    expect(parseStartpage(older)).toEqual([{ title: 'Vite', url: 'https://vitejs.dev/', snippet: 'Next generation frontend tooling.' }])
   })
 
   it('parses DuckDuckGo Lite table rows', () => {
