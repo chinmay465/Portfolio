@@ -48,3 +48,28 @@ jobs:
           npx vite preview --port 4174 &
           for i in $(seq 1 20); do curl -fs localhost:4174/ > /dev/null && break; sleep 1; done
           curl -fs localhost:4174/ | grep -q '<div id="root">'
+
+  shodh:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: shodh-paste-monitor
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: shodh-paste-monitor/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - name: Smoke test
+        run: |
+          PORT=4175 npm start &
+          for i in $(seq 1 30); do curl -fs localhost:4175/ > /dev/null && break; sleep 1; done
+          curl -fs localhost:4175/ | grep -q '<div id="root">'
+          curl -fs -X POST localhost:4175/api/start -H 'Content-Type: application/json' \
+            -d '{"keywords":["acme"],"sources":[{"type":"mock"}],"intervalMs":2000}' | grep -q '"ok":true'
+          curl -fs -X POST localhost:4175/api/stop | grep -q '"ok":true'
