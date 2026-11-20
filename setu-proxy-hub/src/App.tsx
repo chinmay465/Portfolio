@@ -140,7 +140,7 @@ export default function App() {
         />
         <select value={engine} onChange={(e) => setEngine(e.target.value)} aria-label="Search engine">
           <option value="">auto</option>
-          {(config?.engines ?? ['duckduckgo', 'mojeek']).map((en) => (
+          {(config?.engines ?? []).map((en) => (
             <option key={en} value={en}>
               {en}
             </option>
