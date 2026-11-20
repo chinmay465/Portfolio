@@ -8,6 +8,9 @@ import type { Paste, Provider } from '../monitor.ts'
 // access error, which we surface instead of silently failing.
 //
 // Docs: https://pastebin.com/doc_scraping_api
+//
+// Never routed through Setu: the API only answers your whitelisted IP, so a
+// rotating proxy would just get access errors.
 
 const SCRAPE_URL = 'https://scrape.pastebin.com/api_scraping.php'
 const ITEM_URL = 'https://scrape.pastebin.com/api_scrape_item.php'

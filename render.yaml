@@ -45,3 +45,31 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
+      # Lets the "Route through Setu" switch use the Setu service below. Public
+      # URL on purpose: free services can't take private-network traffic. If
+      # Render gives Setu a different subdomain, update this value.
+      - key: SETU_URL
+        value: https://setu-proxy-hub.onrender.com
+      - key: SETU_TOKEN
+        fromService:
+          type: web
+          name: setu-proxy-hub
+          envVarKey: SETU_TOKEN
+  # Setu: free-proxy pool + fetch/search API. On Render the relay only runs with
+  # SETU_TOKEN (generated here), and the local VPN-like tunnel is off — run Setu
+  # on your own machine for that.
+  - type: web
+    name: setu-proxy-hub
+    runtime: node
+    rootDir: setu-proxy-hub
+    branch: main
+    autoDeploy: true
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: SETU_TOKEN
+        generateValue: true
