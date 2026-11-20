@@ -1,5 +1,6 @@
 import * as cheerio from 'cheerio'
 import type { Paste, Provider } from '../monitor.ts'
+import { pickFetcher } from '../net.ts'
 
 // Generic provider for any paste/forum site that publishes a public "archive"
 // or "recent" page of links. You supply CSS selectors; it fetches the archive,
@@ -16,6 +17,8 @@ export interface HtmlArchiveOptions {
   contentSelector?: string
   maxItemsPerPoll?: number
   userAgent?: string
+  /** Fetch through the Setu free-proxy hub (needs SETU_URL on the server). */
+  viaSetu?: boolean
 }
 
 export function createHtmlArchiveProvider(opts: HtmlArchiveOptions): Provider {
@@ -27,19 +30,21 @@ export function createHtmlArchiveProvider(opts: HtmlArchiveOptions): Provider {
     contentSelector = 'body',
     maxItemsPerPoll = 20,
     userAgent = 'shodh-paste-monitor',
+    viaSetu = false,
   } = opts
 
   if (!name || !archiveUrl || !linkSelector) {
     throw new Error('html source needs: name, archiveUrl, linkSelector')
   }
+  const get = pickFetcher(viaSetu)
+  const headers = { 'User-Agent': userAgent }
 
   return {
-    name,
+    name: viaSetu ? `${name} via setu` : name,
     async fetchRecent(): Promise<Paste[]> {
-      const res = await fetch(archiveUrl, { headers: { 'User-Agent': userAgent } })
-      if (!res.ok) throw new Error(`${name}: archive fetch returned ${res.status}`)
-      const html = await res.text()
-      const $ = cheerio.load(html)
+      const res = await get(archiveUrl, { headers })
+      if (!res.ok) throw new Error(`${name}: archive fetch returned ${res.status}${res.via ? ` (via ${res.via})` : ''}`)
+      const $ = cheerio.load(res.text)
 
       const links: string[] = []
       $(linkSelector).each((_, el) => {
@@ -61,10 +66,9 @@ export function createHtmlArchiveProvider(opts: HtmlArchiveOptions): Provider {
       const out: Paste[] = []
       for (const url of urls) {
         try {
-          const r = await fetch(url, { headers: { 'User-Agent': userAgent } })
+          const r = await get(url, { headers })
           if (!r.ok) continue
-          const page = await r.text()
-          const $$ = cheerio.load(page)
+          const $$ = cheerio.load(r.text)
           const content = $$(contentSelector).text()
           out.push({
             id: url,

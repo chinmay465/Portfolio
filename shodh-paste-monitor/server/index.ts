@@ -5,6 +5,7 @@ import express from 'express'
 import type { Request, Response } from 'express'
 import { Monitor } from './monitor.ts'
 import type { MatchRecord, Stats } from './monitor.ts'
+import { setuConfigured } from './net.ts'
 import { buildProviders } from './providers/index.ts'
 import type { SourceSpec } from './providers/index.ts'
 
@@ -106,6 +107,11 @@ app.post('/api/stop', (_req: Request, res: Response) => {
 
 app.get('/api/status', (_req: Request, res: Response) => {
   res.json(monitor.snapshot())
+})
+
+// Lets the UI know whether "Route through Setu" can work on this server.
+app.get('/api/capabilities', (_req: Request, res: Response) => {
+  res.json({ setu: setuConfigured() })
 })
 
 // ---- static frontend (production build) ----
