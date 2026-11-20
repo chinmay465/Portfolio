@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { checkTarget, GuardError } from './guard.ts'
 import { toReader } from './reader.ts'
-import { parseDuckDuckGo, parseMojeek } from './search.ts'
+import { parseBing, parseDdgLite, parseDuckDuckGo, parseMojeek, parseYahoo, unwrapBing, unwrapYahoo } from './search.ts'
 import { parseProxyList, sourcesFromEnv } from './sources.ts'
 
 const strict = { allowHttp: false, allowPrivate: false }
@@ -72,6 +72,41 @@ describe('search parsers', () => {
       <h2><a class="title" href="https://react.dev/">React</a></h2><p class="s">The library for web and native UIs</p></li>
       <li><h2><a href="/relative">skip</a></h2></li></ul>`
     expect(parseMojeek(html)).toEqual([{ title: 'React', url: 'https://react.dev/', snippet: 'The library for web and native UIs' }])
+  })
+})
+
+describe('more engines', () => {
+  const enc = (u: string) => 'a1' + Buffer.from(u).toString('base64url')
+
+  it('parses Bing and unwraps its /ck/a redirect links', () => {
+    const html = `<ol id="b_results">
+      <li class="b_algo"><h2><a href="https://www.bing.com/ck/a?!&&p=abc&u=${enc('https://vitejs.dev/guide/')}&ntb=1">Getting Started | Vite</a></h2>
+        <div class="b_caption"><p class="b_lineclamp2">Next generation   frontend tooling.</p></div></li>
+      <li class="b_algo"><h2><a href="https://react.dev/learn">Quick Start</a></h2><div class="b_caption"><p>Learn React.</p></div></li>
+      <li class="b_ad"><h2><a href="https://ads.test/">Ad</a></h2></li></ol>`
+    expect(parseBing(html)).toEqual([
+      { title: 'Getting Started | Vite', url: 'https://vitejs.dev/guide/', snippet: 'Next generation frontend tooling.' },
+      { title: 'Quick Start', url: 'https://react.dev/learn', snippet: 'Learn React.' },
+    ])
+    expect(unwrapBing('https://www.bing.com/ck/a?u=garbage')).toBeNull()
+  })
+
+  it('parses Yahoo and unwraps RU= links', () => {
+    const html = `<div id="web"><ol><li><div class="dd algo algo-sr">
+      <div class="compTitle"><h3 class="title"><a href="https://r.search.yahoo.com/_ylt=x/RV=2/RE=1/RO=10/RU=https%3a%2f%2fwww.typescriptlang.org%2fdocs%2f/RK=2/RS=y-" aria-label="TypeScript Documentation">www.typescriptlang.org<span>TypeScript Documentation</span></a></h3></div>
+      <div class="compText"><p>Find TypeScript starter projects.</p></div></div></li></ol></div>`
+    expect(parseYahoo(html)).toEqual([
+      { title: 'TypeScript Documentation', url: 'https://www.typescriptlang.org/docs/', snippet: 'Find TypeScript starter projects.' },
+    ])
+    expect(unwrapYahoo('https://search.yahoo.com/search?p=x')).toBeNull()
+  })
+
+  it('parses DuckDuckGo Lite table rows', () => {
+    const html = `<table>
+      <tr><td>1.</td><td><a rel="nofollow" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fnodejs.org%2Fen%2Fdocs&amp;rut=x" class="result-link">Node.js Docs</a></td></tr>
+      <tr><td></td><td class="result-snippet">Reference   documentation.</td></tr>
+      <tr><td></td><td><span class="link-text">nodejs.org/en/docs</span></td></tr></table>`
+    expect(parseDdgLite(html)).toEqual([{ title: 'Node.js Docs', url: 'https://nodejs.org/en/docs', snippet: 'Reference documentation.' }])
   })
 })
 
