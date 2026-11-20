@@ -39,6 +39,7 @@ server/
   monitor.ts          polling engine — dedup, stats, emits matches
   matcher.ts          keyword matching (all keywords; any/all mode) + tests
   providers/          mock.ts, pastebin.ts, htmlArchive.ts, index.ts (registry)
+  net.ts              direct vs. Setu-routed fetch for providers
 src/
   lib/api.ts          start/stop + EventSource client
   lib/format.ts       elapsed timer + snippet highlighting (+ tests)
@@ -66,7 +67,18 @@ npm start        # production: Express serves dist/ + the API on :3000 (or $PORT
   pastebin.com any other way breaks their terms, so this provider won't.)
 - **Custom HTML source** — give it a name, an archive URL and CSS selectors for
   the item links and body. Use only on sites whose ToS and `robots.txt` permit
-  it, with a polite poll interval.
+  it, with a polite poll interval. Tick **Route through Setu proxies** to fetch
+  its pages from [Setu](../setu-proxy-hub)'s rotating free-proxy pool instead of
+  this server's IP.
+
+### Routing through Setu
+
+Set `SETU_URL` (for example `http://localhost:3001`) and, if your Setu has one,
+`SETU_TOKEN` on the Shodh server. The switch in the custom HTML source then sends
+every archive and item fetch through Setu's `/api/fetch`. Errors from Setu itself,
+such as an empty pool or a wrong token, show up in the feed as source errors. On
+Render, `render.yaml` wires both variables from the Setu service for you. Pastebin
+is never proxied, because its API only answers your whitelisted IP.
 
 ## Deploy
 

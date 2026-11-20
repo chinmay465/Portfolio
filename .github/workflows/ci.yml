@@ -73,3 +73,32 @@ jobs:
           curl -fs -X POST localhost:4175/api/start -H 'Content-Type: application/json' \
             -d '{"keywords":["acme"],"sources":[{"type":"mock"}],"intervalMs":2000}' | grep -q '"ok":true'
           curl -fs -X POST localhost:4175/api/stop | grep -q '"ok":true'
+
+  setu:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: setu-proxy-hub
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: setu-proxy-hub/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - name: Smoke test
+        env:
+          SETU_NO_REFRESH: "1"
+          PORT: "4176"
+          SETU_TUNNEL_PORT: "4177"
+        run: |
+          npm start &
+          for i in $(seq 1 30); do curl -fs localhost:4176/ > /dev/null && break; sleep 1; done
+          curl -fs localhost:4176/ | grep -q '<div id="root">'
+          curl -fs localhost:4176/api/config | grep -q '"tunnel":{"address"'
+          curl -fs localhost:4176/api/pool | grep -q '"alive":0'
+          curl -s localhost:4176/api/fetch?url=http://example.com | grep -q 'Plain http'

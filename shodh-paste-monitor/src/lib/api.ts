@@ -12,6 +12,12 @@ export async function startMonitor(body: StartBody): Promise<void> {
   }
 }
 
+export async function getCapabilities(): Promise<{ setu: boolean }> {
+  const res = await fetch('/api/capabilities')
+  if (!res.ok) return { setu: false }
+  return (await res.json()) as { setu: boolean }
+}
+
 export async function stopMonitor(): Promise<void> {
   await fetch('/api/stop', { method: 'POST' })
 }
