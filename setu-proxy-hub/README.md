@@ -38,6 +38,9 @@ Free proxies are run by strangers. Setu is built around that:
   with the real site, with the certificate verified. The proxy sees the hostname and
   traffic volume, but it can't read or change pages. Plain `http://` is refused
   unless you set `SETU_ALLOW_HTTP=1`.
+- **Interceptors are banned.** A proxy that answers HTTPS with its own certificate
+  (trying to read the traffic) fails verification and is banned for good, both
+  during validation and during use.
 - **No rendering of fetched pages.** The UI shows a reader view (text and links only),
   so nothing on a fetched page runs or loads resources from your real IP. `format=raw`
   responses carry `Content-Security-Policy: sandbox`.
@@ -90,9 +93,10 @@ Response headers `X-Setu-Proxy`, `X-Setu-Exit-Ip` and `X-Setu-Final-Url` say whi
 proxy served it. `format=json` returns `{ meta, body }`, and `format=reader` returns
 `{ meta, page: { title, blocks, links } }`.
 
-**Search API**: `GET /api/search?q=…&engine=duckduckgo|mojeek` returns
-`{ engine, results: [{ title, url, snippet }], proxy, exitIp }`. If one engine blocks
-the proxy, Setu falls back to the other.
+**Search API**: `GET /api/search?q=…&engine=duckduckgo|ddg-lite|bing|yahoo|mojeek` returns
+`{ engine, results: [{ title, url, snippet }], proxy, exitIp }`. Search engines bot-check
+free proxy IPs, so each engine tries up to 5 different proxies. Without `engine`, all
+engines run in parallel and the first one that returns results wins.
 
 **Pool**: `GET /api/pool`, `POST /api/pool/refresh`, `GET /api/tunnel`.
 

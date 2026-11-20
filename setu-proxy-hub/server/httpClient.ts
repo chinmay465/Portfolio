@@ -96,3 +96,20 @@ export async function requestViaProxy(proxy: ProxyAddress, url: URL, opts: Tunne
     req.end(opts.body)
   })
 }
+
+// TLS verification failures through a CONNECT tunnel mean the proxy put its own
+// certificate in front of the site, i.e. it tried to read the traffic.
+const INTERCEPT_CODES = new Set([
+  'SELF_SIGNED_CERT_IN_CHAIN',
+  'DEPTH_ZERO_SELF_SIGNED_CERT',
+  'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+  'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+  'UNABLE_TO_GET_ISSUER_CERT',
+  'CERT_UNTRUSTED',
+  'ERR_TLS_CERT_ALTNAME_INVALID',
+])
+
+export function isInterception(err: unknown): boolean {
+  const code = (err as { code?: unknown } | null)?.code
+  return typeof code === 'string' && INTERCEPT_CODES.has(code)
+}

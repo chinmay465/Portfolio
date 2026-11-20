@@ -1,8 +1,13 @@
 // End-to-end: real sockets on localhost. A tiny CONNECT proxy plays the role
 // of a "free proxy", a local HTTP server plays the target site.
+import { execFileSync } from 'node:child_process'
+import fs from 'node:fs'
 import http from 'node:http'
+import https from 'node:https'
 import net from 'node:net'
 import type { AddressInfo } from 'node:net'
+import os from 'node:os'
+import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createApp } from './app.ts'
 import { proxiedFetch } from './fetcher.ts'
@@ -179,6 +184,59 @@ describe('proxy chain', () => {
     })
     expect(status).toBe(403)
     await tunnel.close()
+  })
+})
+
+// A "free proxy" that intercepts HTTPS: whatever host you CONNECT to, it
+// answers TLS itself with a self-signed certificate.
+describe('HTTPS interception', () => {
+  let mitm: http.Server
+  let fake: https.Server
+  beforeAll(async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'setu-mitm-'))
+    execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1', '-subj', '/CN=example.com',
+      '-keyout', path.join(dir, 'k.pem'), '-out', path.join(dir, 'c.pem')], { stdio: 'ignore' })
+    fake = https.createServer({ key: fs.readFileSync(path.join(dir, 'k.pem')), cert: fs.readFileSync(path.join(dir, 'c.pem')) }, (_req, res) => {
+      res.end('{"ip":"203.0.113.50"}')
+    })
+    await listen(fake)
+    mitm = http.createServer()
+    mitm.on('connect', (_req: http.IncomingMessage, sock: net.Socket) => {
+      const up = net.connect(port(fake), '127.0.0.1', () => {
+        sock.write('HTTP/1.1 200 Connection Established\r\n\r\n')
+        up.pipe(sock)
+        sock.pipe(up)
+      })
+      up.on('error', () => sock.destroy())
+      sock.on('error', () => up.destroy())
+    })
+    await listen(mitm)
+  })
+  afterAll(() => {
+    mitm.close()
+    fake.close()
+  })
+
+  it('bans a proxy that presents a fake certificate, and never re-adds it', async () => {
+    const pool = makePool()
+    pool.seed([{ host: '127.0.0.1', port: port(mitm) }, { host: '127.0.0.1', port: port(upstream) }])
+    // Through the honest proxy this would reach the real site; through the MITM it hits the fake cert.
+    const used = new Set<string>([`127.0.0.1:${port(upstream)}`])
+    await expect(proxiedFetch(pool, 'https://example.com/', { guard: open, attempts: 1, exclude: used })).rejects.toThrow(/certificate/)
+    expect(pool.isBanned(`127.0.0.1:${port(mitm)}`)).toBe(true)
+    expect(pool.snapshot().banned).toBe(1)
+    expect(pool.size).toBe(1)
+  })
+
+  it('validation also bans intercepting proxies', async () => {
+    const pool = new ProxyPool({
+      ...makePool().opts,
+      judgeUrl: 'https://example.com/ip',
+      loadList: async () => [{ host: '127.0.0.1', port: port(mitm) }],
+    })
+    await pool.refresh()
+    expect(pool.size).toBe(0)
+    expect(pool.isBanned(`127.0.0.1:${port(mitm)}`)).toBe(true)
   })
 })
 

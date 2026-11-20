@@ -1,7 +1,7 @@
 import type { IncomingHttpHeaders } from 'node:http'
 import { checkTarget, GuardError } from './guard.ts'
 import type { GuardOptions } from './guard.ts'
-import { requestViaProxy } from './httpClient.ts'
+import { isInterception, requestViaProxy } from './httpClient.ts'
 import type { ProxyPool } from './pool.ts'
 
 export const BROWSER_UA =
@@ -113,7 +113,8 @@ export async function proxiedFetch(pool: ProxyPool, rawUrl: string, opts: Proxie
       // A guard failure on a redirect is the caller's problem, not the proxy's.
       if (err instanceof GuardError) throw err
       lastError = err instanceof Error ? err : new Error(String(err))
-      pool.reportFailure(proxy.id, true)
+      if (isInterception(err)) pool.ban(proxy.id)
+      else pool.reportFailure(proxy.id, true)
     }
   }
 
