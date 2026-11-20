@@ -1,0 +1,9 @@
+{
+  "name": "Chinmay Upare, frontend developer",
+  "short_name": "Chinmay",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#1d0711",
+  "theme_color": "#1d0711",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

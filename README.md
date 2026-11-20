@@ -4,6 +4,7 @@ Frontend side projects by Chinmay Upare, one folder per project. Each folder is 
 
 | Project | What it is | Live | Code |
 | --- | --- | --- | --- |
+| **Home** | Landing page for everything here: a Devanagari particle hero, live status pings to each app, and an animated preview of every project. | [chinmay-upare.onrender.com](https://chinmay-upare.onrender.com) | [`portfolio-home/`](./portfolio-home) |
 | **Ekatra** | One YouTube-style recommendation feed across Netflix, Prime Video, JioHotstar, SonyLIV and ZEE5. Each title opens on its own service. | [ekatra-streaming-hub.onrender.com](https://ekatra-streaming-hub.onrender.com) | [`ekatra-streaming-hub/`](./ekatra-streaming-hub) |
 | **Ank** | Bilingual hub for today's Marathi epapers, with city editions and date links. | [ank-marathi-epapers.onrender.com](https://ank-marathi-epapers.onrender.com) | [`ank-marathi-epapers/`](./ank-marathi-epapers) |
 | **Shodh** | Live monitor for public paste sites — watches for keyword mentions and streams matches into a feed. React front end over an Express + SSE backend. | [shodh-paste-monitor.onrender.com](https://shodh-paste-monitor.onrender.com) | [`shodh-paste-monitor/`](./shodh-paste-monitor) |
@@ -11,6 +12,6 @@ Frontend side projects by Chinmay Upare, one folder per project. Each folder is 
 
 ## Deploy
 
-On [dashboard.render.com](https://dashboard.render.com), go to **New → Blueprint** and pick this repo. Render reads `render.yaml` and creates one service per project — static sites for Ekatra and Ank, Node web services for Shodh and Setu. After that, every push to `main` redeploys.
+On [dashboard.render.com](https://dashboard.render.com), go to **New → Blueprint** and pick this repo. Render reads `render.yaml` and creates one service per project — static sites for the landing page, Ekatra and Ank, Node web services for Shodh and Setu. After that, every push to `main` redeploys.
 
 CI (`.github/workflows/ci.yml`) runs one job per project on every push and PR: install, test, build and a smoke test.
