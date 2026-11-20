@@ -6,6 +6,28 @@ on:
   pull_request:
 
 jobs:
+  home:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: portfolio-home
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: portfolio-home/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - name: Smoke test
+        run: |
+          npx vite preview --port 4178 &
+          for i in $(seq 1 20); do curl -fs localhost:4178/ > /dev/null && break; sleep 1; done
+          curl -fs localhost:4178/ | grep -q '<div id="root">'
+
   ank:
     runs-on: ubuntu-latest
     defaults:
