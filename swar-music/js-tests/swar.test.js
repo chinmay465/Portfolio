@@ -233,9 +233,9 @@ test('feels like an app: no tap highlight, selection or overscroll', () => {
 
 const AV_TOGGLE = '<ytmusic-av-toggle><button class="song-button">Song</button><button class="video-button">Video</button></ytmusic-av-toggle>';
 
-test('leaving the app during a video switches to the song and back', async () => {
+test('a video that starts playing switches to its song right away', async () => {
   const p = page(AV_TOGGLE);
-  const v = fakeVideo(p.document, { paused: false, duration: 200, currentTime: 40, videoWidth: 1280, videoHeight: 720, readyState: 4 });
+  const v = fakeVideo(p.document, { paused: false, duration: 200, currentTime: 3, videoWidth: 1280, videoHeight: 720, readyState: 4 });
   p.document.body.appendChild(v);
   const clicks = [];
   p.document.querySelector('.song-button').addEventListener('click', () => {
@@ -244,38 +244,51 @@ test('leaving the app during a video switches to the song and back', async () =>
   });
   p.document.querySelector('.video-button').addEventListener('click', () => clicks.push('video'));
 
-  p.window.__swar.cmd('background');
+  v.dispatchEvent(new p.window.Event('playing'));
   assert.deepEqual(clicks, ['song']);
   await new Promise((r) => setTimeout(r, 400));
   assert.equal(v.paused, false, 'keeps playing after the switch');
 
+  v.dispatchEvent(new p.window.Event('playing'));
   p.window.__swar.cmd('background');
-  assert.deepEqual(clicks, ['song'], 'audio-only: nothing more to switch');
-
-  p.window.__swar.cmd('foreground');
-  p.window.__swar.cmd('foreground');
-  assert.deepEqual(clicks, ['song', 'video'], 'switches back once');
+  assert.deepEqual(clicks, ['song'], 'audio only now: nothing more to switch, never back to video');
   p.close();
 });
 
-test('songs, paused videos and videos without a song version are left alone', () => {
+test('does not click repeatedly while the song stream loads', () => {
+  const p = page(AV_TOGGLE);
+  const v = fakeVideo(p.document, { paused: false, duration: 200, videoWidth: 1280, videoHeight: 720 });
+  p.document.body.appendChild(v);
+  let clicks = 0;
+  p.document.querySelector('.song-button').addEventListener('click', () => { clicks += 1; }); // video still showing
+  for (let i = 0; i < 5; i++) v.dispatchEvent(new p.window.Event('loadedmetadata'));
+  assert.equal(clicks, 1);
+  p.close();
+});
+
+test('songs, ads and videos without a song version are left alone', () => {
   const p = page(AV_TOGGLE);
   const v = fakeVideo(p.document, { paused: false, duration: 200, videoWidth: 0, videoHeight: 0 });
   p.document.body.appendChild(v);
   const clicks = [];
   p.document.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => clicks.push(b.className)));
-
-  p.window.__swar.cmd('background'); // already the song
-  v.videoWidth = 1280; v.videoHeight = 720; v.paused = true;
-  p.window.__swar.cmd('background'); // paused video
-  p.window.__swar.cmd('foreground'); // never switched
+  v.dispatchEvent(new p.window.Event('playing')); // already the song
   assert.deepEqual(clicks, []);
   p.close();
+
+  const ad = page(`<div id="movie_player" class="html5-video-player ad-showing"></div>${AV_TOGGLE}`);
+  const av = fakeVideo(ad.document, { paused: false, duration: 15, videoWidth: 1280, videoHeight: 720 });
+  ad.document.getElementById('movie_player').appendChild(av);
+  let adClicks = 0;
+  ad.document.querySelector('.song-button').addEventListener('click', () => { adClicks += 1; });
+  ad.window.__swar.cmd('background');
+  assert.equal(adClicks, 0, 'never switches during an ad');
+  ad.close();
 
   const q = page(); // no Song | Video switch on this track
   const w = fakeVideo(q.document, { paused: false, duration: 200, videoWidth: 1280, videoHeight: 720 });
   q.document.body.appendChild(w);
-  q.window.__swar.cmd('background');
+  w.dispatchEvent(new q.window.Event('playing'));
   assert.equal(w.paused, false);
   q.close();
 });

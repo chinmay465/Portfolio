@@ -14,7 +14,6 @@ class PlayerCommandTest {
         assertEquals("window.__swar&&window.__swar.cmd&&window.__swar.cmd('seek',83.5);", PlayerCommand.SeekTo(83_500).js)
         assertEquals("window.__swar&&window.__swar.cmd&&window.__swar.cmd('seek',0.0);", PlayerCommand.SeekTo(-5).js)
         assertEquals("window.__swar&&window.__swar.cmd&&window.__swar.cmd('background',null);", PlayerCommand.EnterBackground.js)
-        assertEquals("window.__swar&&window.__swar.cmd&&window.__swar.cmd('foreground',null);", PlayerCommand.ReturnToForeground.js)
     }
 
     @Test
