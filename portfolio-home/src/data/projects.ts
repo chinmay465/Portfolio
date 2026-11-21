@@ -125,7 +125,7 @@ export const projects: Project[] = [
       'Wraps music.youtube.com in a WebView, so your own account, library and recommendations come along',
       'A script injected before the page loads keeps the player "visible" and strips ad slots from the API data, so no ad is ever scheduled',
       'A media foreground service mirrors the player into a MediaSession: notification, lock screen, headset and Bluetooth buttons',
-      'Handles audio focus for calls and pauses when headphones come out; the page script and the APK are checked in CI',
+      'Pauses when headphones come out, and blocks Google telemetry; the page script and the APK are privacy-checked in CI',
     ],
     stack: ['Kotlin', 'Android WebView', 'MediaSession', 'JavaScript', 'jsdom', 'GitHub Actions'],
     kind: 'Android app',
