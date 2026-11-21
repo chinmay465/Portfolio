@@ -17,6 +17,7 @@ class Shell(
     private val loading: View,
     private val loadingStatus: TextView,
     private val offline: View,
+    private val switching: View,
     private val progress: ProgressBar,
     private val onRetry: () -> Unit,
 ) {
@@ -29,6 +30,46 @@ class Shell(
     val offlineVisible get() = offline.visibility == View.VISIBLE
 
     private val slowNotice = Runnable { loadingStatus.crossfadeText(R.string.loading_status_slow) }
+    private val switchTimeout = Runnable { hideSwitching() }
+    private var switchShownAt = 0L
+
+    val switchingVisible get() = switching.visibility == View.VISIBLE
+
+    /** A music video is being swapped for its song: small card over the page. */
+    fun showSwitching(title: String) {
+        switching.findViewById<TextView>(R.id.switching_detail).apply {
+            text = title
+            visibility = if (title.isBlank()) View.GONE else View.VISIBLE
+        }
+        handler.removeCallbacks(switchTimeout)
+        handler.postDelayed(switchTimeout, SWITCH_MAX_MS)
+        switchShownAt = android.os.SystemClock.uptimeMillis()
+        if (switching.visibility == View.VISIBLE) return
+        val card = switching.findViewById<View>(R.id.switching_card)
+        switching.animate().cancel()
+        card.animate().cancel()
+        switching.alpha = 0f
+        switching.visibility = View.VISIBLE
+        card.scaleX = 0.92f
+        card.scaleY = 0.92f
+        card.translationY = 12 * density
+        switching.animate().alpha(1f).setStartDelay(0).setDuration(160).start()
+        card.animate().scaleX(1f).scaleY(1f).translationY(0f)
+            .setStartDelay(0).setDuration(320).setInterpolator(emphasized).start()
+    }
+
+    /** Song is playing (or there was nothing to switch to). Short minimum so it never just flickers. */
+    fun hideSwitching() {
+        handler.removeCallbacks(switchTimeout)
+        if (switching.visibility != View.VISIBLE) return
+        val shownFor = android.os.SystemClock.uptimeMillis() - switchShownAt
+        val delay = (MIN_SWITCH_MS - shownFor).coerceAtLeast(0)
+        val card = switching.findViewById<View>(R.id.switching_card)
+        card.animate().scaleX(0.96f).scaleY(0.96f).setStartDelay(delay).setDuration(200).start()
+        switching.animate().alpha(0f).setStartDelay(delay).setDuration(220)
+            .withEndAction { switching.visibility = View.GONE }
+            .start()
+    }
 
     init {
         offline.findViewById<View>(R.id.offline_retry).setOnClickListener { onRetry() }
@@ -130,5 +171,7 @@ class Shell(
 
     private companion object {
         const val SLOW_MS = 6_000L
+        const val SWITCH_MAX_MS = 10_000L
+        const val MIN_SWITCH_MS = 450L
     }
 }

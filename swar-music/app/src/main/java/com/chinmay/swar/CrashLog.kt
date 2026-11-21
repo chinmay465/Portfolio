@@ -53,6 +53,32 @@ object CrashLog {
     }
 }
 
+/**
+ * When the page can't switch a music video to its song version, it describes
+ * what it found (element names and button labels, no personal data). Shown once
+ * per app session so it can be copied and reported.
+ */
+object SwitchReport {
+    @Volatile
+    private var shown = false
+
+    fun show(activity: Activity, details: String) {
+        if (shown || activity.isFinishing) return
+        shown = true
+        val report = "Swar ${BuildConfigInfo.version(activity)} · Android ${Build.VERSION.RELEASE}\n$details"
+        AlertDialog.Builder(activity)
+            .setTitle(R.string.switch_title)
+            .setMessage(R.string.switch_message)
+            .setPositiveButton(R.string.crash_copy) { _, _ ->
+                activity.getSystemService(ClipboardManager::class.java)
+                    .setPrimaryClip(ClipData.newPlainText("Swar switch report", report))
+                Toast.makeText(activity, R.string.switch_copied, Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton(R.string.crash_dismiss, null)
+            .show()
+    }
+}
+
 private object BuildConfigInfo {
     fun version(context: Context): String = runCatching {
         context.packageManager.getPackageInfo(context.packageName, 0).versionName
