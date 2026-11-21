@@ -207,7 +207,7 @@ export default function GlyphField({ word, accent, reduced, label }: Props) {
     // Wait for the Devanagari face, or the first word samples a fallback font.
     const fontsReady = document.fonts
       ? Promise.all([document.fonts.load(`700 120px "Anek Devanagari Variable"`, 'एकत्र अंक शोध सेतु कवच'),
-          document.fonts.load(`800 120px "Unbounded Variable"`, 'ReactTypeScriptNext.jsDesignMFE70→95KYCTests'),
+          document.fonts.load(`800 120px "Unbounded Variable"`, 'ReactAITypeScriptNext.jsDesignMFE70→95KYCTests'),
           document.fonts.ready,])
       : Promise.resolve()
     fontsReady

@@ -9,7 +9,7 @@ interface Props {
   onFocus: (id: ProjectId | null) => void
 }
 
-const FOCUS = ['Design systems', 'Micro-frontends', 'KYC and payments', 'Web performance']
+const FOCUS = ['Design systems', 'Micro-frontends', 'KYC and payments', 'Web performance', 'AI-assisted dev']
 const STACK = ['React', 'Next.js', 'TypeScript', 'React Query']
 
 /** The hero's summary panel: who I am in five rows, plus the side projects with live status. */
