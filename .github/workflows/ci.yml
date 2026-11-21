@@ -171,6 +171,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - run: chmod +x gradlew
       - run: ./gradlew testDebugUnitTest assembleDebug
+      - name: Privacy check (permissions, exported components, tracker SDKs, endpoints, page script)
+        run: bash scripts/privacy-check.sh
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
