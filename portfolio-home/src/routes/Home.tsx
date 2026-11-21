@@ -10,7 +10,7 @@ import RevealHeading from '../components/RevealHeading'
 import ContactCard from '../components/ContactCard'
 import AllProjectsCta from '../components/AllProjectsCta'
 
-const FEATURED = ['rail', 'ekatra', 'kavach', 'swar'] as const
+const FEATURED = ['rail', 'kavach', 'swar', 'ekatra'] as const
 
 export default function Home() {
   const { reduced } = useSite()
