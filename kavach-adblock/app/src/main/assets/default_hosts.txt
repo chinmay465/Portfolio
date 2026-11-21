@@ -1,0 +1,64 @@
+# Kavach starter blocklist — used until the full list is downloaded,
+# and merged with it afterwards. One domain per line; subdomains are covered.
+
+# Google ads & analytics
+doubleclick.net
+googlesyndication.com
+googleadservices.com
+googletagservices.com
+google-analytics.com
+adservice.google.com
+pagead2.googlesyndication.com
+app-measurement.com
+admob.com
+
+# Mobile ad networks / SDKs
+applovin.com
+applvn.com
+adcolony.com
+unityads.unity3d.com
+vungle.com
+chartboost.com
+inmobi.com
+startapp.com
+supersonicads.com
+ironsrc.mobi
+mintegral.com
+mintegral.net
+liftoff.io
+fyber.com
+tapjoy.com
+pangle.io
+ads.tiktok.com
+an.facebook.com
+
+# Programmatic / display
+amazon-adsystem.com
+adnxs.com
+criteo.com
+criteo.net
+pubmatic.com
+rubiconproject.com
+openx.net
+casalemedia.com
+adsrvr.org
+smartadserver.com
+taboola.com
+outbrain.com
+media.net
+yieldmo.com
+3lift.com
+sharethrough.com
+moatads.com
+scorecardresearch.com
+quantserve.com
+zedo.com
+popads.net
+propellerads.com
+
+# Mobile tracking / attribution
+flurry.com
+appsflyer.com
+adjust.com
+branch.io
+kochava.com
