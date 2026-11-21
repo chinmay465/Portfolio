@@ -32,8 +32,8 @@
     <string name="block_title">Block this domain?</string>
     <string name="block_message">%1$s and its subdomains will be blocked for every app.</string>
     <string name="block">Block</string>
-    <string name="block_hint">e.g. hesads.akamaized.net</string>
-    <string name="invalid_domain">That isn\'t a valid domain name</string>
+    <string name="block_hint">hesads.akamaized.net or rr*---sn-ccoa-*.googlevideo.com</string>
+    <string name="invalid_domain">That isn\'t a valid domain or pattern. Use * only before the last two parts, e.g. ads*.example.com</string>
     <string name="restart_app_hint">%1$s. Force-stop the app that uses it so it reconnects.</string>
     <string name="blocked_toast">Blocked %1$s</string>
     <string name="allowed_toast">Allowed %1$s</string>

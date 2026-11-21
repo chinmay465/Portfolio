@@ -46,4 +46,21 @@ class DomainRulesTest {
         assertNull(DomainRules.normalize("1.2.3.4"))
         assertNull(DomainRules.normalize(""))
     }
+
+    @Test
+    fun normalizesWildcardPatterns() {
+        assertEquals("rr*---sn-ccoa-*.googlevideo.com", DomainRules.normalize(" RR*---sn-ccoa-*.googlevideo.com "))
+        assertEquals("ads*.example.com", DomainRules.normalize("https://ads*.example.com/x"))
+        assertNull(DomainRules.normalize("*"))
+        assertNull(DomainRules.normalize("*.com"))
+        assertNull(DomainRules.normalize("ads.*.com"))
+        assertNull(DomainRules.normalize("*.*"))
+    }
+
+    @Test
+    fun allowingAHostLiftsAPatternBlockCoveringIt() {
+        val (c, _) = DomainRules.allow("rr2---sn-ccoa-cagz.googlevideo.com", setOf("rr*---sn-ccoa-*.googlevideo.com", "z.com"), emptySet())
+        assertEquals(setOf("z.com"), c)
+        assertTrue(DomainRules.isBlocked("rr1---sn-ccoa-cags.googlevideo.com", ds(), ds("rr*---sn-ccoa-*.googlevideo.com"), ds()))
+    }
 }

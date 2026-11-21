@@ -22,14 +22,16 @@ object DomainRules {
     fun allow(domain: String, custom: Set<String>, allowed: Set<String>): Pair<Set<String>, Set<String>> =
         custom.filterNot { covers(it, domain) }.toSet() to (allowed + domain)
 
-    private fun covers(rule: String, domain: String) = domain == rule || domain.endsWith(".$rule")
+    private fun covers(rule: String, domain: String) = DomainSet.ruleMatches(rule, domain)
 
     private val VALID = Regex("^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$")
 
+
     /**
      * Turns what the user typed or pasted (a full link with scheme and path,
-     * "*.example.com", "example.com.") into a bare domain, or null if it
-     * isn't a valid domain name.
+     * "*.example.com", "example.com.") into a bare domain, or a wildcard
+     * pattern like "rr*---sn-ccoa-*.googlevideo.com". Returns null if it isn't
+     * a valid domain or safe pattern.
      */
     fun normalize(input: String): String? {
         var s = input.trim().lowercase()
@@ -37,6 +39,7 @@ object DomainRules {
         s = s.substringBefore('/').substringBefore('?').substringBefore('#')
         s = s.substringAfterLast('@').substringBefore(':')
         s = s.removePrefix("*.").removePrefix(".").trimEnd('.')
+        if ('*' in s) return if (DomainSet.isSafePattern(s)) s else null
         return if (VALID.matches(s)) s else null
     }
 }
