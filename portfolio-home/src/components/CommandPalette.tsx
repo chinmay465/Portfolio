@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router'
 import { GITHUB_URL, REPO_URL, projects } from '../data/projects'
 import { LINKEDIN_URL } from '../data/profile'
 
@@ -12,21 +13,21 @@ interface Item {
 }
 
 const items: Item[] = [
+  { id: 'home', title: 'Home', hint: 'Page', href: '/', external: false },
+  { id: 'about', title: 'About me', hint: 'Page', href: '/about', external: false },
+  { id: 'experience', title: 'Experience and education', hint: 'Page', href: '/experience', external: false },
+  { id: 'projects', title: 'All projects', hint: 'Page', href: '/projects', external: false },
+  { id: 'contact', title: 'Email and contact', hint: 'Page', href: '/contact', external: false },
   ...projects.flatMap((p) => [
+    { id: `${p.id}-page`, title: p.name, hint: 'Project page', href: `/projects/${p.id}`, external: false, accent: p.accent },
     p.live
       ? { id: `${p.id}-live`, title: `Open ${p.name}`, hint: p.live.replace('https://', ''), href: p.live, external: true, accent: p.accent }
       : { id: `${p.id}-apk`, title: `Get the ${p.name} APK`, hint: 'GitHub Actions', href: p.download ?? p.code, external: true, accent: p.accent },
     { id: `${p.id}-code`, title: `${p.name} source code`, hint: 'GitHub', href: p.code, external: true, accent: p.accent },
-    { id: `${p.id}-jump`, title: `Read about ${p.name}`, hint: 'On this page', href: `#${p.id}`, external: false, accent: p.accent },
   ]),
-  { id: 'repo', title: 'Portfolio repository', hint: 'GitHub', href: REPO_URL, external: true },
-  { id: 'github', title: 'GitHub profile', hint: 'github.com/chinmay465', href: GITHUB_URL, external: true },
-  { id: 'about', title: 'About me', hint: 'On this page', href: '#about', external: false },
-  { id: 'journey', title: 'Career journey', hint: 'On this page', href: '#journey', external: false },
-  { id: 'work', title: 'Experience and education', hint: 'On this page', href: '#work', external: false },
-  { id: 'stack', title: 'Skills and stack', hint: 'On this page', href: '#stack', external: false },
-  { id: 'contact', title: 'Email and contact', hint: 'On this page', href: '#contact', external: false },
   { id: 'linkedin', title: 'LinkedIn profile', hint: 'linkedin.com/in/chinmay-upare', href: LINKEDIN_URL, external: true },
+  { id: 'github', title: 'GitHub profile', hint: 'github.com/chinmay465', href: GITHUB_URL, external: true },
+  { id: 'repo', title: 'Source of this site', hint: 'GitHub', href: REPO_URL, external: true },
 ]
 
 interface Props {
@@ -81,8 +82,8 @@ export default function CommandPalette({ open, onClose }: Props) {
             setQuery(e.target.value)
             setActive(0)
           }}
-          placeholder="Search projects, code and sections"
-          aria-label="Search projects, code and sections"
+          placeholder="Search pages, projects and links"
+          aria-label="Search pages, projects and links"
           aria-controls="palette-list"
           aria-activedescendant={results[active] ? `pal-${results[active].id}` : undefined}
         />
@@ -90,20 +91,36 @@ export default function CommandPalette({ open, onClose }: Props) {
           {results.length === 0 && <li className="palette-empty">Nothing matches “{query}”. Try a project name.</li>}
           {results.map((item, i) => (
             <li key={item.id} role="option" id={`pal-${item.id}`} aria-selected={i === active}>
-              <a
-                data-index={i}
-                href={item.href}
-                target={item.external ? '_blank' : undefined}
-                rel={item.external ? 'noopener noreferrer' : undefined}
-                className={i === active ? 'is-active' : undefined}
-                style={item.accent ? ({ '--accent': item.accent } as React.CSSProperties) : undefined}
-                onPointerMove={() => setActive(i)}
-                onClick={onClose}
-              >
-                <span className="palette-dot" aria-hidden="true" />
-                <span className="palette-title">{item.title}</span>
-                <span className="palette-hint">{item.hint}</span>
-              </a>
+              {item.external ? (
+                <a
+                  data-index={i}
+                  href={item.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={i === active ? 'is-active' : undefined}
+                  style={item.accent ? ({ '--accent': item.accent } as React.CSSProperties) : undefined}
+                  onPointerMove={() => setActive(i)}
+                  onClick={onClose}
+                >
+                  <span className="palette-dot" aria-hidden="true" />
+                  <span className="palette-title">{item.title}</span>
+                  <span className="palette-hint">{item.hint}</span>
+                </a>
+              ) : (
+                <Link
+                  data-index={i}
+                  to={item.href}
+                  viewTransition
+                  className={i === active ? 'is-active' : undefined}
+                  style={item.accent ? ({ '--accent': item.accent } as React.CSSProperties) : undefined}
+                  onPointerMove={() => setActive(i)}
+                  onClick={onClose}
+                >
+                  <span className="palette-dot" aria-hidden="true" />
+                  <span className="palette-title">{item.title}</span>
+                  <span className="palette-hint">{item.hint}</span>
+                </Link>
+              )}
             </li>
           ))}
         </ul>

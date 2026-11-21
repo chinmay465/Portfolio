@@ -64,3 +64,11 @@ describe('profile', () => {
     expect(JSON.stringify(profile)).not.toMatch(/\+?91[\s-]?\d{5}\s?\d{5}|\b\d{10}\b/)
   })
 })
+
+describe('routes', () => {
+  it('gives every project a URL-safe, unique id for /projects/:id', () => {
+    const ids = projects.map((p) => p.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    for (const id of ids) expect(id).toMatch(/^[a-z0-9-]+$/)
+  })
+})

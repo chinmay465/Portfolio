@@ -16,6 +16,12 @@ services:
       - path: /assets/*
         name: Cache-Control
         value: public, max-age=31536000, immutable
+    # Client-side routes (/about, /projects/ekatra, ...): serve the app for any path that
+    # isn't a real file, so deep links and refreshes work.
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
   - type: web
     name: ank-marathi-epapers
     runtime: static
