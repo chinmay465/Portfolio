@@ -26,6 +26,41 @@
             </intent-filter>
         </activity>
 
+        <!-- "Kavach On" / "Kavach Off": extra launcher entries for automation
+             apps (Samsung Modes and Routines → "Open an app"). Transparent,
+             close immediately, own task so the app you were in stays in front. -->
+        <activity
+            android:name=".KavachOnActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/quick_on_label"
+            android:noHistory="true"
+            android:roundIcon="@mipmap/ic_launcher_round"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Kavach.Invisible">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".KavachOffActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:icon="@mipmap/ic_launcher_off"
+            android:label="@string/quick_off_label"
+            android:noHistory="true"
+            android:roundIcon="@mipmap/ic_launcher_off"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Kavach.Invisible">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
         <!-- Local VPN. Only DNS traffic is routed into it; everything else
              goes straight to the network. -->
         <service

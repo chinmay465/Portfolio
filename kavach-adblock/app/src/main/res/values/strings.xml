@@ -44,4 +44,9 @@
     <string name="rule_removed">Rule removed</string>
     <string name="lookup_blocked">✕  %1$s</string>
     <string name="lookup_allowed">·  %1$s</string>
+    <string name="quick_on_label">Kavach On</string>
+    <string name="quick_off_label">Kavach Off</string>
+    <string name="quick_on">Kavach is on</string>
+    <string name="quick_off">Kavach is off</string>
+    <string name="quick_needs_setup">Allow Kavach\'s VPN once, then Kavach On will work automatically</string>
 </resources>
