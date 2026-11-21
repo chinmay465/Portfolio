@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- YouTube Music's own background, so the status bar area blends in -->
+    <color name="page_bg">#030303</color>
+    <color name="brand">#E8475B</color>
+    <color name="ic_launcher_bg">#1A0B10</color>
+</resources>
