@@ -20,6 +20,7 @@ object Blocklist {
     private const val BUNDLED_ASSET = "default_hosts.txt"
     private const val PREFS = "kavach"
     private const val KEY_ALLOW = "allowlist"
+    private const val MAX_LIST_BYTES = 20L * 1024 * 1024
 
     @Volatile private var blocked: DomainSet = DomainSet.EMPTY
     @Volatile private var allowed: DomainSet = DomainSet.EMPTY
@@ -59,12 +60,30 @@ object Blocklist {
         val conn = URI(SOURCE_URL).toURL().openConnection() as HttpURLConnection
         conn.connectTimeout = 15_000
         conn.readTimeout = 30_000
+        // Don't send the default User-Agent, which names the phone model and Android version.
+        conn.setRequestProperty("User-Agent", "Kavach")
+        conn.useCaches = false
         try {
             if (conn.responseCode != HttpURLConnection.HTTP_OK) {
                 throw IOException("Blocklist download failed: HTTP ${conn.responseCode}")
             }
             val tmp = File(app.filesDir, "$DOWNLOADED_FILE.tmp")
-            conn.inputStream.use { input -> tmp.outputStream().use { input.copyTo(it) } }
+            conn.inputStream.use { input ->
+                tmp.outputStream().use { out ->
+                    val buf = ByteArray(64 * 1024)
+                    var total = 0L
+                    while (true) {
+                        val n = input.read(buf)
+                        if (n < 0) break
+                        total += n
+                        if (total > MAX_LIST_BYTES) {
+                            tmp.delete()
+                            throw IOException("Blocklist is unexpectedly large")
+                        }
+                        out.write(buf, 0, n)
+                    }
+                }
+            }
             if (!tmp.renameTo(File(app.filesDir, DOWNLOADED_FILE))) {
                 throw IOException("Could not save blocklist")
             }

@@ -11,26 +11,23 @@ import java.io.FileDescriptor
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
-import java.net.DatagramPacket
-import java.net.DatagramSocket
-import java.net.InetAddress
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
 
 /**
  * Reads DNS queries from the tun interface, answers blocked ones with
- * NXDOMAIN, and forwards the rest to a real resolver over a socket that
- * bypasses the VPN.
+ * NXDOMAIN, and forwards the rest over DNS-over-HTTPS. Kavach's own traffic
+ * is excluded from the VPN, so the DoH requests can't loop back into it.
+ *
+ * Privacy: domains are only held in memory long enough to answer the query.
+ * Nothing about allowed lookups is stored or logged.
  */
 class DnsTunnel(
     private val service: VpnService,
     private val tun: ParcelFileDescriptor,
 ) {
-    private val upstreams: List<InetAddress> = listOf(
-        InetAddress.getByAddress(byteArrayOf(1, 1, 1, 1)), // Cloudflare
-        InetAddress.getByAddress(byteArrayOf(8, 8, 8, 8)), // Google
-    )
+    private val doh = DohClient()
 
     private val input = FileInputStream(tun.fileDescriptor)
     private val output = FileOutputStream(tun.fileDescriptor)
@@ -105,31 +102,21 @@ class DnsTunnel(
     }
 
     private fun forward(query: Packets.DnsQuery) {
-        val payload = query.dnsPayload()
-        for (server in upstreams) {
-            try {
-                DatagramSocket().use { socket ->
-                    // Send this socket outside the VPN, or we'd loop back into ourselves.
-                    service.protect(socket)
-                    socket.soTimeout = UPSTREAM_TIMEOUT_MS
-                    socket.send(DatagramPacket(payload, payload.size, server, Packets.DNS_PORT))
-                    val response = ByteArray(4096)
-                    val packet = DatagramPacket(response, response.size)
-                    socket.receive(packet)
-                    write(Packets.buildReply(query, response, packet.length))
-                    return
-                }
-            } catch (e: IOException) {
-                Log.d(TAG, "Upstream $server failed for ${query.domain}: ${e.message}")
-            }
+        val response = try {
+            doh.resolve(query.dnsPayload())
+        } catch (_: IOException) {
+            // No answer: the app's resolver times out and retries. Deliberately
+            // not logged, so the domain never reaches logcat.
+            return
         }
+        write(Packets.buildReply(query, response))
     }
 
     private fun write(packet: ByteArray) {
         try {
             synchronized(output) { output.write(packet) }
         } catch (e: IOException) {
-            Log.d(TAG, "tun write failed: ${e.message}")
+            Log.d(TAG, "tun write failed")
         }
     }
 
@@ -142,6 +129,5 @@ class DnsTunnel(
 
     private companion object {
         const val TAG = "KavachDns"
-        const val UPSTREAM_TIMEOUT_MS = 4_000
     }
 }

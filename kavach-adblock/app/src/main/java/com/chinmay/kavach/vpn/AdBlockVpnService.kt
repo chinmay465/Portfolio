@@ -57,9 +57,13 @@ class AdBlockVpnService : VpnService() {
             .setBlocking(true)
             .setConfigureIntent(openAppIntent())
         try {
-            // Our own traffic (blocklist downloads, upstream DNS) skips the VPN.
+            // Our own traffic (blocklist downloads, DoH upstream) must skip the VPN,
+            // otherwise lookups would loop back into the tunnel.
             builder.addDisallowedApplication(packageName)
-        } catch (_: PackageManager.NameNotFoundException) {
+        } catch (e: PackageManager.NameNotFoundException) {
+            Log.e(TAG, "Could not exclude own package", e)
+            stopVpn()
+            return
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             builder.setMetered(false) // don't make Wi-Fi look metered to other apps
