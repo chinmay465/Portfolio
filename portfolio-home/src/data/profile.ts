@@ -15,7 +15,7 @@ export const about = {
   body: [
     "I'm a senior frontend developer at KredX in Bangalore. Before that I spent three years at Paytm Money in Pune, where I joined as a Software Engineer and was promoted to Senior. Everything I've shipped has been fintech, in React, Next.js and TypeScript.",
     'Most of my work sits underneath features: a design system so the team stops rebuilding the same button, micro-frontends so teams deploy without waiting on each other, and performance work so a page stays fast on a cheap phone. The rest is KYC, onboarding and payments, which I own end to end, failure states included.',
-    'I review code and mentor junior developers at KredX, and I interviewed frontend candidates at Paytm Money. Outside work I build small, complete apps and give them Devanagari names.',
+    'I review code and mentor junior developers at KredX, and I interviewed frontend candidates at Paytm Money. Outside work I build small, complete apps with AI coding tools like Claude Code and GitHub Copilot, and give them Devanagari names.',
   ],
   principles: [
     {
@@ -169,6 +169,7 @@ export const skills: { group: string; items: string[] }[] = [
     group: 'Testing and tooling',
     items: ['Jest', 'React Testing Library', 'Vitest', 'Webpack', 'Vite', 'GitHub Actions', 'Jenkins', 'Sentry'],
   },
+  { group: 'AI tooling', items: ['Claude Code', 'GitHub Copilot', 'AI-assisted development'] },
   { group: 'Backend', items: ['Node.js', 'Express', 'REST APIs', 'Server-Sent Events'] },
 ]
 
@@ -252,6 +253,12 @@ export interface HeroSkill {
 
 export const heroSkills: HeroSkill[] = [
   { word: 'React', label: 'React', detail: '4+ years in production at Paytm Money and KredX', accent: '#6ff3ff' },
+  {
+    word: 'AI',
+    label: 'AI-assisted dev',
+    detail: 'Ships with Claude Code and GitHub Copilot: every app in this portfolio was built that way',
+    accent: '#c084fc',
+  },
   {
     word: 'TypeScript',
     label: 'TypeScript',
