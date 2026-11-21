@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { GITHUB_URL, REPO_URL, projects, stack, webProjects, type ProjectId } from './data/projects'
+import { GITHUB_URL, REPO_URL, projects, webProjects, type ProjectId } from './data/projects'
 import { useMagnetic, useReducedMotion } from './hooks/motion'
 import { healthLabel, usePings, type Health } from './hooks/usePings'
 import GlyphField from './components/GlyphField'
@@ -8,6 +8,14 @@ import ProjectPanel from './components/ProjectPanel'
 import Marquee from './components/Marquee'
 import CommandPalette from './components/CommandPalette'
 import Ambient from './components/Ambient'
+import RevealHeading from './components/RevealHeading'
+import ScrollWords from './components/ScrollWords'
+import Spot from './components/Spot'
+import Journey from './components/Journey'
+import Experience from './components/Experience'
+import ImpactRow from './components/ImpactRow'
+import CopyEmail from './components/CopyEmail'
+import { LINKEDIN_URL, about, impact, skills } from './data/profile'
 
 const WORDS = [
   { id: null, glyph: 'चिन्मय', accent: '#ff9933', caption: 'चिन्मय is my name, written in Devanagari' },
@@ -93,6 +101,8 @@ export default function App() {
   const [focus, setFocus] = useState<ProjectId | null>(null)
   const primary = useMagnetic<HTMLAnchorElement>(0.3)
   const secondary = useMagnetic<HTMLAnchorElement>(0.3)
+  const contactCta = useMagnetic<HTMLAnchorElement>(0.35)
+  const skillWords = skills.flatMap((g) => g.items)
 
   useEffect(() => {
     if (reduced || focus) return
@@ -117,8 +127,8 @@ export default function App() {
 
   return (
     <>
-      <a className="skip" href="#projects">
-        Skip to projects
+      <a className="skip" href="#about">
+        Skip to content
       </a>
       <Ambient reduced={reduced} />
 
@@ -130,9 +140,10 @@ export default function App() {
           <span className="brand-name">Chinmay Upare</span>
         </a>
         <nav aria-label="Sections">
+          <a href="#about">About</a>
+          <a href="#journey">Journey</a>
           <a href="#projects">Projects</a>
-          <a href="#stack">Stack</a>
-          <a href="#work">Experience</a>
+          <a href="#contact">Contact</a>
         </nav>
         <button className="nav-jump" type="button" onClick={() => setPaletteOpen(true)}>
           Jump to
@@ -160,16 +171,16 @@ export default function App() {
           <div className="hero-grid">
             <div className="hero-intro">
               <p>
-                Senior frontend developer at KredX with more than four years of React and TypeScript in production: design
-                systems, micro-frontends, KYC and payment flows. On the side I build small, complete apps: four web
-                apps that are live right now, and an Android ad blocker.
+                Senior frontend developer at KredX in Bangalore, with 4+ years building fintech products in React,
+                Next.js and TypeScript: design systems, micro-frontends, and the KYC, onboarding and payment flows
+                where a bug costs real money.
               </p>
               <div className="hero-actions">
-                <a ref={primary} className="btn btn-primary" href="#projects">
-                  See the projects
+                <a ref={primary} className="btn btn-primary" href="#journey">
+                  See my journey
                 </a>
-                <a ref={secondary} className="btn btn-ghost" href={GITHUB_URL} target="_blank" rel="noopener noreferrer">
-                  GitHub profile
+                <a ref={secondary} className="btn btn-ghost" href="#contact">
+                  Get in touch
                 </a>
               </div>
             </div>
@@ -177,9 +188,53 @@ export default function App() {
           </div>
         </section>
 
+        <section id="about" className="about" aria-labelledby="about-title">
+          <div className="section-head">
+            <RevealHeading id="about-title" text="About me" />
+          </div>
+          <div className="about-grid">
+            <ScrollWords className="about-lead" text={about.lead} reduced={reduced} />
+            <div className="about-body">
+              {about.body.map((para) => (
+                <p key={para.slice(0, 24)}>{para}</p>
+              ))}
+            </div>
+          </div>
+          <ul className="principles">
+            {about.principles.map((pr) => (
+              <Spot as="li" key={pr.title}>
+                <h3>{pr.title}</h3>
+                <p>{pr.text}</p>
+              </Spot>
+            ))}
+          </ul>
+        </section>
+
+        <Journey reduced={reduced} />
+
+        <section id="impact" className="impact-sec" aria-labelledby="impact-title">
+          <div className="section-head">
+            <RevealHeading id="impact-title" text="Before and after" />
+            <p>Results from work I led or shipped at KredX and Paytm Money.</p>
+          </div>
+          <ol className="impact">
+            {impact.map((item) => (
+              <ImpactRow key={item.what} item={item} reduced={reduced} />
+            ))}
+          </ol>
+        </section>
+
+        <section id="work" className="work" aria-labelledby="work-title">
+          <div className="section-head">
+            <RevealHeading id="work-title" text="Experience" />
+            <p>Every role in full. Open one to read what I shipped there.</p>
+          </div>
+          <Experience />
+        </section>
+
         <section id="projects" className="projects" aria-labelledby="projects-title">
           <div className="section-head">
-            <h2 id="projects-title">Five apps, built end to end</h2>
+            <RevealHeading id="projects-title" text="Things I build for fun" />
             <p>
               Each is its own project in{' '}
               <a href={REPO_URL} target="_blank" rel="noopener noreferrer">
@@ -197,46 +252,39 @@ export default function App() {
 
         <section id="stack" className="stack" aria-labelledby="stack-title">
           <div className="section-head">
-            <h2 id="stack-title">What I ship with</h2>
+            <RevealHeading id="stack-title" text="What I work with" />
             <p>Day-job tooling and the stack behind these projects.</p>
           </div>
-          <Marquee items={stack.slice(0, 9)} />
-          <Marquee items={stack.slice(9)} reverse />
-          <ul className="sr-only">
-            {stack.map((s) => (
-              <li key={s}>{s}</li>
+          <Marquee items={skillWords.slice(0, Math.ceil(skillWords.length / 2))} />
+          <Marquee items={skillWords.slice(Math.ceil(skillWords.length / 2))} reverse />
+          <dl className="sr-only">
+            {skills.map((g) => (
+              <div key={g.group}>
+                <dt>{g.group}</dt>
+                <dd>{g.items.join(', ')}</dd>
+              </div>
             ))}
-          </ul>
+          </dl>
         </section>
 
-        <section id="work" className="work" aria-labelledby="work-title">
-          <div className="section-head">
-            <h2 id="work-title">Where I work</h2>
-          </div>
-          <ol className="timeline">
-            <li className="now">
-              <span className="tl-when">Now</span>
-              <div>
-                <h3>KredX</h3>
-                <p className="tl-role">Senior frontend developer</p>
-                <p>KYC flows, payment integrations and a versioned design-system package published to npm.</p>
-              </div>
-            </li>
-            <li>
-              <span className="tl-when">Before</span>
-              <div>
-                <h3>Paytm Money and Paytm</h3>
-                <p className="tl-role">Promoted from Software Engineer to Senior Software Engineer at Paytm Money</p>
-              </div>
-            </li>
-          </ol>
+        <section id="contact" className="contact" aria-labelledby="contact-title">
+          <Spot className="contact-card">
+            <RevealHeading id="contact-title" text="Let's build something" />
+            <p className="contact-intro">Email is the quickest way to reach me. I'm also on LinkedIn and GitHub.</p>
+            <CopyEmail />
+            <div className="contact-actions">
+              <a ref={contactCta} className="btn btn-primary" href={LINKEDIN_URL} target="_blank" rel="noopener noreferrer">
+                Connect on LinkedIn
+              </a>
+              <a className="btn btn-ghost" href={GITHUB_URL} target="_blank" rel="noopener noreferrer">
+                GitHub
+              </a>
+            </div>
+          </Spot>
         </section>
       </main>
 
       <footer className="footer">
-        <p className="footer-big" aria-hidden="true">
-          एकत्र अंक शोध सेतु कवच
-        </p>
         <div className="footer-row">
           <p>
             Built with React 19 and TypeScript, deployed on Render. This page lives in the{' '}

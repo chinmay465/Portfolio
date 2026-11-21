@@ -6,12 +6,17 @@ The landing page for this repo: one place that links to every app, and a showcas
 
 ## What's on it
 
-- **Particle hero:** a canvas of a few thousand particles that assemble into चिन्मय, then morph through each project's Devanagari name (एकत्र, अंक, शोध, सेतु, कवच). They scatter away from the pointer and burst on click. Hovering an app in the status panel morphs the field to that app's name
-- **Decoding headline:** the name resolves out of mixed Devanagari and Latin glyphs, and runs again on hover
-- **Live status:** Kavach, the Android app, shows as an Android app row that links to its APK. Each web app is pinged from the visitor's browser on load and every 30 s, with latency bars. The ping also wakes Render's sleeping free services, so they're warm by the time someone clicks through
-- **Project panels:** each app gets a Devanagari outline that draws itself on scroll, its features and stack, links to the live app (or, for Kavach, the APK) and its folder, and an animated sketch of what it does: Ekatra's scrolling feed, Ank's flipping mastheads, Shodh's live match stream, Setu's proxy routing with retries and evictions, and Kavach's DNS lookups getting stopped or let through. The sketches tilt in 3D with a glare that follows the pointer, and pause when off screen
-- **Command palette:** `Ctrl K`, `⌘ K` or `/` to jump to any app, its code or a section
-- Cursor ring and spotlight, scroll progress line, stack marquee, magnetic buttons
+A personal site and an index of everything in this repo. Everything about Chinmay comes from his resume (`src/data/profile.ts`, no phone number by design).
+
+- **Particle hero:** a canvas of a few thousand particles that assemble into चिन्मय, then morph through each project's name. They scatter away from the pointer and burst on click. Hovering an app in the live status panel morphs the field to that app
+- **Decoding headline:** the name resolves out of mixed glyphs, and runs again on hover
+- **About me:** the lead lights up word by word as you scroll; three working principles on cursor-spotlight cards
+- **Journey:** a pinned scroll scene from MIT AoE Pune through Paytm Money and the promotion to KredX in Bangalore. The timeline fills, the year decodes, and a dot travels from Pune to Bangalore
+- **Before and after:** five results in a bento grid; the old value is struck out and the new one counts or decodes in
+- **Experience:** every role in full in an animated accordion, plus education
+- **Projects:** each app with a self-drawing outline of its name, features, stack, live ping and an animated sketch of what it does (Ekatra, Ank, Shodh, Setu, Kavach). The pings also wake Render's sleeping services
+- **Skills marquee and contact:** email with a copy button, LinkedIn and GitHub
+- Headings rise out of a mask on scroll, cursor ring and spotlight, scroll progress line, magnetic buttons, `Ctrl K` / `⌘ K` / `/` command palette
 - Everything respects `prefers-reduced-motion`; keyboard focus is visible throughout
 
 ## Stack
@@ -20,6 +25,7 @@ React 19, TypeScript, Vite, Vitest and oxlint. No UI or animation library: the c
 
 ```
 src/
+  data/profile.ts             about, journey, impact, experience, skills
   data/projects.ts            project catalogue (add an app here)
   lib/scramble.ts             headline decode frames (+ tests)
   lib/ping.ts                 status ping and classification (+ tests)
