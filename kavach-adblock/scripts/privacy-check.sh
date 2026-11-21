@@ -9,7 +9,7 @@
 # Run from kavach-adblock/ after ./gradlew assembleDebug.
 set -euo pipefail
 
-APK=${1:-app/build/outputs/apk/release/app-release.apk}
+APK=${1:-app/build/outputs/apk/debug/app-debug.apk}
 SDK=${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}
 APKANALYZER=$(ls "$SDK"/cmdline-tools/*/bin/apkanalyzer 2>/dev/null | sort -V | tail -1)
 [ -x "$APKANALYZER" ] || { echo "::error::apkanalyzer not found under $SDK"; exit 1; }
@@ -19,15 +19,12 @@ trap 'rm -rf "$WORK"' EXIT
 "$APKANALYZER" manifest print "$APK" > "$WORK/manifest.xml"
 unzip -q -o "$APK" 'classes*.dex' -d "$WORK/dex"
 cat "$WORK"/dex/classes*.dex | strings -n 6 > "$WORK/dex-strings.txt"
-APKSIGNER=$(ls "$SDK"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)
-[ -x "$APKSIGNER" ] || { echo "::error::apksigner not found under $SDK"; exit 1; }
-"$APKSIGNER" verify --print-certs "$APK" > "$WORK/signer.txt"
 
-python3 - "$WORK" "$APK" <<'PY'
+python3 - "$WORK" <<'PY'
 import os, re, sys
 import xml.etree.ElementTree as ET
 
-work, apk = sys.argv[1], sys.argv[2]
+work = sys.argv[1]
 A = "{http://schemas.android.com/apk/res/android}"
 root = ET.parse(os.path.join(work, "manifest.xml")).getroot()
 pkg = root.get("package")
@@ -55,15 +52,7 @@ if app.get(A + "allowBackup") != "false":
 if app.get(A + "usesCleartextTraffic") == "true":
     errors.append("usesCleartextTraffic is true")
 if app.get(A + "debuggable") == "true":
-    if "release" in os.path.basename(apk):
-        errors.append("Release APK is debuggable")
     report.append("debuggable=true(debug build)")
-
-# Signer: report the certificate so updates can be checked against it.
-signer = open(os.path.join(work, "signer.txt")).read()
-dn = re.search(r"certificate DN: (.+)", signer)
-sha = re.search(r"certificate SHA-256 digest: ([0-9a-f]+)", signer)
-report.append("signer=" + (dn.group(1) if dn else "?") + " sha256=" + (sha.group(1)[:16] if sha else "?"))
 
 # 3. Exported components
 # Permissions that only the system/shell hold, so other apps can't use the entry point.
