@@ -17,6 +17,7 @@ Swar wraps [music.youtube.com](https://music.youtube.com) in an Android app. Mus
 ```
 
 - **Background play.** YouTube Music's web player pauses when the Page Visibility API says the tab is hidden. `swar.js` runs before the page's own scripts (`WebViewCompat.addDocumentStartJavaScript`) and makes `document.hidden` always `false`. It also swallows `visibilitychange` events. The activity never calls `WebView.onPause()`, which is what would stop media. The foreground service keeps the process alive and holds a partial wake lock while music plays.
+- **Videos too.** Chromium pauses a playing *video* as soon as the page is hidden, which page scripts can't prevent. `SwarWebView` keeps reporting its window as visible while the app is in the background, so videos keep going with the screen off. When you leave the app during a video that has a song version (YouTube Music's **Song | Video** switch), Swar switches to **Song** and keeps playing audio only, which saves data and battery. When you come back, it switches back to **Video**. Videos without a song version keep playing as video.
 - **No ads, in three layers.**
   1. *Data:* `JSON.parse`, `Response.json()` and the embedded `ytInitialPlayerResponse` are wrapped so `adPlacements`, `playerAds`, `adSlots` and ad renderers are removed before the player reads them. With no ad scheduled, nothing plays. This is the same approach uBlock Origin uses.
   2. *Network:* `AdFilter` returns an empty response for ad servers (DoubleClick, AdSense, IMA SDK), YouTube's ad endpoints (`/pagead/`, `/api/stats/ads`, `/ptracking`, …) and telemetry (see Privacy). Service-worker requests go through the same filter.
@@ -90,4 +91,5 @@ cd js-tests && npm ci && npm test   # swar.js in a simulated YouTube Music page 
 | `web/AdFilter.kt` | Ad and telemetry hosts and endpoints blocked at the network level |
 | `web/NavPolicy.kt` | Which links stay in the app, open outside or are blocked |
 | `web/UserAgent.kt` | Turns WebView's user agent into Chrome's |
+| `web/SwarWebView.kt` | WebView that stays "visible" in the background so videos aren't paused |
 | `js-tests/` | jsdom tests for `swar.js` |

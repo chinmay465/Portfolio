@@ -132,8 +132,15 @@ class MainActivity : AppCompatActivity() {
 
     // No onPause/onStop override that pauses the WebView: WebView.onPause()
     // is what would stop playback in the background.
+    override fun onStart() {
+        super.onStart()
+        webView.evaluateJavascript(PlayerCommand.ReturnToForeground.js, null)
+    }
+
     override fun onStop() {
         super.onStop()
+        // Screen off or another app opened: a playing video switches to its song version.
+        webView.evaluateJavascript(PlayerCommand.EnterBackground.js, null)
         CookieManager.getInstance().flush()
     }
 

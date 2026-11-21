@@ -231,6 +231,55 @@ test('feels like an app: no tap highlight, selection or overscroll', () => {
   p.close();
 });
 
+const AV_TOGGLE = '<ytmusic-av-toggle><button class="song-button">Song</button><button class="video-button">Video</button></ytmusic-av-toggle>';
+
+test('leaving the app during a video switches to the song and back', async () => {
+  const p = page(AV_TOGGLE);
+  const v = fakeVideo(p.document, { paused: false, duration: 200, currentTime: 40, videoWidth: 1280, videoHeight: 720, readyState: 4 });
+  p.document.body.appendChild(v);
+  const clicks = [];
+  p.document.querySelector('.song-button').addEventListener('click', () => {
+    clicks.push('song');
+    v.videoWidth = 0; v.videoHeight = 0; v.paused = true; // stream reloads as audio only
+  });
+  p.document.querySelector('.video-button').addEventListener('click', () => clicks.push('video'));
+
+  p.window.__swar.cmd('background');
+  assert.deepEqual(clicks, ['song']);
+  await new Promise((r) => setTimeout(r, 400));
+  assert.equal(v.paused, false, 'keeps playing after the switch');
+
+  p.window.__swar.cmd('background');
+  assert.deepEqual(clicks, ['song'], 'audio-only: nothing more to switch');
+
+  p.window.__swar.cmd('foreground');
+  p.window.__swar.cmd('foreground');
+  assert.deepEqual(clicks, ['song', 'video'], 'switches back once');
+  p.close();
+});
+
+test('songs, paused videos and videos without a song version are left alone', () => {
+  const p = page(AV_TOGGLE);
+  const v = fakeVideo(p.document, { paused: false, duration: 200, videoWidth: 0, videoHeight: 0 });
+  p.document.body.appendChild(v);
+  const clicks = [];
+  p.document.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => clicks.push(b.className)));
+
+  p.window.__swar.cmd('background'); // already the song
+  v.videoWidth = 1280; v.videoHeight = 720; v.paused = true;
+  p.window.__swar.cmd('background'); // paused video
+  p.window.__swar.cmd('foreground'); // never switched
+  assert.deepEqual(clicks, []);
+  p.close();
+
+  const q = page(); // no Song | Video switch on this track
+  const w = fakeVideo(q.document, { paused: false, duration: 200, videoWidth: 1280, videoHeight: 720 });
+  q.document.body.appendChild(w);
+  q.window.__swar.cmd('background');
+  assert.equal(w.paused, false);
+  q.close();
+});
+
 test('running the script twice is harmless', () => {
   const p = page();
   const parse = p.window.JSON.parse;
