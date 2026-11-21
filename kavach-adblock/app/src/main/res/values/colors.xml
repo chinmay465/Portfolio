@@ -4,4 +4,5 @@
     <color name="shield_on">#1B9E6B</color>
     <color name="shield_off">#9AA3A0</color>
     <color name="ic_launcher_bg">#0F3D2E</color>
+    <color name="ic_launcher_off_bg">#3A3F3D</color>
 </resources>

@@ -57,7 +57,10 @@ if app.get(A + "debuggable") == "true":
 # 3. Exported components
 # Permissions that only the system/shell hold, so other apps can't use the entry point.
 system_only = {"android.permission.BIND_VPN_SERVICE", "android.permission.DUMP"}
-launcher = f"{pkg}.MainActivity"
+# Launcher entries: the main screen plus the "Kavach On"/"Kavach Off" quick
+# toggles used by automation apps. Like any launcher icon, other apps can start
+# them; they only switch protection and take no input.
+launchers = {f"{pkg}.MainActivity", f"{pkg}.KavachOnActivity", f"{pkg}.KavachOffActivity"}
 exported = []
 for kind in ("activity", "activity-alias", "service", "receiver", "provider"):
     for c in app.iter(kind):
@@ -68,7 +71,7 @@ for kind in ("activity", "activity-alias", "service", "receiver", "provider"):
             continue
         perm = c.get(A + "permission") or c.get(A + "readPermission")
         exported.append(f"{kind}:{name.rsplit('.', 1)[-1]}[{perm or 'open'}]")
-        if name == launcher or perm in system_only:
+        if name in launchers or perm in system_only:
             continue
         errors.append(f"Exported {kind} reachable by other apps: {name} (permission={perm})")
 report.append("exported=" + ",".join(exported))
