@@ -4,6 +4,7 @@ import EkatraVisual from './EkatraVisual'
 import AnkVisual from './AnkVisual'
 import ShodhVisual from './ShodhVisual'
 import SetuVisual from './SetuVisual'
+import RailVisual from './RailVisual'
 import KavachVisual from './KavachVisual'
 import SwarVisual from './SwarVisual'
 
@@ -12,6 +13,7 @@ export const VISUALS: Record<ProjectId, ComponentType<{ active: boolean }>> = {
   ank: AnkVisual,
   shodh: ShodhVisual,
   setu: SetuVisual,
+  rail: RailVisual,
   kavach: KavachVisual,
   swar: SwarVisual,
 }

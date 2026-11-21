@@ -1,4 +1,4 @@
-export type ProjectId = 'ekatra' | 'ank' | 'shodh' | 'setu' | 'kavach' | 'swar'
+export type ProjectId = 'ekatra' | 'ank' | 'shodh' | 'setu' | 'rail' | 'kavach' | 'swar'
 
 export interface Project {
   id: ProjectId
@@ -10,12 +10,13 @@ export interface Project {
   tagline: string
   points: string[]
   stack: string[]
-  kind: 'Static site' | 'Node web service' | 'Android app'
+  kind: 'Static site' | 'Node web service' | 'Python web service' | 'Android app'
   /** Deployed web app. Pinged by the status console. Absent for the Android apps. */
   live?: string
   /** Where to get the Android APK (built by CI). */
   download?: string
-  code: string
+  /** Source on GitHub. Absent while the repo is private. */
+  code?: string
   accent: string
 }
 
@@ -96,6 +97,23 @@ export const projects: Project[] = [
     live: 'https://setu-proxy-hub.onrender.com',
     code: `${repo}/tree/main/setu-proxy-hub`,
     accent: '#b9a4ff',
+  },
+  {
+    id: 'rail',
+    name: 'Rail Planner',
+    glyph: 'मार्ग',
+    meaning: 'route',
+    tagline: 'When Indian Railways bookings open, and the routes that still get you there when direct trains are full.',
+    points: [
+      'General and Tatkal booking windows for every leg, counted from the train\'s origin, with a calendar reminder',
+      'Alternate routes within your limits on extra time, extra distance and changes, through via stations with planned stops',
+      'A round-by-round search over the useful change points, sorted and filtered on the server, 50 results at a time',
+      'Live seat availability per leg (AVL, RAC, WL), with rate-limit handling and a toggle to hide waitlisted routes',
+    ],
+    stack: ['Python', 'FastAPI', 'React', 'TypeScript', 'Docker'],
+    kind: 'Python web service',
+    live: 'https://rail-planner-08hw.onrender.com',
+    accent: '#ff6b3d',
   },
   {
     id: 'kavach',

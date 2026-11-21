@@ -22,8 +22,10 @@ const items: Item[] = [
     { id: `${p.id}-page`, title: p.name, hint: 'Project page', href: `/projects/${p.id}`, external: false, accent: p.accent },
     p.live
       ? { id: `${p.id}-live`, title: `Open ${p.name}`, hint: p.live.replace('https://', ''), href: p.live, external: true, accent: p.accent }
-      : { id: `${p.id}-apk`, title: `Get the ${p.name} APK`, hint: 'GitHub Actions', href: p.download ?? p.code, external: true, accent: p.accent },
-    { id: `${p.id}-code`, title: `${p.name} source code`, hint: 'GitHub', href: p.code, external: true, accent: p.accent },
+      : { id: `${p.id}-apk`, title: `Get the ${p.name} APK`, hint: 'GitHub Actions', href: p.download ?? p.code ?? '#', external: true, accent: p.accent },
+    ...(p.code
+      ? [{ id: `${p.id}-code`, title: `${p.name} source code`, hint: 'GitHub', href: p.code, external: true, accent: p.accent }]
+      : []),
   ]),
   { id: 'linkedin', title: 'LinkedIn profile', hint: 'linkedin.com/in/chinmay-upare', href: LINKEDIN_URL, external: true },
   { id: 'github', title: 'GitHub profile', hint: 'github.com/chinmay465', href: GITHUB_URL, external: true },

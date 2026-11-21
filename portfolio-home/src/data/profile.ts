@@ -232,10 +232,10 @@ export const journey: Stage[] = [
     year: 'Today',
     city: 'Bangalore',
     title: 'Shipping at work, building on weekends',
-    org: 'KredX and six side projects',
+    org: 'KredX and seven side projects',
     points: [
       'Mentoring and reviewing code across the frontend team',
-      'Ships side projects end to end with AI pair-programming: four web apps live on Render, two Android apps built and privacy-checked in CI',
+      'Ships side projects end to end with AI pair-programming: five web apps live on Render, two Android apps built and privacy-checked in CI',
     ],
     route: 1,
   },

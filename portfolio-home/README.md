@@ -13,7 +13,7 @@ A personal site split into short pages, so no page runs long. Everything about C
 | `/` | Skills board hero, the name, an At a glance card, four featured projects, three results, contact |
 | `/about` | About me, working principles, the career journey slider, skills |
 | `/experience` | Before-and-after results, every role in an accordion, education |
-| `/projects` | All six apps as cards, filterable by web or Android (`?type=web`, `?type=android`) |
+| `/projects` | All seven apps as cards, filterable by web or Android (`?type=web`, `?type=android`) |
 | `/projects/:id` | One app in full: features, stack, live status, links, animated sketch, previous and next |
 | `/contact` | Email with copy button, LinkedIn, GitHub |
 | anything else | A 404 page |
