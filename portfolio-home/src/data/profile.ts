@@ -171,3 +171,78 @@ export const skills: { group: string; items: string[] }[] = [
   },
   { group: 'Backend', items: ['Node.js', 'Express', 'REST APIs', 'Server-Sent Events'] },
 ]
+
+export interface Stage {
+  /** Year in Devanagari numerals; the particles spell it. */
+  glyph: string
+  year: string
+  city: 'Pune' | 'Bangalore'
+  title: string
+  org: string
+  points: string[]
+  /** 0 = Pune, 1 = Bangalore: where the dot on the route sits at this stage. */
+  route: number
+}
+
+export const journey: Stage[] = [
+  {
+    glyph: '२०१८',
+    year: '2018',
+    city: 'Pune',
+    title: 'B.Tech in Computer Science',
+    org: 'MIT Academy of Engineering',
+    points: ['Four years of computer science in Pune', 'Graduated in 2022 with a CGPA of 8.75'],
+    route: 0,
+  },
+  {
+    glyph: '२०२२',
+    year: '2022',
+    city: 'Pune',
+    title: 'Software Engineer',
+    org: 'Paytm Money',
+    points: [
+      'Merged the web and mobile app into one H5 codebase',
+      'Built modules across 6 micro-frontends with Module Federation',
+      'Took Lighthouse from 70 to 95 for 1M+ users',
+    ],
+    route: 0,
+  },
+  {
+    glyph: '२०२४',
+    year: '2024',
+    city: 'Pune',
+    title: 'Promoted to Senior Software Engineer',
+    org: 'Paytm Money',
+    points: [
+      'Trading tools for 740K+ active users, engagement up 20%',
+      'Automated account closure, 70% fewer support requests',
+      'Interviewed frontend candidates for the team',
+    ],
+    route: 0,
+  },
+  {
+    glyph: '२०२५',
+    year: '2025',
+    city: 'Bangalore',
+    title: 'Senior Frontend Developer',
+    org: 'KredX',
+    points: [
+      'Moved to Bangalore',
+      'Led the design system: 25+ components, tokens, Storybook',
+      'Onboarding cut from 2 days to 2 hours; BillDesk payments end to end',
+    ],
+    route: 1,
+  },
+  {
+    glyph: 'आज',
+    year: 'Today',
+    city: 'Bangalore',
+    title: 'Shipping at work, building on weekends',
+    org: 'KredX and five side projects',
+    points: [
+      'Mentoring and reviewing code across the frontend team',
+      'Five side projects, each with a Devanagari name',
+    ],
+    route: 1,
+  },
+]

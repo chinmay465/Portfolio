@@ -36,14 +36,12 @@ export default function ProjectPanel({ project: p, health, reduced }: Props) {
       ref={ref}
       id={p.id}
       className="proj"
+      data-scene={`project:${p.id}`}
       data-revealed={revealed || reduced}
       style={{ '--accent': p.accent } as React.CSSProperties}
       aria-labelledby={`${p.id}-title`}
     >
       <div ref={artRef} className="proj-art">
-        <span className="proj-glyph" lang="mr" aria-hidden="true">
-          {p.glyph}
-        </span>
         <Tilt reduced={reduced} className="proj-screen">
           <Visual active={visible && !reduced} />
         </Tilt>
