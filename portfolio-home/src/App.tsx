@@ -42,7 +42,7 @@ function StatusConsole({
       </div>
       <ul>
         {projects.map((p) => {
-          // The Android app has no URL to ping; it gets a static badge instead.
+          // The Android apps have no URL to ping; they get a static badge instead.
           const h = p.live ? (health[p.id] ?? { state: 'checking' as const, history: [] }) : undefined
           return (
             <li key={p.id} style={{ '--accent': p.accent } as React.CSSProperties}>
@@ -162,7 +162,7 @@ export default function App() {
               <p>
                 Senior frontend developer at KredX with more than four years of React and TypeScript in production: design
                 systems, micro-frontends, KYC and payment flows. On the side I build small, complete apps: four web
-                apps that are live right now, and an Android ad blocker.
+                apps that are live right now, and two Android apps, an ad blocker and an ad-free YouTube Music player.
               </p>
               <div className="hero-actions">
                 <a ref={primary} className="btn btn-primary" href="#projects">
@@ -179,13 +179,13 @@ export default function App() {
 
         <section id="projects" className="projects" aria-labelledby="projects-title">
           <div className="section-head">
-            <h2 id="projects-title">Five apps, built end to end</h2>
+            <h2 id="projects-title">Six apps, built end to end</h2>
             <p>
               Each is its own project in{' '}
               <a href={REPO_URL} target="_blank" rel="noopener noreferrer">
                 one repository
               </a>
-              , tested in CI. The four React and TypeScript web apps deploy from a single Render Blueprint, and the
+              , tested in CI. The four React and TypeScript web apps deploy from a single Render Blueprint, and each
               Android app's APK is built and privacy-checked on every push. The previews beside them are animated
               sketches of what each app does.
             </p>
@@ -235,7 +235,7 @@ export default function App() {
 
       <footer className="footer">
         <p className="footer-big" aria-hidden="true">
-          एकत्र अंक शोध सेतु कवच
+          एकत्र अंक शोध सेतु कवच स्वर
         </p>
         <div className="footer-row">
           <p>
