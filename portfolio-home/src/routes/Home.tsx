@@ -8,8 +8,9 @@ import ProjectCard from '../components/ProjectCard'
 import ImpactRow from '../components/ImpactRow'
 import RevealHeading from '../components/RevealHeading'
 import ContactCard from '../components/ContactCard'
+import AllProjectsCta from '../components/AllProjectsCta'
 
-const FEATURED = ['ekatra', 'setu', 'swar', 'kavach'] as const
+const FEATURED = ['rail', 'ekatra', 'setu', 'swar'] as const
 
 export default function Home() {
   const { reduced } = useSite()
@@ -27,18 +28,14 @@ export default function Home() {
       <section className="sec" aria-labelledby="work-title">
         <div className="section-head">
           <RevealHeading id="work-title" text="Selected work" />
-          <p>
-            Side projects I designed and built end to end.{' '}
-            <Link to="/projects" viewTransition>
-              See all {projects.length}
-            </Link>
-          </p>
+          <p>Side projects I designed and built end to end. Hover a card to play its preview.</p>
         </div>
         <div className="pgrid pgrid-4 rail-mobile">
           {featured.map((p, i) => (
             <ProjectCard key={p.id} project={p} index={i} />
           ))}
         </div>
+        <AllProjectsCta />
       </section>
 
       <section className="sec" aria-labelledby="hl-title">
