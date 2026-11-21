@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- YouTube Music's own background, so the status bar area blends in -->
+    <!-- YouTube Music's own background, so the status bar area and overlays blend in -->
     <color name="page_bg">#030303</color>
-    <color name="brand">#E8475B</color>
-    <color name="ic_launcher_bg">#1A0B10</color>
+    <color name="brand">#5B8CFF</color>
+    <color name="brand_2">#A066FF</color>
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#B3B3B3</color>
+    <color name="text_tertiary">#7A7A7A</color>
 </resources>

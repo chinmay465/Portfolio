@@ -6,10 +6,16 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.net.ConnectivityManager
+import android.net.Network
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.view.View
 import android.view.ViewGroup
+import android.webkit.WebResourceError
 import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.RenderProcessGoneDetail
@@ -19,11 +25,13 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.FrameLayout
+import android.widget.ProgressBar
+import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -35,6 +43,7 @@ import com.chinmay.swar.playback.PlaybackService
 import com.chinmay.swar.playback.PlayerBridge
 import com.chinmay.swar.playback.PlayerCommand
 import com.chinmay.swar.playback.PlayerState
+import com.chinmay.swar.ui.Shell
 import com.chinmay.swar.web.AdFilter
 import com.chinmay.swar.web.NavPolicy
 import com.chinmay.swar.web.UserAgent
@@ -45,6 +54,24 @@ import java.io.ByteArrayInputStream
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
+    private lateinit var shell: Shell
+    private val handler = Handler(Looper.getMainLooper())
+    private var mainFrameFailed = false
+    private val revealFallback = Runnable { shell.showPage() }
+
+    private val backCallback = object : OnBackPressedCallback(true) {
+        override fun handleOnBackPressed() {
+            // Leaving the app must not stop the music, so never finish on back.
+            if (webView.canGoBack()) webView.goBack() else moveTaskToBack(true)
+        }
+    }
+
+    // Back online after an error: retry without waiting for a tap.
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            runOnUiThread { if (shell.offlineVisible) retry() }
+        }
+    }
     private val pageScript by lazy { assets.open("swar.js").bufferedReader().use { it.readText() } }
     private var documentStartScript = false
 
@@ -54,13 +81,25 @@ class MainActivity : AppCompatActivity() {
     private val closeListener: () -> Unit = { runOnUiThread { finishAndRemoveTask() } }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen().setOnExitAnimationListener { splash ->
+            // Hand over to the loading screen, which shows the same bars.
+            splash.view.animate().alpha(0f).setDuration(260).withEndAction { splash.remove() }.start()
+        }
         super.onCreate(savedInstanceState)
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        val root = FrameLayout(this).apply { setBackgroundColor(getColor(R.color.page_bg)) }
-        webView = WebView(this).apply { setBackgroundColor(getColor(R.color.page_bg)) }
-        root.addView(webView, FrameLayout.LayoutParams(MATCH, MATCH))
-        setContentView(root)
+        setContentView(R.layout.activity_main)
+        val root = findViewById<View>(R.id.root)
+        webView = findViewById(R.id.web)
+        shell = Shell(
+            loading = findViewById(R.id.loading),
+            loadingStatus = findViewById<TextView>(R.id.loading_status),
+            offline = findViewById(R.id.offline),
+            progress = findViewById<ProgressBar>(R.id.progress),
+            onRetry = ::retry,
+        )
+        // Never leave someone staring at the loading screen.
+        handler.postDelayed(revealFallback, MAX_LOADING_MS)
         ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime())
             view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
@@ -75,12 +114,9 @@ class MainActivity : AppCompatActivity() {
         PlayerBridge.commandSink = commandSink
         PlayerBridge.closeListener = closeListener
 
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                // Leaving the app must not stop the music, so never finish on back.
-                if (webView.canGoBack()) webView.goBack() else moveTaskToBack(true)
-            }
-        })
+        onBackPressedDispatcher.addCallback(this, backCallback)
+        updateBackCallback()
+        getSystemService(ConnectivityManager::class.java).registerDefaultNetworkCallback(networkCallback)
 
         // Only the page address is kept across process death (see onSaveInstanceState).
         val savedUrl = savedInstanceState?.getString(STATE_URL)?.takeIf { it.startsWith(ORIGIN) }
@@ -111,6 +147,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        handler.removeCallbacksAndMessages(null)
+        shell.release()
+        runCatching { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(networkCallback) }
         if (PlayerBridge.commandSink === commandSink) PlayerBridge.commandSink = null
         if (PlayerBridge.closeListener === closeListener) PlayerBridge.closeListener = null
         if (isFinishing) {
@@ -166,7 +205,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         webView.webViewClient = PageClient()
-        webView.webChromeClient = WebChromeClient()
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onProgressChanged(view: WebView, newProgress: Int) = shell.onProgress(newProgress)
+        }
     }
 
     private inner class PageClient : WebViewClient() {
@@ -186,6 +227,7 @@ class MainActivity : AppCompatActivity() {
             }
 
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+            mainFrameFailed = false
             // Older WebView without document-start scripts: inject as early as we can.
             if (!documentStartScript && url != null && url.startsWith(ORIGIN)) {
                 view.evaluateJavascript(pageScript, null)
@@ -194,6 +236,25 @@ class MainActivity : AppCompatActivity() {
 
         override fun onPageFinished(view: WebView, url: String?) {
             CookieManager.getInstance().flush()
+            if (mainFrameFailed) return
+            if (url != null && url.startsWith(ORIGIN)) {
+                // The page script says "ready" once the UI has drawn; this is the backstop.
+                handler.removeCallbacks(revealFallback)
+                handler.postDelayed(revealFallback, READY_FALLBACK_MS)
+            } else {
+                shell.showPage() // sign-in pages have no page script
+            }
+        }
+
+        override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
+            if (!request.isForMainFrame) return
+            mainFrameFailed = true
+            handler.removeCallbacks(revealFallback)
+            shell.showOffline()
+        }
+
+        override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
+            updateBackCallback()
         }
 
         override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
@@ -220,7 +281,15 @@ class MainActivity : AppCompatActivity() {
         } catch (e: JSONException) {
             return
         }
-        if (o.optString("type") != "state") return
+        when (o.optString("type")) {
+            "ready" -> {
+                handler.removeCallbacks(revealFallback)
+                if (!mainFrameFailed) shell.showPage()
+                return
+            }
+            "state" -> Unit
+            else -> return
+        }
         val state = PlayerState(
             title = o.optString("title"),
             artist = o.optString("artist"),
@@ -233,6 +302,23 @@ class MainActivity : AppCompatActivity() {
         )
         PlayerBridge.publish(state)
         if (state.playing) PlaybackService.ensureRunning(this)
+    }
+
+    private fun retry() {
+        shell.showLoading()
+        handler.removeCallbacks(revealFallback)
+        handler.postDelayed(revealFallback, MAX_LOADING_MS)
+        if (webView.url.isNullOrEmpty()) webView.loadUrl(HOME) else webView.reload()
+    }
+
+    /**
+     * Android 12+ moves a root activity to the background on Back instead of
+     * finishing it, with the predictive-back animation. So at the top of the
+     * page history, let the system handle Back. Older versions would finish
+     * the activity (and stop the music), so there Swar always handles it.
+     */
+    private fun updateBackCallback() {
+        backCallback.isEnabled = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || webView.canGoBack()
     }
 
     private fun openExternally(uri: Uri) {
@@ -260,7 +346,8 @@ class MainActivity : AppCompatActivity() {
         const val HOME = "$ORIGIN/"
         const val BRIDGE_NAME = "SwarBridge"
         const val STATE_URL = "swar.url"
-        const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
+        const val MAX_LOADING_MS = 12_000L
+        const val READY_FALLBACK_MS = 2_500L
 
         fun blockedOrNull(request: WebResourceRequest): WebResourceResponse? =
             if (AdFilter.shouldBlock(request.url.toString())) {
