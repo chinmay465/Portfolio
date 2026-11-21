@@ -1,8 +1,19 @@
 import { useEffect, useRef } from 'react'
 
+export interface GlyphColors {
+  /** Particles at rest, forming the word. */
+  rest: string
+  /** Particles drifting into place. */
+  calm: string
+  /** Particles in flight. */
+  fast: string
+  /** Loose particles floating around the word. */
+  dust: string
+}
+
 interface Props {
   word: string
-  accent: string
+  colors: GlyphColors
   reduced: boolean
   label: string
 }
@@ -20,8 +31,6 @@ interface Particle {
 
 const FONT = '"Anek Devanagari Variable", "Anek Latin Variable", sans-serif'
 const MAX_POINTS = 2600
-const CALM = '#ffe9d6'
-const FAST = '#6ff3ff'
 
 /** Rasterises a word off-screen and returns points on its filled pixels. */
 function sampleWord(word: string, w: number, h: number): { pts: [number, number][]; gap: number } {
@@ -67,7 +76,7 @@ function shuffle<T>(a: T[]): T[] {
  * The hero picture: a few thousand particles that assemble into a Devanagari word,
  * scatter away from the pointer, burst on click and fly across to the next word.
  */
-export default function GlyphField({ word, accent, reduced, label }: Props) {
+export default function GlyphField({ word, colors, reduced, label }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const state = useRef({
@@ -77,7 +86,7 @@ export default function GlyphField({ word, accent, reduced, label }: Props) {
     gap: 4,
     mx: -9999,
     my: -9999,
-    accent,
+    colors,
     word,
     visible: true,
     raf: 0,
@@ -87,10 +96,10 @@ export default function GlyphField({ word, accent, reduced, label }: Props) {
   useEffect(() => {
     const s = state.current
     s.word = word
-    s.accent = accent
+    s.colors = colors
     retarget()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [word, accent])
+  }, [word, colors])
 
   function retarget() {
     const s = state.current
@@ -136,13 +145,12 @@ export default function GlyphField({ word, accent, reduced, label }: Props) {
     if (!canvas || !ctx) return
     const s = state.current
     ctx.clearRect(0, 0, s.w, s.h)
-    ctx.globalCompositeOperation = 'lighter'
     const size = Math.max(1.4, s.gap * 0.62)
     const buckets: [string, Path2D][] = [
-      [s.accent, new Path2D()],
-      [CALM, new Path2D()],
-      [FAST, new Path2D()],
-      ['rgba(255,233,214,0.22)', new Path2D()],
+      [s.colors.rest, new Path2D()],
+      [s.colors.calm, new Path2D()],
+      [s.colors.fast, new Path2D()],
+      [s.colors.dust, new Path2D()],
     ]
     for (const p of s.particles) {
       if (!reduced) {

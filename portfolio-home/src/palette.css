@@ -1,0 +1,101 @@
+/* ---------- Command palette ---------- */
+
+.palette-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: start center;
+  padding: 12vh 16px 16px;
+  background: rgba(27, 26, 46, 0.45);
+  backdrop-filter: blur(8px);
+  animation: fade 0.25s ease both;
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+.palette {
+  width: min(620px, 100%);
+  border-radius: 20px;
+  border: 1px solid var(--line-2);
+  background: #1b1a2e;
+  --ink: #fff4ea;
+  --ink-2: rgba(255, 244, 234, 0.76);
+  --ink-3: rgba(255, 244, 234, 0.54);
+  --line: rgba(255, 244, 234, 0.12);
+  --line-2: rgba(255, 244, 234, 0.24);
+  color: var(--ink);
+  box-shadow: 0 40px 120px -20px rgba(0, 0, 0, 0.9);
+  overflow: hidden;
+  animation: rise 0.4s var(--ease) both;
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+}
+.palette-input {
+  width: 100%;
+  padding: 18px 20px;
+  font: 500 18px/1.2 var(--sans);
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  outline: none;
+}
+.palette-input::placeholder {
+  color: var(--ink-3);
+}
+.palette-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px;
+  max-height: min(52vh, 420px);
+  overflow-y: auto;
+}
+.palette-list a {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 46px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  text-decoration: none;
+}
+.palette-list a.is-active {
+  background: rgba(255, 241, 232, 0.08);
+}
+.palette-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent, var(--saffron));
+}
+.palette-hint {
+  font-size: 14px;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40vw;
+}
+.palette-empty {
+  padding: 16px 12px;
+  color: var(--ink-3);
+}
+.palette-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 12px 20px;
+  font-size: 13px;
+  color: var(--ink-3);
+  border-top: 1px solid var(--line);
+}
+

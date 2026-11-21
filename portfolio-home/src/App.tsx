@@ -1,104 +1,36 @@
-import { useEffect, useMemo, useState } from 'react'
-import { GITHUB_URL, REPO_URL, projects, stack, webProjects, type ProjectId } from './data/projects'
-import { useMagnetic, useReducedMotion } from './hooks/motion'
-import { healthLabel, usePings, type Health } from './hooks/usePings'
-import GlyphField from './components/GlyphField'
+import { useEffect, useState } from 'react'
+import { GITHUB_URL, REPO_URL, projects, webProjects } from './data/projects'
+import { LINKEDIN_URL, about, education, facts, impact, jobs, skills } from './data/profile'
+import { useReducedMotion } from './hooks/motion'
+import { usePings } from './hooks/usePings'
+import GlyphField, { type GlyphColors } from './components/GlyphField'
 import ScrambleText from './components/ScrambleText'
 import ProjectPanel from './components/ProjectPanel'
-import Marquee from './components/Marquee'
 import CommandPalette from './components/CommandPalette'
-import Ambient from './components/Ambient'
+import ScrollProgress from './components/ScrollProgress'
+import SectionTitle from './components/SectionTitle'
+import ImpactRow from './components/ImpactRow'
+import CopyEmail from './components/CopyEmail'
 
-const WORDS = [
-  { id: null, glyph: 'चिन्मय', accent: '#ff9933', caption: 'चिन्मय is my name, written in Devanagari' },
-  ...projects.map((p) => ({ id: p.id, glyph: p.glyph, accent: p.accent, caption: `${p.glyph} is ${p.name}, meaning ${p.meaning}` })),
+const WORDS: { glyph: string; caption: string }[] = [
+  { glyph: 'चिन्मय', caption: 'चिन्मय, my name in Devanagari' },
+  ...projects.map((p) => ({ glyph: p.glyph, caption: `${p.glyph}, ${p.name}: ${p.meaning}` })),
 ]
 const CYCLE_MS = 5200
-
-function Spark({ history }: { history: number[] }) {
-  const max = Math.max(400, ...history)
-  return (
-    <span className="spark" aria-hidden="true">
-      {Array.from({ length: 10 }, (_, i) => {
-        const v = history[history.length - 10 + i]
-        return <i key={i} style={{ height: v ? `${Math.max(12, (v / max) * 100)}%` : '12%', opacity: v ? 1 : 0.25 }} />
-      })}
-    </span>
-  )
-}
-
-function StatusConsole({
-  health,
-  onFocus,
-}: {
-  health: Partial<Record<ProjectId, Health>>
-  onFocus: (id: ProjectId | null) => void
-}) {
-  return (
-    <section className="console" aria-labelledby="console-title">
-      <div className="console-head">
-        <h2 id="console-title">Live right now</h2>
-        <p>Web apps pinged from your browser as this page loaded</p>
-      </div>
-      <ul>
-        {projects.map((p) => {
-          // The Android app has no URL to ping; it gets a static badge instead.
-          const h = p.live ? (health[p.id] ?? { state: 'checking' as const, history: [] }) : undefined
-          return (
-            <li key={p.id} style={{ '--accent': p.accent } as React.CSSProperties}>
-              <a
-                href={p.live ?? p.download}
-                target="_blank"
-                rel="noopener noreferrer"
-                onPointerEnter={() => onFocus(p.id)}
-                onPointerLeave={() => onFocus(null)}
-                onFocus={() => onFocus(p.id)}
-                onBlur={() => onFocus(null)}
-              >
-                <span className="console-glyph" aria-hidden="true">
-                  {p.glyph}
-                </span>
-                <span className="console-name">{p.name}</span>
-                {h ? (
-                  <>
-                    <span className={`console-state pill-${h.state}`}>
-                      <i aria-hidden="true" />
-                      {healthLabel(h)}
-                    </span>
-                    <Spark history={h.history} />
-                  </>
-                ) : (
-                  <>
-                    <span className="console-state pill-native">
-                      <i aria-hidden="true" />
-                      Android app
-                    </span>
-                    <span className="spark" aria-hidden="true" />
-                  </>
-                )}
-              </a>
-            </li>
-          )
-        })}
-      </ul>
-    </section>
-  )
-}
+const INK: GlyphColors = { rest: '#1b1a2e', calm: '#3a2a3e', fast: '#fff6ec', dust: 'rgba(27,26,46,0.22)' }
 
 export default function App() {
   const reduced = useReducedMotion()
   const health = usePings(webProjects)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [cycle, setCycle] = useState(0)
-  const [focus, setFocus] = useState<ProjectId | null>(null)
-  const primary = useMagnetic<HTMLAnchorElement>(0.3)
-  const secondary = useMagnetic<HTMLAnchorElement>(0.3)
+  const [scrolled, setScrolled] = useState(false)
 
   useEffect(() => {
-    if (reduced || focus) return
+    if (reduced) return
     const t = setInterval(() => setCycle((c) => (c + 1) % WORDS.length), CYCLE_MS)
     return () => clearInterval(t)
-  }, [reduced, focus])
+  }, [reduced])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -108,147 +40,249 @@ export default function App() {
         setPaletteOpen((o) => !o)
       }
     }
+    const onScroll = () => setScrolled(scrollY > 24)
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('scroll', onScroll)
+    }
   }, [])
 
-  const word = useMemo(() => (focus ? WORDS.find((w) => w.id === focus)! : WORDS[cycle]), [focus, cycle])
+  const word = WORDS[cycle]
   const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
+  const liveCount = webProjects.filter((p) => health[p.id]?.state === 'online').length
 
   return (
     <>
-      <a className="skip" href="#projects">
-        Skip to projects
+      <a className="skip" href="#about">
+        Skip to content
       </a>
-      <Ambient reduced={reduced} />
 
-      <header className="nav">
+      <header className="nav" data-scrolled={scrolled}>
         <a className="brand" href="#top" aria-label="Chinmay Upare, back to top">
-          <span className="brand-mark" aria-hidden="true">
+          <span lang="mr" aria-hidden="true">
             चि
           </span>
-          <span className="brand-name">Chinmay Upare</span>
+          Chinmay Upare
         </a>
         <nav aria-label="Sections">
-          <a href="#projects">Projects</a>
-          <a href="#stack">Stack</a>
+          <a href="#about">About</a>
           <a href="#work">Experience</a>
+          <a href="#projects">Projects</a>
+          <a href="#contact">Contact</a>
         </nav>
         <button className="nav-jump" type="button" onClick={() => setPaletteOpen(true)}>
-          Jump to
-          <kbd>{isMac ? '⌘' : 'Ctrl'} K</kbd>
+          Jump to <kbd>{isMac ? '⌘' : 'Ctrl'} K</kbd>
         </button>
+        <ScrollProgress />
       </header>
 
       <main id="top">
         <section className="hero" aria-labelledby="hero-title">
-          <div className="hero-field">
-            <GlyphField word={word.glyph} accent={word.accent} reduced={reduced} label={word.caption} />
-            <div className="hero-caption">
-              <span key={word.glyph} className="hero-caption-text">
-                {word.caption}
-              </span>
-              <span className="hero-hint">{reduced ? '' : 'Move through the letters, or click to scatter them'}</span>
-            </div>
-          </div>
-
-          <h1 id="hero-title" className="hero-name">
-            <ScrambleText className="hero-line" text="Chinmay" reduced={reduced} delay={250} />{' '}
-            <ScrambleText className="hero-line" text="Upare" reduced={reduced} delay={450} />
-          </h1>
-
-          <div className="hero-grid">
-            <div className="hero-intro">
-              <p>
-                Senior frontend developer at KredX with more than four years of React and TypeScript in production: design
-                systems, micro-frontends, KYC and payment flows. On the side I build small, complete apps: four web
-                apps that are live right now, and an Android ad blocker.
+          <div className="hero-inner">
+            <div className="hero-field">
+              <GlyphField word={word.glyph} colors={INK} reduced={reduced} label={word.caption} />
+              <p className="hero-caption" aria-hidden="true">
+                <span key={word.glyph}>{word.caption}</span>
+                {!reduced && <span className="hero-hint">Run your pointer through it, or click</span>}
               </p>
-              <div className="hero-actions">
-                <a ref={primary} className="btn btn-primary" href="#projects">
-                  See the projects
-                </a>
-                <a ref={secondary} className="btn btn-ghost" href={GITHUB_URL} target="_blank" rel="noopener noreferrer">
-                  GitHub profile
-                </a>
+            </div>
+
+            <div className="hero-copy">
+              <div>
+                <p className="hero-hello" lang="mr">
+                  नमस्कार, I'm
+                </p>
+                <h1 id="hero-title" className="hero-name">
+                  <ScrambleText className="hero-line" text="Chinmay" reduced={reduced} delay={200} />{' '}
+                  <ScrambleText className="hero-line" text="Upare" reduced={reduced} delay={420} />
+                </h1>
+              </div>
+              <div className="hero-side">
+                <p className="hero-intro">
+                  Senior frontend developer. I build design systems, micro-frontends and the KYC, onboarding and
+                  payment flows of fintech products, in React, Next.js and TypeScript.
+                </p>
+                <div className="hero-actions">
+                  <a className="btn btn-ink" href="#contact">
+                    Get in touch
+                  </a>
+                  <a className="btn btn-line" href={LINKEDIN_URL} target="_blank" rel="noopener noreferrer">
+                    LinkedIn
+                  </a>
+                  <a className="btn btn-line" href={GITHUB_URL} target="_blank" rel="noopener noreferrer">
+                    GitHub
+                  </a>
+                </div>
               </div>
             </div>
-            <StatusConsole health={health} onFocus={setFocus} />
+
+            <dl className="hero-facts">
+              {facts.map((f) => (
+                <div key={f.label}>
+                  <dt>{f.label}</dt>
+                  <dd>{f.value}</dd>
+                </div>
+              ))}
+            </dl>
           </div>
         </section>
 
-        <section id="projects" className="projects" aria-labelledby="projects-title">
-          <div className="section-head">
-            <h2 id="projects-title">Five apps, built end to end</h2>
-            <p>
-              Each is its own project in{' '}
-              <a href={REPO_URL} target="_blank" rel="noopener noreferrer">
-                one repository
-              </a>
-              , tested in CI. The four React and TypeScript web apps deploy from a single Render Blueprint, and the
-              Android app's APK is built and privacy-checked on every push. The previews beside them are animated
-              sketches of what each app does.
-            </p>
+        <section className="band" aria-labelledby="about-title">
+          <div id="about" className="wrap">
+            <SectionTitle id="about-title" title="About me" marathi="माझ्याविषयी" />
+            <div className="about">
+              <p className="about-lead">{about.lead}</p>
+              <div className="about-body">
+                {about.body.map((para) => (
+                  <p key={para.slice(0, 24)}>{para}</p>
+                ))}
+              </div>
+            </div>
+            <ul className="principles">
+              {about.principles.map((pr) => (
+                <li key={pr.title}>
+                  <h3>{pr.title}</h3>
+                  <p>{pr.text}</p>
+                </li>
+              ))}
+            </ul>
           </div>
-          {projects.map((p) => (
-            <ProjectPanel key={p.id} project={p} health={health[p.id]} reduced={reduced} />
-          ))}
         </section>
 
-        <section id="stack" className="stack" aria-labelledby="stack-title">
-          <div className="section-head">
-            <h2 id="stack-title">What I ship with</h2>
-            <p>Day-job tooling and the stack behind these projects.</p>
+        <section className="band band-ink" aria-labelledby="impact-title">
+          <div className="wrap">
+            <SectionTitle id="impact-title" title="Before and after" marathi="फरक">
+              <p>Some of what changed because of work I led or shipped.</p>
+            </SectionTitle>
+            <ol className="impact">
+              {impact.map((item) => (
+                <ImpactRow key={item.what} item={item} reduced={reduced} />
+              ))}
+            </ol>
           </div>
-          <Marquee items={stack.slice(0, 9)} />
-          <Marquee items={stack.slice(9)} reverse />
-          <ul className="sr-only">
-            {stack.map((s) => (
-              <li key={s}>{s}</li>
+        </section>
+
+        <section className="band" aria-labelledby="work-title">
+          <div id="work" className="wrap">
+            <SectionTitle id="work-title" title="Experience" marathi="अनुभव" />
+            <ol className="jobs">
+              {jobs.map((job) => (
+                <li key={job.company} className="job">
+                  <div className="job-side">
+                    <h3>{job.company}</h3>
+                    <p>{job.place}</p>
+                    <p className="job-dates">{job.dates}</p>
+                  </div>
+                  <div className="job-main">
+                    {job.note && <p className="job-note">{job.note}</p>}
+                    {job.roles.map((role) => (
+                      <div key={role.title} className="role">
+                        <h4>
+                          {role.title}
+                          <span>{role.dates}</span>
+                        </h4>
+                        <ul>
+                          {role.points.map((pt) => (
+                            <li key={pt}>{pt}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </li>
+              ))}
+              <li className="job job-edu">
+                <div className="job-side">
+                  <h3>Education</h3>
+                  <p className="job-dates">{education.dates}</p>
+                </div>
+                <div className="job-main">
+                  <div className="role">
+                    <h4>
+                      {education.school}
+                      <span>{education.grade}</span>
+                    </h4>
+                    <p>{education.degree}</p>
+                  </div>
+                </div>
+              </li>
+            </ol>
+          </div>
+        </section>
+
+        <section className="band band-mist" aria-labelledby="projects-title">
+          <div id="projects" className="wrap">
+            <SectionTitle id="projects-title" title="Things I build for myself" marathi="प्रकल्प">
+              <p>
+                Five side projects, each a complete app in{' '}
+                <a href={REPO_URL} target="_blank" rel="noopener noreferrer">
+                  one repository
+                </a>{' '}
+                with tests and CI. The four web apps were pinged from your browser as this page loaded:{' '}
+                <strong>{liveCount} of {webProjects.length}</strong> answered so far. The screens are animated sketches
+                of what each app does.
+              </p>
+            </SectionTitle>
+            <nav className="proj-index" aria-label="Jump to a project">
+              {projects.map((p) => (
+                <a key={p.id} href={`#${p.id}`} style={{ '--accent': p.accent } as React.CSSProperties}>
+                  <span lang="mr" aria-hidden="true">
+                    {p.glyph}
+                  </span>
+                  {p.name}
+                </a>
+              ))}
+            </nav>
+            {projects.map((p) => (
+              <ProjectPanel key={p.id} project={p} health={health[p.id]} reduced={reduced} />
             ))}
-          </ul>
+          </div>
         </section>
 
-        <section id="work" className="work" aria-labelledby="work-title">
-          <div className="section-head">
-            <h2 id="work-title">Where I work</h2>
+        <section className="band" aria-labelledby="skills-title">
+          <div id="skills" className="wrap">
+            <SectionTitle id="skills-title" title="What I work with" marathi="कौशल्य" />
+            <dl className="skills">
+              {skills.map((g) => (
+                <div key={g.group}>
+                  <dt>{g.group}</dt>
+                  <dd>
+                    <ul>
+                      {g.items.map((s) => (
+                        <li key={s}>{s}</li>
+                      ))}
+                    </ul>
+                  </dd>
+                </div>
+              ))}
+            </dl>
           </div>
-          <ol className="timeline">
-            <li className="now">
-              <span className="tl-when">Now</span>
-              <div>
-                <h3>KredX</h3>
-                <p className="tl-role">Senior frontend developer</p>
-                <p>KYC flows, payment integrations and a versioned design-system package published to npm.</p>
-              </div>
-            </li>
-            <li>
-              <span className="tl-when">Before</span>
-              <div>
-                <h3>Paytm Money and Paytm</h3>
-                <p className="tl-role">Promoted from Software Engineer to Senior Software Engineer at Paytm Money</p>
-              </div>
-            </li>
-          </ol>
         </section>
       </main>
 
-      <footer className="footer">
-        <p className="footer-big" aria-hidden="true">
-          एकत्र अंक शोध सेतु कवच
-        </p>
-        <div className="footer-row">
-          <p>
-            Built with React 19 and TypeScript, deployed on Render. This page lives in the{' '}
+      <footer id="contact" className="contact" aria-labelledby="contact-title">
+        <div className="wrap">
+          <SectionTitle id="contact-title" title="Get in touch" marathi="संपर्क">
+            <p>Email is the quickest way to reach me. I'm also on LinkedIn and GitHub.</p>
+          </SectionTitle>
+          <CopyEmail />
+          <div className="contact-links">
+            <a href={LINKEDIN_URL} target="_blank" rel="noopener noreferrer">
+              linkedin.com/in/chinmay-upare
+            </a>
+            <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer">
+              github.com/chinmay465
+            </a>
+          </div>
+          <p className="contact-foot">
+            Built with React 19 and TypeScript, typeset in Anek, deployed on Render. Source in the{' '}
             <a href={REPO_URL} target="_blank" rel="noopener noreferrer">
               Portfolio repo
-            </a>{' '}
-            too.
+            </a>
+            .
           </p>
-          <button className="nav-jump" type="button" onClick={() => setPaletteOpen(true)}>
-            Jump anywhere
-            <kbd>{isMac ? '⌘' : 'Ctrl'} K</kbd>
-          </button>
         </div>
       </footer>
 

@@ -6,20 +6,24 @@ The landing page for this repo: one place that links to every app, and a showcas
 
 ## What's on it
 
-- **Particle hero:** a canvas of a few thousand particles that assemble into चिन्मय, then morph through each project's Devanagari name (एकत्र, अंक, शोध, सेतु, कवच). They scatter away from the pointer and burst on click. Hovering an app in the status panel morphs the field to that app's name
-- **Decoding headline:** the name resolves out of mixed Devanagari and Latin glyphs, and runs again on hover
-- **Live status:** Kavach, the Android app, shows as an Android app row that links to its APK. Each web app is pinged from the visitor's browser on load and every 30 s, with latency bars. The ping also wakes Render's sleeping free services, so they're warm by the time someone clicks through
-- **Project panels:** each app gets a Devanagari outline that draws itself on scroll, its features and stack, links to the live app (or, for Kavach, the APK) and its folder, and an animated sketch of what it does: Ekatra's scrolling feed, Ank's flipping mastheads, Shodh's live match stream, Setu's proxy routing with retries and evictions, and Kavach's DNS lookups getting stopped or let through. The sketches tilt in 3D with a glare that follows the pointer, and pause when off screen
-- **Command palette:** `Ctrl K`, `⌘ K` or `/` to jump to any app, its code or a section
-- Cursor ring and spotlight, scroll progress line, stack marquee, magnetic buttons
-- Everything respects `prefers-reduced-motion`; keyboard focus is visible throughout
+A personal site first, project index second. Everything about Chinmay comes from his resume (`src/data/profile.ts`, no phone number by design).
+
+- **Hero:** a full-bleed saffron field where ink particles spell चिन्मय, then each project's Devanagari name. They scatter from the pointer and burst on click. The name decodes out of mixed Devanagari and Latin glyphs
+- **About me:** a short first-person intro and three working principles
+- **Before and after:** five results from work at KredX and Paytm Money; the old value is struck out and the new one counts or decodes in as it scrolls into view
+- **Experience and education:** KredX and Paytm Money with both roles and dates, plus MIT Academy of Engineering, Pune
+- **Projects:** each app gets its own colour block with its Devanagari name and an animated sketch of what it does (Ekatra's feed, Ank's mastheads, Shodh's match stream, Setu's proxy routing, Kavach's DNS filtering). Web apps are pinged live from the visitor's browser, which also wakes Render's sleeping services
+- **Skills and contact:** grouped skills, email with a copy button, LinkedIn and GitHub
+- Every section heading carries its Marathi twin (माझ्याविषयी, फरक, अनुभव, प्रकल्प, कौशल्य, संपर्क)
+- `Ctrl K`, `⌘ K` or `/` opens a command palette; reduced motion is respected throughout
 
 ## Stack
 
-React 19, TypeScript, Vite, Vitest and oxlint. No UI or animation library: the canvas, SVG and CSS are hand-written. Fonts are self-hosted with Fontsource: Unbounded for display, Anek Latin and Anek Devanagari for text.
+React 19, TypeScript, Vite, Vitest and oxlint. No UI or animation library: the canvas, SVG and CSS are hand-written. Type is Anek throughout, self-hosted with Fontsource: Anek Latin and Anek Devanagari are one design, so English and Marathi match.
 
 ```
 src/
+  data/profile.ts             about, impact, experience, education, skills
   data/projects.ts            project catalogue (add an app here)
   lib/scramble.ts             headline decode frames (+ tests)
   lib/ping.ts                 status ping and classification (+ tests)

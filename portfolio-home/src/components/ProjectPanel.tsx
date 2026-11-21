@@ -1,7 +1,7 @@
 import { useRef, type ComponentType } from 'react'
 import type { Project } from '../data/projects'
 import { healthLabel, type Health } from '../hooks/usePings'
-import { useInView, useMagnetic, useRevealed } from '../hooks/motion'
+import { useInView, useRevealed } from '../hooks/motion'
 import Tilt from './Tilt'
 import EkatraVisual from './visuals/EkatraVisual'
 import AnkVisual from './visuals/AnkVisual'
@@ -26,28 +26,30 @@ interface Props {
 
 export default function ProjectPanel({ project: p, health, reduced }: Props) {
   const ref = useRef<HTMLElement>(null)
-  const visRef = useRef<HTMLDivElement>(null)
+  const artRef = useRef<HTMLDivElement>(null)
   const revealed = useRevealed(ref)
-  const visible = useInView(visRef, '80px')
-  const cta = useMagnetic<HTMLAnchorElement>(0.25)
+  const visible = useInView(artRef, '80px')
   const Visual = VISUALS[p.id]
 
   return (
     <article
       ref={ref}
       id={p.id}
-      className="panel"
+      className="proj"
       data-revealed={revealed || reduced}
       style={{ '--accent': p.accent } as React.CSSProperties}
       aria-labelledby={`${p.id}-title`}
     >
-      <div className="panel-copy">
-        <svg className="panel-glyph" viewBox="0 0 600 210" aria-hidden="true">
-          <text x="4" y="150">
-            {p.glyph}
-          </text>
-        </svg>
-        <div className="panel-heading">
+      <div ref={artRef} className="proj-art">
+        <span className="proj-glyph" lang="mr" aria-hidden="true">
+          {p.glyph}
+        </span>
+        <Tilt reduced={reduced} className="proj-screen">
+          <Visual active={visible && !reduced} />
+        </Tilt>
+      </div>
+      <div className="proj-copy">
+        <div className="proj-head">
           <h3 id={`${p.id}-title`}>{p.name}</h3>
           {health ? (
             <span className={`pill pill-${health.state}`}>
@@ -61,39 +63,24 @@ export default function ProjectPanel({ project: p, health, reduced }: Props) {
             </span>
           )}
         </div>
-        <p className="panel-meaning">
-          {p.glyph} means {p.meaning}. {p.live ? `${p.kind} on Render.` : `${p.kind}, built and privacy-checked in CI.`}
+        <p className="proj-meaning">
+          <span lang="mr">{p.glyph}</span> means {p.meaning}
         </p>
-        <p className="panel-tagline">{p.tagline}</p>
-        <ul className="panel-points">
+        <p className="proj-tagline">{p.tagline}</p>
+        <ul className="proj-points">
           {p.points.map((pt) => (
             <li key={pt}>{pt}</li>
           ))}
         </ul>
-        <ul className="chips" aria-label="Built with">
-          {p.stack.map((s) => (
-            <li key={s}>{s}</li>
-          ))}
-        </ul>
-        <div className="panel-actions">
-          <a
-            ref={cta}
-            className="btn btn-primary"
-            href={p.live ?? p.download}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
+        <p className="proj-stack">{p.stack.join(', ')}</p>
+        <div className="proj-actions">
+          <a className="btn btn-ink" href={p.live ?? p.download} target="_blank" rel="noopener noreferrer">
             {p.live ? `Open ${p.name}` : 'Get the APK'}
           </a>
-          <a className="btn btn-ghost" href={p.code} target="_blank" rel="noopener noreferrer">
+          <a className="btn btn-line" href={p.code} target="_blank" rel="noopener noreferrer">
             View the code
           </a>
         </div>
-      </div>
-      <div ref={visRef} className="panel-visual">
-        <Tilt reduced={reduced}>
-          <Visual active={visible && !reduced} />
-        </Tilt>
       </div>
     </article>
   )
