@@ -17,6 +17,18 @@
         android:theme="@style/Theme.Swar"
         android:usesCleartextTraffic="false">
 
+        <!-- Privacy: don't let Android System WebView upload usage metrics
+             from this app, even if the phone has "usage & diagnostics" on. -->
+        <meta-data
+            android:name="android.webkit.WebView.MetricsOptOut"
+            android:value="true" />
+        <!-- No Safe Browsing lookups to Google for every page. Swar only
+             loads YouTube and Google sign-in pages in-app; every other
+             link opens in your browser, which does its own checks. -->
+        <meta-data
+            android:name="android.webkit.WebView.EnableSafeBrowsing"
+            android:value="false" />
+
         <!-- configChanges: rotation, dark mode etc. must not recreate the
              activity, or the WebView (and the song) would be torn down. -->
         <activity
