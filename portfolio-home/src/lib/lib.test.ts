@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { classify, BLOCKED_UNDER_MS } from './ping'
 import { scrambleFrame, SCRAMBLE_GLYPHS } from './scramble'
 import { marathiDate, toDevanagariDigits } from './format'
-import { projects } from '../data/projects'
+import { projects, webProjects } from '../data/projects'
 
 describe('scrambleFrame', () => {
   it('returns the target once fully revealed', () => {
@@ -40,10 +40,19 @@ describe('format', () => {
 })
 
 describe('projects', () => {
-  it('links every project to its live app and its folder', () => {
+  it('links every project to its folder, and every web app to its live URL', () => {
     for (const p of projects) {
-      expect(p.live).toMatch(/^https:\/\/[a-z-]+\.onrender\.com$/)
       expect(p.code).toContain('github.com/chinmay465/Portfolio/tree/main/')
+      if (p.kind === 'Android app') {
+        expect(p.live).toBeUndefined()
+        expect(p.download).toMatch(/^https:\/\/github\.com\/chinmay465\/Portfolio\//)
+      } else {
+        expect(p.live).toMatch(/^https:\/\/[a-z-]+\.onrender\.com$/)
+      }
     }
+  })
+  it('only pings projects that have a live URL', () => {
+    expect(webProjects.map((p) => p.id)).toEqual(['ekatra', 'ank', 'shodh', 'setu'])
+    expect(projects.map((p) => p.id)).toContain('kavach')
   })
 })

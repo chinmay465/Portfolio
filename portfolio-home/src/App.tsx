@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { GITHUB_URL, REPO_URL, projects, stack, type ProjectId } from './data/projects'
+import { GITHUB_URL, REPO_URL, projects, stack, webProjects, type ProjectId } from './data/projects'
 import { useMagnetic, useReducedMotion } from './hooks/motion'
 import { healthLabel, usePings, type Health } from './hooks/usePings'
 import GlyphField from './components/GlyphField'
@@ -31,7 +31,7 @@ function StatusConsole({
   health,
   onFocus,
 }: {
-  health: Record<ProjectId, Health>
+  health: Partial<Record<ProjectId, Health>>
   onFocus: (id: ProjectId | null) => void
 }) {
   return (
@@ -41,8 +41,8 @@ function StatusConsole({
         <p>Pinged from your browser as this page loaded</p>
       </div>
       <ul>
-        {projects.map((p) => {
-          const h = health[p.id]
+        {webProjects.map((p) => {
+          const h = health[p.id] ?? { state: 'checking', history: [] }
           return (
             <li key={p.id} style={{ '--accent': p.accent } as React.CSSProperties}>
               <a
@@ -74,7 +74,7 @@ function StatusConsole({
 
 export default function App() {
   const reduced = useReducedMotion()
-  const health = usePings(projects)
+  const health = usePings(webProjects)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [cycle, setCycle] = useState(0)
   const [focus, setFocus] = useState<ProjectId | null>(null)
@@ -148,8 +148,8 @@ export default function App() {
             <div className="hero-intro">
               <p>
                 Senior frontend developer at KredX with more than four years of React and TypeScript in production: design
-                systems, micro-frontends, KYC and payment flows. On the side I build small, complete apps. All four
-                below are live.
+                systems, micro-frontends, KYC and payment flows. On the side I build small, complete apps: four web
+                apps that are live right now, and an Android ad blocker.
               </p>
               <div className="hero-actions">
                 <a ref={primary} className="btn btn-primary" href="#projects">
@@ -166,13 +166,14 @@ export default function App() {
 
         <section id="projects" className="projects" aria-labelledby="projects-title">
           <div className="section-head">
-            <h2 id="projects-title">Four apps, each one live</h2>
+            <h2 id="projects-title">Five apps, built end to end</h2>
             <p>
-              Each is its own React and TypeScript project in{' '}
+              Each is its own project in{' '}
               <a href={REPO_URL} target="_blank" rel="noopener noreferrer">
                 one repository
               </a>
-              , tested in CI and deployed from a single Render Blueprint. The previews beside them are animated
+              , tested in CI. The four React and TypeScript web apps deploy from a single Render Blueprint, and the
+              Android app's APK is built and privacy-checked on every push. The previews beside them are animated
               sketches of what each app does.
             </p>
           </div>
@@ -221,7 +222,7 @@ export default function App() {
 
       <footer className="footer">
         <p className="footer-big" aria-hidden="true">
-          एकत्र अंक शोध सेतु
+          एकत्र अंक शोध सेतु कवच
         </p>
         <div className="footer-row">
           <p>

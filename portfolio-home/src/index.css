@@ -609,6 +609,10 @@ kbd {
 .pill-unreachable i {
   background: var(--rose);
 }
+.pill-native i {
+  background: #4ade80;
+  box-shadow: 0 0 10px #4ade80;
+}
 @keyframes ping {
   from {
     transform: scale(0.6);
@@ -1334,6 +1338,121 @@ kbd {
 }
 .setu-log {
   color: var(--ink-2);
+}
+
+/* Kavach */
+.vis-kavach {
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(160deg, #0b2a1c, #05140d 70%);
+}
+.vis-kavach svg {
+  width: 100%;
+  height: auto;
+  flex: 1;
+}
+.kv-wire {
+  stroke: rgba(74, 222, 128, 0.12);
+  stroke-width: 1;
+}
+.kv-wire-out {
+  stroke-dasharray: 4 8;
+  stroke: rgba(74, 222, 128, 0.3);
+  animation: dash 3s linear infinite;
+}
+.kv-route {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-dasharray: 600;
+  stroke-dashoffset: 600;
+  animation: route 1s var(--ease) forwards;
+  filter: drop-shadow(0 0 6px var(--accent));
+}
+.kv-route.blocked {
+  stroke: var(--rose);
+  filter: drop-shadow(0 0 6px var(--rose));
+}
+.kv-app rect {
+  fill: #0f2a1d;
+  stroke: rgba(74, 222, 128, 0.35);
+  stroke-width: 1.5;
+  transition:
+    fill 0.3s,
+    stroke 0.3s;
+}
+.kv-app text,
+.kv-net text {
+  font: 600 11px var(--body);
+  fill: var(--ink);
+  text-anchor: middle;
+}
+.kv-app.current rect {
+  fill: var(--accent);
+  stroke: #fff;
+}
+.kv-app.current text {
+  fill: #06140d;
+}
+.kv-shield path:first-child {
+  fill: #0f2a1d;
+  stroke: var(--accent);
+  stroke-width: 0.6;
+  filter: drop-shadow(0 0 6px rgba(74, 222, 128, 0.5));
+}
+.kv-check {
+  fill: var(--accent);
+}
+.kv-shield.hit path:first-child {
+  animation: shield-hit 0.9s var(--ease) 0.45s;
+}
+@keyframes shield-hit {
+  30% {
+    stroke: var(--rose);
+    stroke-width: 1.4;
+    filter: drop-shadow(0 0 10px var(--rose));
+  }
+}
+.kv-net circle {
+  fill: #06140d;
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+.kv-net.ok circle {
+  animation: arrive 1.15s var(--ease);
+}
+.kv-packet {
+  fill: #fff;
+  filter: drop-shadow(0 0 6px var(--accent)) drop-shadow(0 0 12px var(--accent));
+}
+.kv-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 4px 24px;
+  color: var(--ink-3);
+}
+.kv-meta strong {
+  color: var(--ink);
+}
+.kv-log {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--ink-2);
+}
+.kv-log li {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kv-log li:first-child {
+  animation: pop 0.4s var(--ease);
+}
+.kv-log li.blocked {
+  color: var(--rose);
 }
 
 /* ---------- Stack marquee ---------- */
