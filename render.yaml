@@ -95,3 +95,21 @@ services:
         value: "22"
       - key: SETU_TOKEN
         generateValue: true
+  # Rail Planner: FastAPI + React in one Docker image. Set RAILRADAR_API_KEY in the
+  # dashboard when the Blueprint asks (it powers seat availability). rootDir keeps
+  # deploys to changes under rail-planner/.
+  - type: web
+    name: chinmay-rail-planner
+    runtime: docker
+    rootDir: rail-planner
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    branch: main
+    autoDeploy: true
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: RAILRADAR_API_KEY
+        sync: false
+      - key: TIMETABLE_SOURCE # snapshot (stored timetable, no API calls for routes) or live
+        value: snapshot

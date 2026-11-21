@@ -1,0 +1,9 @@
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+__pycache__/
+.pytest_cache/
+.venv/
+.env
+.DS_Store
+backend/data/*.sqlite3

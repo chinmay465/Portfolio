@@ -15,7 +15,7 @@ export interface Project {
   live?: string
   /** Where to get the Android APK (built by CI). */
   download?: string
-  /** Source on GitHub. Absent while the repo is private. */
+  /** Source on GitHub. */
   code?: string
   accent: string
 }
@@ -41,6 +41,7 @@ export const projects: Project[] = [
     stack: ['Python', 'FastAPI', 'React', 'TypeScript', 'Docker'],
     kind: 'Python web service',
     live: 'https://rail-planner-08hw.onrender.com',
+    code: `${repo}/tree/main/rail-planner`,
     accent: '#ff6b3d',
   },
   {
