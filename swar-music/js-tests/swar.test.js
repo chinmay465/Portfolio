@@ -492,8 +492,15 @@ test('no usable Song switch: searches, then plays the matching song', async () =
   assert.equal(JSON.parse(requests[0].init.body).query, 'kesariya Pritam, Arijit Singh');
   assert.deepEqual(navigations, ['atv1']);
 
-  v.dispatchEvent(new p.window.Event('playing'));
+  const switchMsgs = () => p.messages.filter((m) => m.type === 'switch').map((m) => m.phase);
+  assert.deepEqual(switchMsgs(), ['start'], 'card shows while switching');
+  assert.equal(p.messages.find((m) => m.type === 'switch').title, 'Kesariya');
+  assert.equal(v.muted, true, 'video muted during the switch');
+
+  v.dispatchEvent(new p.window.Event('playing')); // the song is playing now
   assert.equal(requests.length, 1, 'searched once per video');
+  assert.deepEqual(switchMsgs(), ['start', 'done']);
+  assert.equal(v.muted, false, 'sound back on for the song');
   p.close();
 });
 
@@ -513,6 +520,8 @@ test('no clear match: stays on low-data video', async () => {
   await new Promise((r) => setTimeout(r, 50));
   assert.equal(navigated, false);
   assert.ok(p.document.documentElement.classList.contains('swar-low-data'));
+  assert.deepEqual(p.messages.filter((m) => m.type === 'switch').map((m) => m.phase), ['start', 'none'], 'card goes away');
+  assert.equal(v.muted, false, 'sound back on for the low-data video');
   p.close();
 });
 

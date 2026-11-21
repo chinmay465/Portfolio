@@ -312,6 +312,30 @@
     });
   }
 
+  // ---- Switch state for the app's "Switching to the song" card. The video is
+  // muted meanwhile, so its audio doesn't play before the song starts.
+  const SWITCH_TIMEOUT_MS = 9000;
+  let switching = null; // { from, muted, timer }
+
+  function startSwitch(fromId, title) {
+    if (switching && switching.from === fromId) return;
+    endSwitch('replaced');
+    const v = video();
+    const muted = !!(v && !v.muted);
+    if (muted) v.muted = true;
+    switching = { from: fromId, muted, timer: setTimeout(() => endSwitch('timeout'), SWITCH_TIMEOUT_MS) };
+    post({ type: 'switch', phase: 'start', title: title || '' });
+  }
+
+  function endSwitch(phase) {
+    if (!switching) return;
+    clearTimeout(switching.timer);
+    const v = video();
+    if (switching.muted && v) v.muted = false;
+    switching = null;
+    post({ type: 'switch', phase });
+  }
+
   const avToggle = () => document.querySelector('#av-id ytmusic-av-toggle, ytmusic-av-toggle');
   const toggleDisabled = (t) => !!(t && t.hasAttribute('toggle-disabled'));
 
@@ -519,13 +543,21 @@
     const artist = (md && md.artist) || (details && details.author) || '';
     if (!title) return; // metadata not there yet; try again on the next tick
     searched.set(videoId, '');
+    startSwitch(videoId, normalizeTitle(title) ? title.replace(/\s*[([|].*$/, '').trim() : title);
     searchSongs(`${normalizeTitle(title)} ${artist}`.trim()).then((response) => {
-      if (!response) return;
+      if (!response) {
+        endSwitch('none');
+        return;
+      }
       const song = pickSongVersion(response, { title, artist });
-      if (!song) return; // no clear match: stay on low-data video
+      if (!song) {
+        endSwitch('none'); // no clear match: stay on low-data video
+        return;
+      }
       searched.set(videoId, song.id);
       const now = playerVideo();
       if (now && now.id === videoId) playSong(song.id); // only if that video is still on
+      else endSwitch('none');
     });
   }
   Object.assign(window.__swar, { normalizeTitle, pickSongVersion, songResults });
@@ -536,6 +568,7 @@
     if (!v || adShowing()) return;
     if (!isVideoPlayback(v)) {
       leaveLowData();
+      if (switching && !v.paused) endSwitch('done');
       return;
     }
     if (Date.now() - lastSwitch < SWITCH_COOLDOWN_MS) return;
@@ -553,6 +586,7 @@
       return;
     }
     const wasPlaying = !v.paused || v.autoplay;
+    startSwitch(id, (navigator.mediaSession && navigator.mediaSession.metadata && navigator.mediaSession.metadata.title) || '');
     button.click();
     lastSwitch = Date.now();
     if (wasPlaying) keepPlaying();

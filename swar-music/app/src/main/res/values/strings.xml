@@ -10,6 +10,7 @@
     <string name="action_previous">Previous</string>
     <string name="action_close">Close</string>
     <string name="loading_status">Tuning in…</string>
+    <string name="switching_title">Switching to the song…</string>
     <string name="loading_status_slow">Still tuning in. Slow connection?</string>
     <string name="offline_title">Can\'t reach YouTube Music</string>
     <string name="offline_message">Check your connection. Swar will try again as soon as you\'re back online.</string>
