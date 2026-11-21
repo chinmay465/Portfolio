@@ -20,6 +20,11 @@ sealed interface PlayerCommand {
         override val js = call("prev")
     }
 
+    /** App left the screen: make sure nothing is playing as video (switch to the song version). */
+    data object EnterBackground : PlayerCommand {
+        override val js = call("background")
+    }
+
     data class SeekTo(val positionMs: Long) : PlayerCommand {
         override val js = call("seek", (positionMs.coerceAtLeast(0) / 1000.0).toString())
     }
