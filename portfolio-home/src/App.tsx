@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { GITHUB_URL, REPO_URL, projects, webProjects, type ProjectId } from './data/projects'
 import { useMagnetic, useReducedMotion } from './hooks/motion'
-import { healthLabel, usePings, type Health } from './hooks/usePings'
+import { usePings } from './hooks/usePings'
+import ProfileCard from './components/ProfileCard'
 import GlyphField from './components/GlyphField'
 import ScrambleText from './components/ScrambleText'
 import ProjectPanel from './components/ProjectPanel'
@@ -22,76 +23,6 @@ const WORDS = [
   ...projects.map((p) => ({ id: p.id, glyph: p.glyph, accent: p.accent, caption: `${p.glyph} is ${p.name}, meaning ${p.meaning}` })),
 ]
 const CYCLE_MS = 5200
-
-function Spark({ history }: { history: number[] }) {
-  const max = Math.max(400, ...history)
-  return (
-    <span className="spark" aria-hidden="true">
-      {Array.from({ length: 10 }, (_, i) => {
-        const v = history[history.length - 10 + i]
-        return <i key={i} style={{ height: v ? `${Math.max(12, (v / max) * 100)}%` : '12%', opacity: v ? 1 : 0.25 }} />
-      })}
-    </span>
-  )
-}
-
-function StatusConsole({
-  health,
-  onFocus,
-}: {
-  health: Partial<Record<ProjectId, Health>>
-  onFocus: (id: ProjectId | null) => void
-}) {
-  return (
-    <section className="console" aria-labelledby="console-title">
-      <div className="console-head">
-        <h2 id="console-title">Live right now</h2>
-        <p>Web apps pinged from your browser as this page loaded</p>
-      </div>
-      <ul>
-        {projects.map((p) => {
-          // The Android app has no URL to ping; it gets a static badge instead.
-          const h = p.live ? (health[p.id] ?? { state: 'checking' as const, history: [] }) : undefined
-          return (
-            <li key={p.id} style={{ '--accent': p.accent } as React.CSSProperties}>
-              <a
-                href={p.live ?? p.download}
-                target="_blank"
-                rel="noopener noreferrer"
-                onPointerEnter={() => onFocus(p.id)}
-                onPointerLeave={() => onFocus(null)}
-                onFocus={() => onFocus(p.id)}
-                onBlur={() => onFocus(null)}
-              >
-                <span className="console-glyph" aria-hidden="true">
-                  {p.glyph}
-                </span>
-                <span className="console-name">{p.name}</span>
-                {h ? (
-                  <>
-                    <span className={`console-state pill-${h.state}`}>
-                      <i aria-hidden="true" />
-                      {healthLabel(h)}
-                    </span>
-                    <Spark history={h.history} />
-                  </>
-                ) : (
-                  <>
-                    <span className="console-state pill-native">
-                      <i aria-hidden="true" />
-                      Android app
-                    </span>
-                    <span className="spark" aria-hidden="true" />
-                  </>
-                )}
-              </a>
-            </li>
-          )
-        })}
-      </ul>
-    </section>
-  )
-}
 
 export default function App() {
   const reduced = useReducedMotion()
@@ -179,12 +110,12 @@ export default function App() {
                 <a ref={primary} className="btn btn-primary" href="#journey">
                   See my journey
                 </a>
-                <a ref={secondary} className="btn btn-ghost" href="#contact">
-                  Get in touch
+                <a ref={secondary} className="btn btn-ghost" href={LINKEDIN_URL} target="_blank" rel="noopener noreferrer">
+                  LinkedIn
                 </a>
               </div>
             </div>
-            <StatusConsole health={health} onFocus={setFocus} />
+            <ProfileCard health={health} onFocus={setFocus} />
           </div>
         </section>
 
