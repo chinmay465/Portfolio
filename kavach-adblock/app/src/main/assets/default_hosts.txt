@@ -71,3 +71,11 @@ imasdk.googleapis.com
 appsflyersdk.com
 bdtelemetry.amazon
 minerva.devices.a2z.com
+
+# YouTube Music ads on Chinmay's network. These are Google cache servers
+# inside the local ISP, so the names can change. If YouTube or YouTube Music
+# stops playing, allow them in My rules.
+rr1---sn-ccoa-cags.googlevideo.com
+rr1---sn-ccoa-cagz.googlevideo.com
+rr2---sn-ccoa-cags.googlevideo.com
+rr2---sn-ccoa-cagz.googlevideo.com
