@@ -1,7 +1,7 @@
-name: Refresh timetable
+name: Rail Planner timetable
 
 # Adds trains that started since the stored timetable (or refreshes every train) from RailRadar,
-# then commits backend/data/timetable.json.gz. The push redeploys the app on Render.
+# then commits rail-planner/backend/data/timetable.json.gz. The push redeploys the app on Render.
 # Needs the repo secret RAILRADAR_API_KEY (Settings → Secrets and variables → Actions).
 
 on:
@@ -34,20 +34,20 @@ jobs:
     timeout-minutes: 300
     defaults:
       run:
-        working-directory: backend
+        working-directory: rail-planner/backend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: rail-planner/backend/requirements.txt
       - run: pip install -r requirements.txt
 
       # Keep RailRadar responses between runs so an interrupted crawl resumes without re-spending quota.
       - uses: actions/cache@v4
         with:
-          path: backend/data/railradar-crawl.sqlite3
+          path: rail-planner/backend/data/railradar-crawl.sqlite3
           key: railradar-crawl-${{ github.run_id }}
           restore-keys: railradar-crawl-
 
@@ -81,5 +81,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/timetable.json.gz
-          git commit -m "Timetable: $(tail -2 crawl.log | head -1 | cut -c1-200)"
+          git commit -m "Rail Planner timetable: $(tail -2 crawl.log | head -1 | cut -c1-200)"
           git push

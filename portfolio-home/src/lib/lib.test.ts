@@ -40,11 +40,9 @@ describe('format', () => {
 })
 
 describe('projects', () => {
-  it('links every project to its code (when public), and every web app to its live URL', () => {
+  it('links every project to its folder, and every web app to its live URL', () => {
     for (const p of projects) {
-      // Rail Planner lives in its own private repo, so it has no public code link yet.
-      if (p.id === 'rail') expect(p.code).toBeUndefined()
-      else expect(p.code).toContain('github.com/chinmay465/Portfolio/tree/main/')
+      expect(p.code).toContain('github.com/chinmay465/Portfolio/tree/main/')
       if (p.kind === 'Android app') {
         expect(p.live).toBeUndefined()
         expect(p.download).toMatch(/^https:\/\/github\.com\/chinmay465\/Portfolio\//)

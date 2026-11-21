@@ -22,11 +22,11 @@ export default function Projects() {
         title="Projects"
         intro={
           <>
-            Each is a complete app, tested in CI; most live in{' '}
+            Each is a complete app in{' '}
             <a href={REPO_URL} target="_blank" rel="noopener noreferrer">
               one repository
             </a>
-            . Hover a card to play its preview; open one for the details.
+            , tested in CI. Hover a card to play its preview; open one for the details.
           </>
         }
       >

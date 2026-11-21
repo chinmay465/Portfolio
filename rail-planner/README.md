@@ -68,66 +68,10 @@ To deploy as a single process, run `npm run build` in `frontend/`. FastAPI then 
 
 ## Deploy
 
-The `Dockerfile` builds the React app and runs FastAPI, which serves the API and the UI from one container on `$PORT`.
+Rail Planner lives in the [Portfolio](../README.md) repo and deploys from its root `render.yaml` as the `chinmay-rail-planner` Docker service (rootDir `rail-planner`), so every push to `main` that touches this folder redeploys it. Set `RAILRADAR_API_KEY` in the Render dashboard; it powers seat availability.
 
-**Render (free tier, redeploys on every push to `main`)**
-1. Go to [dashboard.render.com](https://dashboard.render.com) → **New → Blueprint** and pick this repo.
-2. Render reads `render.yaml` and deploys. After that, `git push` is the deploy.
+The `Dockerfile` builds the React app and runs FastAPI, which serves the API and the UI from one container on `$PORT`. The free tier sleeps after about 15 minutes of inactivity, so the first request after that takes around 30 seconds.
 
-The free tier sleeps after about 15 minutes of inactivity, so the first request after that takes around 30 seconds.
+**Timetable updates:** `.github/workflows/rail-timetable.yml` at the repo root adds newly introduced trains on the 1st of every month (or on demand from the Actions tab) and commits `backend/data/timetable.json.gz`. It needs the repo secret `RAILRADAR_API_KEY`.
 
 **Anywhere else:** `docker build -t rail-planner . && docker run -p 8000:8000 rail-planner`
-
-On every push and PR, CI (`.github/workflows/ci.yml`) runs the backend tests, builds the frontend, then builds and smoke-tests the Docker image.
-
-## API
-
-- `GET /api/stations?q=pune`
-- `GET /api/routes?from=SBC&to=PUNE&date=2026-10-20&extra_hours=3&extra_km=150&nearby_km=15&min_transfer_min=20&include_unreserved=false&limit=50`. Add `no_time_limit=true` or `no_km_limit=true` to remove either limit, `max_changes=3` for more changes, `via=SRR,MAQ,TNA` to force stations in order, `via_stay=0,7,0` for planned stops (hours) at them, `via_radius=0,15,0` for a km buffer around each (any station that close counts), `max_wait_hours=2` to cap waiting at a station, `trains=17307,12158` to keep only routes using those trains, and `depart_after=18:00&arrive_by=2026-10-21T12:00` for a time window. `GET /api/trains?q=basava` looks trains up.
-- `GET /api/booking-windows?date=2026-10-20&train=12627&board=BPL`
-- `POST /api/seats` with `{"cls": "3A", "quota": "GN", "fresh": false, "legs": [{"train": "17307", "from": "SBC", "to": "SUR", "date": "2026-10-20", "classes": ["2A","3A","SL"]}]}`
-
-## Timetable data
-
-**Default: stored timetable, `backend/data/timetable.json.gz`.** Every train with its halts, times, distances, classes and **running days**, 0.9 MB, loaded at boot. Route search and the booking calendar use it, so they make **no RailRadar requests**. RailRadar's 10-requests-a-minute limit is left for seat checks.
-- Current file: the Indian Railways timetable as of **September 2024**, from the [RSTGCN dataset](https://github.com/KoyenaChowdhury/RSTGCN) (IIT Kharagpur): 3,877 trains (express, superfast, Rajdhani, Shatabdi, Vande Bharat and specials) and 4,718 stations. Suburban, passenger and MEMU trains are mostly not included.
-- Running days are the weekdays each train actually left its origin in September 2024, taken from that month's run records. 1,418 trains run daily and 1,336 weekly. Halt times are the scheduled times from the same records, because the dataset's route file has broken times for some trains.
-- Coordinates, states and coach classes come from [datameet/railways](https://github.com/datameet/railways). 275 stations missing there are placed along the line between neighbouring halts.
-- Things that changed after September 2024 aren't in it (new trains, retimings), and many specials (0xxxx) no longer run. The UI says so. Station codes are current (e.g. CSMT, not CSTM).
-- To rebuild:
-
-```bash
-git clone --depth 1 https://github.com/KoyenaChowdhury/RSTGCN.git /tmp/rstgcn
-unzip -q /tmp/rstgcn/Indian-Railway-Network-and-Delays.zip -d /tmp/rstgcn
-git clone --depth 1 https://github.com/datameet/railways.git /tmp/railways
-python backend/scripts/build_timetable_2024.py /tmp/rstgcn/Indian-Railway-Network-and-Delays /tmp/railways backend/data/timetable.json.gz
-```
-
-**Add newly introduced trains (GitHub Action):** `.github/workflows/refresh-timetable.yml` scans the 300 busiest stations' RailRadar boards, fetches only the trains not in the file yet (`crawl_railradar.py --new-only`), and commits the result, which redeploys the app. It runs on the 1st of every month and on demand (Actions → Refresh timetable → Run workflow; choose `full` to refresh every train instead). It needs the repo secret `RAILRADAR_API_KEY`. A run costs about 300 requests plus one per new train; existing trains are left as they are, and the file's `meta.added` lists what was added.
-
-**Refresh it to today's timetable with RailRadar:** `backend/scripts/crawl_railradar.py` fetches `GET /v1/trains/{number}` for every train in the file (one request each) and writes the result back to the same file.
-- It paces itself (9 requests/min by default), stops at `--max` requests per run (default 900) and stops cleanly on a quota or key error.
-- Every response is cached in `backend/data/railradar-crawl.sqlite3` (git-ignored, 45 days), so re-running continues where it stopped and never re-fetches. A full crawl of about 4,000 trains is about 7.5 hours of requests, so spread it over as many runs or months as your quota needs.
-- Until the crawl completes, crawled trains replace their stored entries, trains RailRadar doesn't know (withdrawn) are dropped, and the rest stay as they were. The file's `meta` records how far it got.
-- `--stations 50` also scans the 50 busiest station boards on the first run to find trains that are new since 2024.
-
-```bash
-cd backend
-RAILRADAR_API_KEY=rr_live_... python scripts/crawl_railradar.py --max 900   # repeat until it says "complete"
-git add data/timetable.json.gz && git commit -m "Refresh timetable from RailRadar"
-```
-
-**Live timetables (optional): `TIMETABLE_SOURCE=live`.** Routes then come from [RailRadar](https://railradar.in/docs) station boards (`GET /v1/stations/{code}/trains`) instead of the stored file. Set `RAILRADAR_API_KEY` too (on Render: service → Environment).
-- A leg A→B is any train on both boards that reaches B after A. Change stations are ranked from the stored network's shape (never its clock times), and the top 10 are queried, skipping any within the nearby radius of either end.
-- A new route costs about 16 requests, and up to 30 with 2+ changes, which is more than the 10-a-minute limit. Station boards are cached in SQLite for 7 days (`RAILRADAR_CACHE`, default `backend/data/railradar-cache.sqlite3`), so repeat searches are free. Render's free tier wipes the cache on restart.
-- If the key is rejected or the quota runs out, the app falls back to the stored timetable and says so in the UI.
-
-**Seat availability** always uses RailRadar and needs `RAILRADAR_API_KEY`, whichever timetable source is set.
-
-The previous fallback, a ~2016–17 snapshot from datameet without running days, can still be built with `backend/scripts/build_timetable.py`.
-
-`GET /api/status` shows the timetable source and its date, whether seat checks are available, and this month's API request count.
-
-Booking rules are in `app/rules.py`, as of September 2026. Update the constants if IRCTC changes them.
-
-This project does not log in to, scrape, or book on IRCTC or RailOne.
