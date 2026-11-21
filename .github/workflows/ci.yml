@@ -138,11 +138,27 @@ jobs:
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
       - run: chmod +x gradlew
-      - run: ./gradlew testDebugUnitTest assembleDebug
-      - name: Privacy check (permissions, exported components, tracker SDKs, endpoints)
-        run: bash scripts/privacy-check.sh
+      - name: Load signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.KAVACH_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/kavach.p12"
+            echo "KAVACH_KEYSTORE_PATH=$RUNNER_TEMP/kavach.p12" >> "$GITHUB_ENV"
+          else
+            echo "::warning title=Kavach signing::No KAVACH_KEYSTORE_BASE64 secret. This APK uses a throwaway key and won't install over other builds."
+          fi
+      - name: Test and build release APK
+        env:
+          KAVACH_KEYSTORE_PASSWORD: ${{ secrets.KAVACH_KEYSTORE_PASSWORD }}
+        run: ./gradlew testReleaseUnitTest assembleRelease
+      - name: Privacy check (permissions, exported components, tracker SDKs, endpoints, signer)
+        run: bash scripts/privacy-check.sh app/build/outputs/apk/release/app-release.apk
+      - name: Remove signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/kavach.p12"
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: kavach-debug-apk
-          path: kavach-adblock/app/build/outputs/apk/debug/app-debug.apk
+          name: kavach-apk
+          path: kavach-adblock/app/build/outputs/apk/release/app-release.apk
