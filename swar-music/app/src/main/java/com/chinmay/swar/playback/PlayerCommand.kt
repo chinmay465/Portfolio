@@ -20,14 +20,9 @@ sealed interface PlayerCommand {
         override val js = call("prev")
     }
 
-    /** App left the screen: if a video is playing, switch to its song (audio-only) version. */
+    /** App left the screen: make sure nothing is playing as video (switch to the song version). */
     data object EnterBackground : PlayerCommand {
         override val js = call("background")
-    }
-
-    /** App is back on screen: switch back to the video if Swar switched it to the song. */
-    data object ReturnToForeground : PlayerCommand {
-        override val js = call("foreground")
     }
 
     data class SeekTo(val positionMs: Long) : PlayerCommand {

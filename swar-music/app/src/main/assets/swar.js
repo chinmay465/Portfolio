@@ -10,9 +10,9 @@
  *     Skip. Also dismisses the "Are you still there?" dialog.
  *  4. Reports what's playing to the app (notification, lock screen, headset
  *     buttons) and runs commands coming back from it.
- *  4b. When the app leaves the screen during a video, switches YouTube Music
- *     to the song (audio-only) version and keeps playing; switches back to
- *     the video when the app returns.
+ *  4b. Never plays video: whenever a video that has a song version starts,
+ *     switches YouTube Music to the song (audio-only) version and keeps
+ *     playing.
  *  5. Makes the page feel like an app: no tap flashes, no text selection on
  *     long-press, no rubber-band overscroll, and a "ready" signal so the app
  *     can drop its loading screen once the UI has drawn.
@@ -215,18 +215,16 @@
     if (v) v.pause();
   }
 
-  // ---------------------------------------------------------------- 4b. song/video
+  // ---------------------------------------------------------------- 4b. song only
   // A track with both versions shows YouTube Music's Song | Video switch.
-  const AV_BUTTON = {
-    song: 'ytmusic-av-toggle .song-button, ytmusic-av-toggle #song-button',
-    video: 'ytmusic-av-toggle .video-button, ytmusic-av-toggle #video-button',
-  };
+  const SONG_BUTTON = 'ytmusic-av-toggle .song-button, ytmusic-av-toggle #song-button';
   // A video stream has a picture; the song version is audio only.
   const showingVideo = (v) => !!(v && v.videoWidth > 0 && v.videoHeight > 0);
-  let switchedToSong = false;
+  const SWITCH_COOLDOWN_MS = 2500; // the new stream takes a moment to replace the video
+  let lastSwitch = 0;
   let resumeTimer = 0;
 
-  // Switching loads the other version's stream; make sure playback carries on.
+  // Switching loads the song's stream; make sure playback carries on.
   function keepPlaying() {
     clearInterval(resumeTimer);
     let ticks = 0;
@@ -238,26 +236,21 @@
     }, 250);
   }
 
-  function enterBackground() {
+  /** If a video is showing and it has a song version, switch to the song. */
+  function preferSong() {
     const v = video();
-    if (!v || v.paused || !showingVideo(v) || adShowing()) return;
-    if (!clickFirst(AV_BUTTON.song)) return; // no song version: the video keeps playing
-    switchedToSong = true;
-    keepPlaying();
+    if (!showingVideo(v) || adShowing()) return;
+    if (Date.now() - lastSwitch < SWITCH_COOLDOWN_MS) return;
+    const wasPlaying = !v.paused || v.autoplay;
+    if (!clickFirst(SONG_BUTTON)) return; // no song version: nothing to switch to
+    lastSwitch = Date.now();
+    if (wasPlaying) keepPlaying();
   }
-
-  function returnToForeground() {
-    if (!switchedToSong) return;
-    switchedToSong = false;
-    const v = video();
-    const wasPlaying = !!(v && !v.paused);
-    if (clickFirst(AV_BUTTON.video) && wasPlaying) keepPlaying();
-  }
+  window.__swar.preferSong = preferSong;
 
   function cmd(name, arg) {
     switch (name) {
-      case 'background': enterBackground(); break;
-      case 'foreground': returnToForeground(); break;
+      case 'background': preferSong(); break;
       case 'play': play(); break;
       case 'pause': pause(); break;
       case 'next':
@@ -334,7 +327,7 @@
   }
   window.__swar.report = report;
 
-  const onMediaEvent = () => { guard(); report(); };
+  const onMediaEvent = () => { guard(); preferSong(); report(); };
   for (const type of ['play', 'playing', 'pause', 'ended', 'loadedmetadata', 'seeked', 'durationchange']) {
     document.addEventListener(type, onMediaEvent, true);
   }
