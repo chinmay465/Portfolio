@@ -82,9 +82,11 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
-        val restored = savedInstanceState != null && webView.restoreState(savedInstanceState) != null
-        if (!restored) webView.loadUrl(linkFrom(intent) ?: HOME)
+        // Only the page address is kept across process death (see onSaveInstanceState).
+        val savedUrl = savedInstanceState?.getString(STATE_URL)?.takeIf { it.startsWith(ORIGIN) }
+        webView.loadUrl(linkFrom(intent) ?: savedUrl ?: HOME)
         askForNotificationPermission()
+        CrashLog.showIfAny(this)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -101,7 +103,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        webView.saveState(outState)
+        // Not webView.saveState(): for YouTube Music it serialises the whole
+        // back/forward history with page state, which goes past Android's ~1 MB
+        // limit and kills the app (TransactionTooLargeException) every time it
+        // leaves the screen. The current address is all that's worth keeping.
+        webView.url?.takeIf { it.startsWith(ORIGIN) }?.let { outState.putString(STATE_URL, it) }
     }
 
     override fun onDestroy() {
@@ -253,6 +259,7 @@ class MainActivity : AppCompatActivity() {
         const val ORIGIN = "https://$HOST"
         const val HOME = "$ORIGIN/"
         const val BRIDGE_NAME = "SwarBridge"
+        const val STATE_URL = "swar.url"
         const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
 
         fun blockedOrNull(request: WebResourceRequest): WebResourceResponse? =
