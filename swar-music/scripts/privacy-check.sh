@@ -8,6 +8,7 @@
 #   - a network endpoint in Swar's own code that isn't on the allowlist
 #   - a URL in the page script, which runs inside music.youtube.com and must
 #     never send anything anywhere
+#   - WebView's own metrics upload or Safe Browsing lookups turned back on
 # Run from swar-music/ after ./gradlew assembleDebug.
 set -euo pipefail
 
@@ -54,6 +55,11 @@ if app.get(A + "allowBackup") != "false":
     errors.append("allowBackup is not false")
 if app.get(A + "usesCleartextTraffic") == "true":
     errors.append("usesCleartextTraffic is true")
+meta = {m.get(A + "name"): m.get(A + "value") for m in app.iter("meta-data")}
+if meta.get("android.webkit.WebView.MetricsOptOut") != "true":
+    errors.append("WebView metrics opt-out (android.webkit.WebView.MetricsOptOut) is not set")
+if meta.get("android.webkit.WebView.EnableSafeBrowsing") != "false":
+    errors.append("WebView Safe Browsing lookups are not turned off")
 if app.get(A + "debuggable") == "true":
     report.append("debuggable=true(debug build)")
 

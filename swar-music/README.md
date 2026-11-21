@@ -19,11 +19,23 @@ Swar wraps [music.youtube.com](https://music.youtube.com) in an Android app. Mus
 - **Background play.** YouTube Music's web player pauses when the Page Visibility API says the tab is hidden. `swar.js` runs before the page's own scripts (`WebViewCompat.addDocumentStartJavaScript`) and makes `document.hidden` always `false`. It also swallows `visibilitychange` events. The activity never calls `WebView.onPause()`, which is what would stop media. The foreground service keeps the process alive and holds a partial wake lock while music plays.
 - **No ads, in three layers.**
   1. *Data:* `JSON.parse`, `Response.json()` and the embedded `ytInitialPlayerResponse` are wrapped so `adPlacements`, `playerAds`, `adSlots` and ad renderers are removed before the player reads them. With no ad scheduled, nothing plays. This is the same approach uBlock Origin uses.
-  2. *Network:* `AdFilter` returns an empty response for ad servers (DoubleClick, AdSense, IMA SDK) and YouTube's ad endpoints (`/pagead/`, `/api/stats/ads`, `/ptracking`, …). Service-worker requests go through the same filter.
+  2. *Network:* `AdFilter` returns an empty response for ad servers (DoubleClick, AdSense, IMA SDK), YouTube's ad endpoints (`/pagead/`, `/api/stats/ads`, `/ptracking`, …) and telemetry (see Privacy). Service-worker requests go through the same filter.
   3. *Fallback:* if an ad still starts, it's muted, jumped to its end, and Skip is clicked. Premium upsell banners are hidden with CSS. The "Are you still there?" dialog is dismissed automatically.
 - **Controls.** The page reports title, artist, album art, position and play state over a `WebMessageListener` bridge (origin-locked to `https://music.youtube.com`). `PlaybackService` mirrors that into a `MediaSession`. Commands go back as JavaScript, and the page's own media-session handlers are called first so the queue logic stays YouTube's.
 - **Audio focus.** Swar pauses for calls and navigation prompts and resumes afterwards. It pauses for good when another music app starts. It also pauses when headphones are unplugged.
 - **Links.** Sign-in stays inside the app. `intent://` "open in the YouTube Music app" links are blocked. Other sites open in your browser. Shared `music.youtube.com` links can be opened with Swar.
+
+## Privacy
+
+Swar adds no tracking of its own, and blocks as much of Google's as it can without breaking playback.
+
+- **Nothing from Swar.** There are no analytics, crash-reporting or ad SDKs and no server of our own. The only request Swar's own code makes is fetching album art from Google's image servers (`ytimg.com`, `ggpht.com`, `googleusercontent.com`), with a generic `Swar` user agent rather than one that names your phone. The page script talks only to the app, over a bridge limited to `https://music.youtube.com`, and contains no URLs.
+- **No WebView telemetry.** Android System WebView can upload usage metrics for the apps that use it. Swar opts out in its manifest (`MetricsOptOut`). Safe Browsing lookups are off too: Swar only loads YouTube and Google sign-in pages, and every other link opens in your browser.
+- **Google's telemetry blocked.** YouTube Music's client event logs (`/youtubei/v1/log_event`), quality-of-experience reports (`/api/stats/qoe`), page-timing and error beacons (`/csi_204`, `/gen_204`, `/error_204`), Google's shared logging endpoint (`play.google.com/log`), Google Analytics and Firebase logging all get an empty response, along with the ad servers and ad beacons.
+- **What Google still sees.** You're signed in to your own account, so Google knows what you play. That's how YouTube Music works, not something an app can hide. The history pings (`/api/stats/playback`, `/api/stats/watchtime`) are left alone on purpose: your recommendations and "Listen again" come from them. To stop them too, pause YouTube History in your Google account, which also works for the official app. WebView also tells sites which app it's running in (an `X-Requested-With: com.chinmay.swar` header), and Android no longer lets apps turn that off.
+- **Nothing stored outside the phone.** Backups and phone-to-phone transfers are off, so your signed-in session never leaves the device. Cleartext HTTP is disabled.
+
+CI enforces this on every build: `scripts/privacy-check.sh` fails if the APK gains a permission, an exported component, a tracking SDK or an unreviewed network endpoint. It also fails if the page script gains a URL or a way to send data out, or if the WebView privacy settings are turned back on.
 
 ## Using it
 
@@ -61,7 +73,7 @@ cd js-tests && npm ci && npm test   # swar.js in a simulated YouTube Music page 
 | `MainActivity.kt` | WebView setup, request filtering, link policy, page → app messages |
 | `playback/PlaybackService.kt` | Foreground service, notification, MediaSession, audio focus, locks |
 | `playback/PlayerBridge.kt` | Shared state flow and command channel between the activity and the service |
-| `web/AdFilter.kt` | Ad hosts and YouTube ad endpoints blocked at the network level |
+| `web/AdFilter.kt` | Ad and telemetry hosts and endpoints blocked at the network level |
 | `web/NavPolicy.kt` | Which links stay in the app, open outside or are blocked |
 | `web/UserAgent.kt` | Turns WebView's user agent into Chrome's |
 | `js-tests/` | jsdom tests for `swar.js` |
