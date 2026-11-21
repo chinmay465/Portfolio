@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Kavach</string>
+    <string name="tagline">Blocks ads and trackers in every app</string>
+    <string name="status_on">Protection is on</string>
+    <string name="status_off">Protection is off</string>
+    <string name="turn_on">Turn on</string>
+    <string name="turn_off">Turn off</string>
+    <string name="stop">Stop</string>
+    <string name="stat_blocked">Blocked</string>
+    <string name="stat_queries">Lookups</string>
+    <string name="stat_list">In blocklist</string>
+    <string name="recent_header">Recently blocked · tap to allow</string>
+    <string name="recent_empty">Blocked domains will show up here</string>
+    <string name="update_blocklist">Update blocklist</string>
+    <string name="updating">Updating…</string>
+    <string name="clear_allowlist">Clear allowed (%1$d)</string>
+    <string name="allowlist_cleared">Allowed domains cleared</string>
+    <string name="blocklist_updated">Blocklist updated: %1$s domains</string>
+    <string name="blocklist_failed">Couldn\'t update blocklist. %1$s</string>
+    <string name="allow_title">Allow this domain?</string>
+    <string name="allow_message">%1$s and its subdomains will stop being blocked. Use this when an app breaks.</string>
+    <string name="allow">Allow</string>
+    <string name="vpn_permission_denied">Kavach needs the VPN permission to filter ads.</string>
+    <string name="notification_channel">Ad blocking</string>
+    <string name="notification_title">Kavach is blocking ads</string>
+    <string name="notification_text">Filtering ad and tracker lookups for all apps</string>
+</resources>
