@@ -12,8 +12,6 @@ import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.media.AudioAttributes
-import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.net.wifi.WifiManager
 import android.os.Build
@@ -44,14 +42,18 @@ import androidx.media.app.NotificationCompat as MediaNotificationCompat
  * Keeps the app alive while music plays with the screen off or another app
  * open: a mediaPlayback foreground service with a media notification, a
  * MediaSession (lock screen, headset and Bluetooth buttons, Android Auto-style
- * controls), audio focus and a wake lock. The audio itself is played by the
+ * controls) and a wake lock. The audio itself is played by the
  * WebView in MainActivity; this service only mirrors and controls it.
+ *
+ * No audio focus handling here on purpose: WebView requests audio focus for the
+ * song itself (and pauses for calls and other music apps). A second request from
+ * this service took focus away from WebView, which paused the song the moment
+ * it started.
  */
 class PlaybackService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private lateinit var session: MediaSessionCompat
-    private lateinit var audioManager: AudioManager
 
     private var last: PlayerState? = null
     private var wasPlaying = false
@@ -64,9 +66,6 @@ class PlaybackService : Service() {
 
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
-    private var focusRequest: AudioFocusRequest? = null
-    private var hasFocus = false
-    private var resumeOnFocusGain = false
     private var noisyRegistered = false
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -74,7 +73,6 @@ class PlaybackService : Service() {
     override fun onCreate() {
         super.onCreate()
         running = true
-        audioManager = getSystemService(AudioManager::class.java)
         createChannel()
         session = MediaSessionCompat(this, "Swar").apply {
             setCallback(sessionCallback)
@@ -113,7 +111,6 @@ class PlaybackService : Service() {
         scope.cancel()
         releaseLocks()
         unregisterNoisy()
-        abandonFocus()
         session.isActive = false
         session.release()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
@@ -150,14 +147,11 @@ class PlaybackService : Service() {
 
     private fun onPlayingChanged(playing: Boolean) {
         if (playing) {
-            requestFocus()
             acquireLocks()
             registerNoisy()
         } else {
             releaseLocks()
             unregisterNoisy()
-            // Paused for a phone call etc.: keep focus so we hear when it's ours again.
-            if (!resumeOnFocusGain) abandonFocus()
         }
     }
 
@@ -292,55 +286,6 @@ class PlaybackService : Service() {
         if (max <= ARTWORK_MAX_PX) return bitmap
         val f = ARTWORK_MAX_PX.toFloat() / max
         return Bitmap.createScaledBitmap(bitmap, (bitmap.width * f).toInt(), (bitmap.height * f).toInt(), true)
-    }
-
-    // ------------------------------------------------------------ audio focus
-
-    private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
-        when (change) {
-            AudioManager.AUDIOFOCUS_GAIN -> {
-                hasFocus = true
-                if (resumeOnFocusGain) {
-                    resumeOnFocusGain = false
-                    PlayerBridge.send(PlayerCommand.Play)
-                }
-            }
-            AudioManager.AUDIOFOCUS_LOSS -> {
-                // Another app started playing for good.
-                hasFocus = false
-                resumeOnFocusGain = false
-                PlayerBridge.send(PlayerCommand.Pause)
-            }
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                // Phone call, navigation prompt: pause and come back afterwards.
-                if (last?.playing == true) {
-                    resumeOnFocusGain = true
-                    PlayerBridge.send(PlayerCommand.Pause)
-                }
-            }
-            // LOSS_TRANSIENT_CAN_DUCK: Android 8+ lowers our volume by itself.
-        }
-    }
-
-    private fun requestFocus() {
-        resumeOnFocusGain = false
-        if (hasFocus) return
-        val request = focusRequest ?: AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
-            .setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                    .build(),
-            )
-            .setOnAudioFocusChangeListener(focusListener)
-            .build()
-            .also { focusRequest = it }
-        hasFocus = audioManager.requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
-    }
-
-    private fun abandonFocus() {
-        focusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
-        hasFocus = false
     }
 
     // ------------------------------------------------------------------ locks

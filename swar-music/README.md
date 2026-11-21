@@ -11,7 +11,7 @@ Swar wraps [music.youtube.com](https://music.youtube.com) in an Android app. Mus
  │   • page always "visible"                    │state │ • media notification         │
  │   • ad data removed from API responses       │ ───▶ │ • MediaSession: lock screen, │
  │   • leftover ads muted + skipped             │      │   headset, Bluetooth         │
- │   • reports what's playing                   │ ◀─── │ • audio focus, wake lock     │
+ │   • reports what's playing                   │ ◀─── │ • wake lock                  │
  │ shouldInterceptRequest → AdFilter            │ cmds │ • pause on headphones unplug │
  └──────────────────────────────────────────────┘      └──────────────────────────────┘
 ```
@@ -22,7 +22,7 @@ Swar wraps [music.youtube.com](https://music.youtube.com) in an Android app. Mus
   2. *Network:* `AdFilter` returns an empty response for ad servers (DoubleClick, AdSense, IMA SDK), YouTube's ad endpoints (`/pagead/`, `/api/stats/ads`, `/ptracking`, …) and telemetry (see Privacy). Service-worker requests go through the same filter.
   3. *Fallback:* if an ad still starts, it's muted, jumped to its end, and Skip is clicked. Premium upsell banners are hidden with CSS. The "Are you still there?" dialog is dismissed automatically.
 - **Controls.** The page reports title, artist, album art, position and play state over a `WebMessageListener` bridge (origin-locked to `https://music.youtube.com`). `PlaybackService` mirrors that into a `MediaSession`. Commands go back as JavaScript, and the page's own media-session handlers are called first so the queue logic stays YouTube's.
-- **Audio focus.** Swar pauses for calls and navigation prompts and resumes afterwards. It pauses for good when another music app starts. It also pauses when headphones are unplugged.
+- **Audio focus.** WebView takes audio focus for the song itself, so Android pauses or ducks it for calls and other music apps. Swar doesn't request focus on top of that: a second request from the same app takes focus away from WebView and pauses the song. Swar does pause when headphones are unplugged.
 - **Links.** Sign-in stays inside the app. `intent://` "open in the YouTube Music app" links are blocked. Other sites open in your browser. Shared `music.youtube.com` links can be opened with Swar.
 
 ## Privacy
@@ -71,7 +71,7 @@ cd js-tests && npm ci && npm test   # swar.js in a simulated YouTube Music page 
 |---|---|
 | `assets/swar.js` | Page script: visibility override, ad-data pruning, ad fallback, state bridge, commands |
 | `MainActivity.kt` | WebView setup, request filtering, link policy, page → app messages |
-| `playback/PlaybackService.kt` | Foreground service, notification, MediaSession, audio focus, locks |
+| `playback/PlaybackService.kt` | Foreground service, notification, MediaSession, wake lock, headphone unplug |
 | `playback/PlayerBridge.kt` | Shared state flow and command channel between the activity and the service |
 | `web/AdFilter.kt` | Ad and telemetry hosts and endpoints blocked at the network level |
 | `web/NavPolicy.kt` | Which links stay in the app, open outside or are blocked |
