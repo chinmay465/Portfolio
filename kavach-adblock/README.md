@@ -21,7 +21,7 @@ Kavach blocks ads and trackers in every app on the phone by running a local VPN.
 - One-tap on/off, plus a persistent notification with a **Stop** action
 - Live counters for blocked domains, total lookups and blocklist size
 - A "Recently blocked" list: tap a domain to **allow** it when an app breaks
-- **Block domain**: add any ad server yourself. Your blocks win over the downloaded list and over allows, and cover subdomains
+- **Block domain**: add any ad server yourself. Your blocks win over the downloaded list and over allows, and cover subdomains. Wildcards work too: `rr*---sn-ccoa-*.googlevideo.com` blocks every server in that group (`*` matches within one part of the name, and the last two parts must be written out)
 - **Live lookups** (off by default): shows every domain apps look up right now, so you can spot an app's ad server and tap to block it
 - **My rules**: everything you've blocked or allowed, tap a rule to remove it
 - **Export / Clear**: share the list on screen as text (newest first, ✕ = blocked). Tap **Clear**, use one app, then **Export** to get that app's lookups
