@@ -62,3 +62,7 @@ appsflyer.com
 adjust.com
 branch.io
 kochava.com
+
+# In-app video ads
+hesads.akamaized.net
+imasdk.googleapis.com
