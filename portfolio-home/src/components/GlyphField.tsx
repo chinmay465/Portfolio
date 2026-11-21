@@ -19,7 +19,10 @@ interface Particle {
 }
 
 const FONT = '"Anek Devanagari Variable", "Anek Latin Variable", sans-serif'
-const MAX_POINTS = 2600
+const LATIN = '"Unbounded Variable", "Anek Latin Variable", sans-serif'
+/** Space at the bottom of the field kept clear for the caption and skill chips. */
+const RESERVED = 96
+const MAX_POINTS = 3400
 const CALM = '#ffe9d6'
 const FAST = '#6ff3ff'
 
@@ -30,17 +33,22 @@ function sampleWord(word: string, w: number, h: number): { pts: [number, number]
   c.height = Math.max(1, Math.floor(h))
   const ctx = c.getContext('2d', { willReadFrequently: true })
   if (!ctx) return { pts: [], gap: 4 }
-  let size = h * 0.62
-  ctx.font = `700 ${size}px ${FONT}`
+  // Devanagari hangs from a headline near the top; Latin sits on a baseline. Each
+  // needs its own size and vertical offset to look centred above the skill dock.
+  const deva = /[\u0900-\u097F]/.test(word)
+  const font = deva ? `700 SIZEpx ${FONT}` : `900 SIZEpx ${LATIN}`
+  const area = h - RESERVED
+  let size = deva ? area * 0.72 : area * 0.58
+  ctx.font = font.replace('SIZE', String(size))
   const measured = ctx.measureText(word).width
-  if (measured > w * 0.86) size *= (w * 0.86) / measured
-  ctx.font = `700 ${size}px ${FONT}`
+  if (measured > w * 0.84) size *= (w * 0.84) / measured
+  ctx.font = font.replace('SIZE', String(size))
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   ctx.fillStyle = '#fff'
-  ctx.fillText(word, w / 2, h / 2 + size * 0.26 - 12)
+  ctx.fillText(word, w / 2, deva ? area / 2 + size * 0.22 : area / 2 + size * 0.04)
   const data = ctx.getImageData(0, 0, c.width, c.height).data
-  let gap = w < 520 ? 3 : 4
+  let gap = 3
   let pts: [number, number][] = []
   for (;;) {
     pts = []
@@ -137,7 +145,7 @@ export default function GlyphField({ word, accent, reduced, label }: Props) {
     const s = state.current
     ctx.clearRect(0, 0, s.w, s.h)
     ctx.globalCompositeOperation = 'lighter'
-    const size = Math.max(1.4, s.gap * 0.62)
+    const size = Math.max(1.8, s.gap * 0.72)
     const buckets: [string, Path2D][] = [
       [s.accent, new Path2D()],
       [CALM, new Path2D()],
@@ -149,8 +157,8 @@ export default function GlyphField({ word, accent, reduced, label }: Props) {
         const wob = p.free ? 18 : 0.7
         const tx = p.tx + Math.sin(t * 0.0012 + p.seed) * wob
         const ty = p.ty + Math.cos(t * 0.001 + p.seed) * wob
-        p.vx += (tx - p.x) * (p.free ? 0.0016 : 0.014)
-        p.vy += (ty - p.y) * (p.free ? 0.0016 : 0.014)
+        p.vx += (tx - p.x) * (p.free ? 0.0016 : 0.02)
+        p.vy += (ty - p.y) * (p.free ? 0.0016 : 0.02)
         const dx = p.x - s.mx
         const dy = p.y - s.my
         const d2 = dx * dx + dy * dy
@@ -167,7 +175,7 @@ export default function GlyphField({ word, accent, reduced, label }: Props) {
         p.y += p.vy
       }
       const speed = Math.abs(p.vx) + Math.abs(p.vy)
-      const bucket = p.free ? 3 : speed > 3.2 ? 2 : speed > 0.9 ? 1 : 0
+      const bucket = p.free ? 3 : speed > 4 ? 2 : speed > 1.8 ? 1 : 0
       const sz = bucket === 2 ? size * 0.8 : size
       buckets[bucket][1].rect(p.x, p.y, sz, sz)
     }
@@ -198,7 +206,9 @@ export default function GlyphField({ word, accent, reduced, label }: Props) {
     const ro = new ResizeObserver(resize)
     // Wait for the Devanagari face, or the first word samples a fallback font.
     const fontsReady = document.fonts
-      ? Promise.all([document.fonts.load(`700 120px "Anek Devanagari Variable"`, s.word), document.fonts.ready])
+      ? Promise.all([document.fonts.load(`700 120px "Anek Devanagari Variable"`, 'एकत्र अंक शोध सेतु कवच'),
+          document.fonts.load(`800 120px "Unbounded Variable"`, 'ReactTypeScriptNext.jsDesignMFE70→95KYCTests'),
+          document.fonts.ready,])
       : Promise.resolve()
     fontsReady
       .catch(() => undefined)

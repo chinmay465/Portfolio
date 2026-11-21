@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { GITHUB_URL, REPO_URL, projects, webProjects, type ProjectId } from './data/projects'
 import { useMagnetic, useReducedMotion } from './hooks/motion'
 import { usePings } from './hooks/usePings'
@@ -16,19 +16,17 @@ import Journey from './components/Journey'
 import Experience from './components/Experience'
 import ImpactRow from './components/ImpactRow'
 import CopyEmail from './components/CopyEmail'
-import { LINKEDIN_URL, about, impact, skills } from './data/profile'
+import { LINKEDIN_URL, about, heroSkills, impact, skills } from './data/profile'
 
-const WORDS = [
-  { id: null, glyph: 'चिन्मय', accent: '#ff9933', caption: 'चिन्मय is my name, written in Devanagari' },
-  ...projects.map((p) => ({ id: p.id, glyph: p.glyph, accent: p.accent, caption: `${p.glyph} is ${p.name}, meaning ${p.meaning}` })),
-]
-const CYCLE_MS = 5200
+const CYCLE_MS = 4200
 
 export default function App() {
   const reduced = useReducedMotion()
   const health = usePings(webProjects)
   const [paletteOpen, setPaletteOpen] = useState(false)
-  const [cycle, setCycle] = useState(0)
+  const [skill, setSkill] = useState(0)
+  const [paused, setPaused] = useState(false)
+  const dockRef = useRef<HTMLUListElement>(null)
   const [focus, setFocus] = useState<ProjectId | null>(null)
   const primary = useMagnetic<HTMLAnchorElement>(0.3)
   const secondary = useMagnetic<HTMLAnchorElement>(0.3)
@@ -36,10 +34,19 @@ export default function App() {
   const skillWords = skills.flatMap((g) => g.items)
 
   useEffect(() => {
-    if (reduced || focus) return
-    const t = setInterval(() => setCycle((c) => (c + 1) % WORDS.length), CYCLE_MS)
+    if (reduced || focus || paused) return
+    const t = setInterval(() => setSkill((c) => (c + 1) % heroSkills.length), CYCLE_MS)
     return () => clearInterval(t)
-  }, [reduced, focus])
+  }, [reduced, focus, paused, skill])
+
+  // On narrow screens the chips scroll sideways: keep the current one in view.
+  useEffect(() => {
+    const dock = dockRef.current
+    const chip = dock?.children[skill] as HTMLElement | undefined
+    if (dock && chip && dock.scrollWidth > dock.clientWidth) {
+      dock.scrollTo({ left: chip.offsetLeft - dock.clientWidth / 2 + chip.offsetWidth / 2, behavior: 'smooth' })
+    }
+  }, [skill])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -53,7 +60,13 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  const word = useMemo(() => (focus ? WORDS.find((w) => w.id === focus)! : WORDS[cycle]), [focus, cycle])
+  // The field spells the current skill, or a project's name while one is hovered in the card.
+  const word = useMemo(() => {
+    const p = focus ? projects.find((x) => x.id === focus) : undefined
+    if (p) return { glyph: p.glyph, accent: p.accent, caption: `${p.name}: ${p.tagline}` }
+    const sk = heroSkills[skill]
+    return { glyph: sk.word, accent: sk.accent, caption: sk.detail }
+  }, [focus, skill])
   const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
 
   return (
@@ -84,13 +97,46 @@ export default function App() {
 
       <main id="top">
         <section className="hero" aria-labelledby="hero-title">
-          <div className="hero-field">
-            <GlyphField word={word.glyph} accent={word.accent} reduced={reduced} label={word.caption} />
-            <div className="hero-caption">
-              <span key={word.glyph} className="hero-caption-text">
-                {word.caption}
-              </span>
-              <span className="hero-hint">{reduced ? '' : 'Move through the letters, or click to scatter them'}</span>
+          <div className="hero-field" style={{ '--accent': word.accent } as React.CSSProperties}>
+            <GlyphField word={word.glyph} accent={word.accent} reduced={reduced} label={`${word.glyph}. ${word.caption}`} />
+            <div className="skill-board">
+              <p className="skill-caption" aria-live="polite">
+                <span key={word.caption}>{word.caption}</span>
+              </p>
+              <ul
+                ref={dockRef}
+                className="skill-dock"
+                aria-label="Skills"
+                onPointerEnter={() => setPaused(true)}
+                onPointerLeave={() => setPaused(false)}
+              >
+                {heroSkills.map((sk, i) => {
+                  const on = !focus && i === skill
+                  return (
+                    <li key={sk.label}>
+                      <button
+                        type="button"
+                        className={on ? 'on' : undefined}
+                        aria-pressed={on}
+                        style={{ '--accent': sk.accent } as React.CSSProperties}
+                        onPointerEnter={() => setSkill(i)}
+                        onFocus={() => setSkill(i)}
+                        onClick={() => setSkill(i)}
+                      >
+                        {sk.label}
+                        {on && !reduced && (
+                          <i
+                            className="skill-timer"
+                            key={skill}
+                            style={{ animationDuration: `${CYCLE_MS}ms`, animationPlayState: paused ? 'paused' : 'running' }}
+                            aria-hidden="true"
+                          />
+                        )}
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
             </div>
           </div>
 
