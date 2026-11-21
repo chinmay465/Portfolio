@@ -217,7 +217,7 @@ export default function App() {
               <a href={REPO_URL} target="_blank" rel="noopener noreferrer">
                 one repository
               </a>
-              , tested in CI. The four React and TypeScript web apps deploy from a single Render Blueprint, and the
+              , tested in CI. The four React and TypeScript web apps deploy from a single Render Blueprint, and each
               Android app's APK is built and privacy-checked on every push. The previews beside them are animated
               sketches of what each app does.
             </p>

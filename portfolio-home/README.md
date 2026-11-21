@@ -14,7 +14,7 @@ A personal site and an index of everything in this repo. Everything about Chinma
 - **Journey:** a pinned scroll scene from MIT AoE Pune through Paytm Money and the promotion to KredX in Bangalore. The timeline fills, the year decodes, and a dot travels from Pune to Bangalore
 - **Before and after:** five results in a bento grid; the old value is struck out and the new one counts or decodes in
 - **Experience:** every role in full in an animated accordion, plus education
-- **Projects:** each app with a self-drawing outline of its name, features, stack, live ping and an animated sketch of what it does (Ekatra, Ank, Shodh, Setu, Kavach). The pings also wake Render's sleeping services
+- **Projects:** each app with a self-drawing outline of its name, features, stack, live ping (an APK link for the Android apps) and an animated sketch of what it does (Ekatra, Ank, Shodh, Setu, Kavach, Swar). The pings also wake Render's sleeping services
 - **Skills marquee and contact:** email with a copy button, LinkedIn and GitHub
 - Headings rise out of a mask on scroll, cursor ring and spotlight, scroll progress line, magnetic buttons, `Ctrl K` / `⌘ K` / `/` command palette
 - Everything respects `prefers-reduced-motion`; keyboard focus is visible throughout

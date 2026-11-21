@@ -8,6 +8,7 @@ import AnkVisual from './visuals/AnkVisual'
 import ShodhVisual from './visuals/ShodhVisual'
 import SetuVisual from './visuals/SetuVisual'
 import KavachVisual from './visuals/KavachVisual'
+import SwarVisual from './visuals/SwarVisual'
 
 const VISUALS: Record<Project['id'], ComponentType<{ active: boolean }>> = {
   ekatra: EkatraVisual,
@@ -15,11 +16,12 @@ const VISUALS: Record<Project['id'], ComponentType<{ active: boolean }>> = {
   shodh: ShodhVisual,
   setu: SetuVisual,
   kavach: KavachVisual,
+  swar: SwarVisual,
 }
 
 interface Props {
   project: Project
-  /** Ping result for web apps; absent for the Android app. */
+  /** Ping result for web apps; absent for the Android apps. */
   health?: Health
   reduced: boolean
 }

@@ -1,4 +1,4 @@
-export type ProjectId = 'ekatra' | 'ank' | 'shodh' | 'setu' | 'kavach'
+export type ProjectId = 'ekatra' | 'ank' | 'shodh' | 'setu' | 'kavach' | 'swar'
 
 export interface Project {
   id: ProjectId
@@ -11,7 +11,7 @@ export interface Project {
   points: string[]
   stack: string[]
   kind: 'Static site' | 'Node web service' | 'Android app'
-  /** Deployed web app. Pinged by the status console. Absent for the Android app. */
+  /** Deployed web app. Pinged by the status console. Absent for the Android apps. */
   live?: string
   /** Where to get the Android APK (built by CI). */
   download?: string
@@ -114,6 +114,24 @@ export const projects: Project[] = [
     download: `${repo}/actions/workflows/ci.yml?query=branch%3Amain`,
     code: `${repo}/tree/main/kavach-adblock`,
     accent: '#4ade80',
+  },
+  {
+    id: 'swar',
+    name: 'Swar',
+    glyph: 'स्वर',
+    meaning: 'a musical note',
+    tagline: 'YouTube Music that keeps playing with the screen off, and plays no ads.',
+    points: [
+      'Wraps music.youtube.com in a WebView, so your own account, library and recommendations come along',
+      'A script injected before the page loads keeps the player "visible" and strips ad slots from the API data, so no ad is ever scheduled',
+      'A media foreground service mirrors the player into a MediaSession: notification, lock screen, headset and Bluetooth buttons',
+      'Pauses when headphones come out, and blocks Google telemetry; the page script and the APK are privacy-checked in CI',
+    ],
+    stack: ['Kotlin', 'Android WebView', 'MediaSession', 'JavaScript', 'jsdom', 'GitHub Actions'],
+    kind: 'Android app',
+    download: `${repo}/actions/workflows/ci.yml?query=branch%3Amain`,
+    code: `${repo}/tree/main/swar-music`,
+    accent: '#5b8cff',
   },
 ]
 
