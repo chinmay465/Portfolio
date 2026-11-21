@@ -18,4 +18,7 @@
     <string name="crash_copy">Copy report</string>
     <string name="crash_copied">Crash report copied</string>
     <string name="crash_dismiss">Dismiss</string>
+    <string name="switch_title">Couldn\'t switch to the song</string>
+    <string name="switch_message">This video is playing as video. Copy the details and send them to the developer so the switch can be fixed for your phone. They only describe the page layout.</string>
+    <string name="switch_copied">Details copied</string>
 </resources>
