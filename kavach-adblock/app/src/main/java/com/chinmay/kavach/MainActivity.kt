@@ -1,6 +1,7 @@
 package com.chinmay.kavach
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.VpnService
 import android.os.Build
@@ -26,7 +27,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.text.DateFormat
 import java.text.NumberFormat
+import java.util.Date
 
 class MainActivity : AppCompatActivity() {
 
@@ -75,6 +78,11 @@ class MainActivity : AppCompatActivity() {
         binding.updateList.setOnClickListener { updateBlocklist() }
         binding.blockDomain.setOnClickListener { promptBlockDomain() }
         binding.myRules.setOnClickListener { showRules() }
+        binding.clearList.setOnClickListener {
+            AdBlockState.clearLists()
+            Toast.makeText(this, R.string.list_cleared, Toast.LENGTH_SHORT).show()
+        }
+        binding.exportList.setOnClickListener { exportList() }
 
         observeState()
 
@@ -133,6 +141,34 @@ class MainActivity : AppCompatActivity() {
                 getString(if (it.blocked) R.string.lookup_blocked else R.string.lookup_allowed, it.domain)
             },
         )
+    }
+
+    /**
+     * Shares the list currently on screen as plain text through Android's
+     * share sheet (copy, Files, chat apps...). Only happens when you tap
+     * Export; Kavach itself never writes the list to storage.
+     */
+    private fun exportList() {
+        if (rows.isEmpty()) {
+            Toast.makeText(this, R.string.export_empty, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val now = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date())
+        val header = getString(
+            if (AdBlockState.liveLookups.value) R.string.export_header_live else R.string.export_header_blocked,
+            now,
+        )
+        val text = buildString {
+            appendLine(header)
+            appendLine(getString(R.string.export_legend))
+            appendLine()
+            rows.forEach { appendLine((if (it.blocked) "✕ " else "· ") + it.domain) }
+        }
+        val send = Intent(Intent.ACTION_SEND)
+            .setType("text/plain")
+            .putExtra(Intent.EXTRA_SUBJECT, getString(R.string.export_subject, now))
+            .putExtra(Intent.EXTRA_TEXT, text)
+        startActivity(Intent.createChooser(send, getString(R.string.export_chooser)))
     }
 
     private fun renderRunning(running: Boolean) {

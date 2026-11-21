@@ -3,13 +3,23 @@ package com.chinmay.kavach.vpn
 /**
  * A set of domains where an entry also covers its subdomains:
  * if "doubleclick.net" is in the set, "ad.g.doubleclick.net" matches too.
+ *
+ * Entries may also be wildcard patterns, where `*` stands for any run of
+ * letters, digits or hyphens inside one label:
+ * "rr*---sn-ccoa-*.googlevideo.com" matches "rr2---sn-ccoa-cagz.googlevideo.com".
+ * A pattern matches the whole host name only, not its subdomains.
  */
-class DomainSet(private val domains: Set<String>) {
+class DomainSet(entries: Set<String>) {
 
-    val size: Int get() = domains.size
+    private val domains: Set<String> = entries.filterTo(HashSet()) { '*' !in it }
+    private val patterns: List<Regex> = entries.filter { '*' in it }.map(::patternToRegex)
+
+    val size: Int get() = domains.size + patterns.size
 
     fun matches(host: String): Boolean {
-        if (domains.isEmpty() || host.isEmpty()) return false
+        if (host.isEmpty()) return false
+        if (patterns.isNotEmpty() && patterns.any { it.matches(host) }) return true
+        if (domains.isEmpty()) return false
         var d = host
         while (true) {
             if (d in domains) return true
@@ -23,6 +33,23 @@ class DomainSet(private val domains: Set<String>) {
 
     companion object {
         val EMPTY = DomainSet(emptySet())
+
+        /** `*` = any letters, digits or hyphens within a single label. */
+        fun patternToRegex(pattern: String): Regex =
+            Regex(pattern.split('*').joinToString("[a-z0-9-]*") { Regex.escape(it) })
+
+        // Wildcards only in the leading labels; the last two labels must be
+        // literal, so no pattern can cover a whole TLD or everything.
+        private val SAFE_PATTERN =
+            Regex("^([a-z0-9*]([a-z0-9*-]{0,61}[a-z0-9*])?\\.)+[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.[a-z][a-z0-9-]{0,61}[a-z0-9]$")
+
+        fun isSafePattern(p: String): Boolean =
+            p.length in 4..253 && SAFE_PATTERN.matches(p) && p.replace("*", "").length >= 4
+
+        /** Whether a single rule (domain or pattern) covers [host]. */
+        fun ruleMatches(rule: String, host: String): Boolean =
+            if ('*' in rule) patternToRegex(rule).matches(host)
+            else host == rule || host.endsWith(".$rule")
 
         private val WHITESPACE = Regex("\\s+")
         private val IGNORED = setOf(
@@ -49,6 +76,7 @@ class DomainSet(private val domains: Set<String>) {
                 for (h in hosts) {
                     val host = h.lowercase().trimEnd('.')
                     if (host in IGNORED || '.' !in host || IP_LIKE.matches(host)) continue
+                    if ('*' in host && !isSafePattern(host)) continue
                     into.add(host)
                 }
             }

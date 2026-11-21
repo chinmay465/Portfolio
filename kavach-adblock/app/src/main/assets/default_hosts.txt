@@ -66,3 +66,14 @@ kochava.com
 # In-app video ads
 hesads.akamaized.net
 imasdk.googleapis.com
+
+# App tracking seen in JioHotstar and Prime Video
+appsflyersdk.com
+bdtelemetry.amazon
+minerva.devices.a2z.com
+
+# YouTube Music ads on Chinmay's network: the sn-ccoa group of Google cache
+# servers inside the local ISP (rr1---sn-ccoa-cags, rr2---sn-ccoa-cagz, ...).
+# They also carry normal video, so YouTube falls back to other servers.
+# If YouTube or YouTube Music stops playing, allow this pattern in My rules.
+rr*---sn-ccoa-*.googlevideo.com

@@ -5,6 +5,12 @@
         <item name="colorOnPrimary">#FFFFFF</item>
     </style>
 
+    <style name="Theme.Kavach.Invisible" parent="android:Theme.Translucent.NoTitleBar">
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:windowNoDisplay">false</item>
+        <item name="android:windowDisablePreview">true</item>
+    </style>
+
     <style name="StatValue">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>

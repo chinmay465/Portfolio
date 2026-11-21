@@ -26,7 +26,7 @@ object AdBlockState {
     val recentLookups = MutableStateFlow<List<Lookup>>(emptyList())
 
     private const val RECENT_LIMIT = 50
-    private const val LOOKUP_LIMIT = 150
+    private const val LOOKUP_LIMIT = 500
 
     fun onQuery(domain: String?, wasBlocked: Boolean) {
         queries.update { it + 1 }
@@ -49,9 +49,15 @@ object AdBlockState {
 
     /** Reflects a block/allow the user just made in the on-screen lists. */
     fun markDomain(domain: String, blocked: Boolean) {
-        val covered = { d: String -> d == domain || d.endsWith(".$domain") }
+        val covered = { d: String -> DomainSet.ruleMatches(domain, d) }
         if (!blocked) recentBlocked.update { list -> list.filterNot(covered) }
         recentLookups.update { list -> list.map { if (covered(it.domain)) it.copy(blocked = blocked) else it } }
+    }
+
+    /** Empties the on-screen lists (counters are kept). */
+    fun clearLists() {
+        recentBlocked.value = emptyList()
+        recentLookups.value = emptyList()
     }
 
     fun resetSession() {

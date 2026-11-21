@@ -34,4 +34,23 @@ class DomainSetTest {
         assertTrue(s.matches("tracker.example.org"))
         assertFalse(s.matches("example.com"))
     }
+
+    @Test
+    fun wildcardPatternsMatchWithinOneLabel() {
+        val s = set("rr*---sn-ccoa-*.googlevideo.com")
+        assertTrue(s.matches("rr2---sn-ccoa-cagz.googlevideo.com"))
+        assertTrue(s.matches("rr1---sn-ccoa-cags.googlevideo.com"))
+        assertTrue(s.matches("rr10---sn-ccoa-x9.googlevideo.com"))
+        assertFalse(s.matches("rr2---sn-2ocvhc-50.googlevideo.com"))
+        assertFalse(s.matches("googlevideo.com"))
+        // * never crosses a dot
+        assertFalse(s.matches("rr2.evil---sn-ccoa-x.googlevideo.com"))
+    }
+
+    @Test
+    fun unsafePatternsInListsAreIgnored() {
+        val s = set("*.com", "*", "ads.*.com", "*.example.com")
+        assertFalse(s.matches("google.com"))
+        assertTrue(s.matches("cdn.example.com"))
+    }
 }
