@@ -27,6 +27,7 @@ jobs:
           npx vite preview --port 4178 &
           for i in $(seq 1 20); do curl -fs localhost:4178/ > /dev/null && break; sleep 1; done
           curl -fs localhost:4178/ | grep -q '<div id="root">'
+          curl -fs localhost:4178/projects/ekatra | grep -q '<div id="root">'
 
   ank:
     runs-on: ubuntu-latest

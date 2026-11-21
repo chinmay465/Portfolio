@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { education, jobs } from '../data/profile'
 
 /** Every role in full, one open at a time, with an animated expand. */
-export default function Experience() {
+export default function RoleAccordion() {
   const roles = jobs.flatMap((job) => job.roles.map((role) => ({ ...role, company: job.company, place: job.place })))
   const [open, setOpen] = useState(0)
 

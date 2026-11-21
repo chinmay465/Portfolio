@@ -1,3 +1,4 @@
+import { Link } from 'react-router'
 import type { ProjectId } from '../data/projects'
 import { projects } from '../data/projects'
 import type { Health } from '../hooks/usePings'
@@ -18,10 +19,10 @@ export default function ProfileCard({ health, onFocus }: Props) {
     <section className="console pcard" aria-labelledby="pcard-title">
       <div className="console-head">
         <h2 id="pcard-title">At a glance</h2>
-        <a href="#contact" className="pcard-open">
+        <Link to="/contact" className="pcard-open" viewTransition>
           <i aria-hidden="true" />
           Get in touch
-        </a>
+        </Link>
       </div>
       <dl className="pcard-rows">
         <div style={{ '--i': 0 } as React.CSSProperties}>
@@ -76,8 +77,9 @@ export default function ProfileCard({ health, onFocus }: Props) {
                 const label = p.live ? (h ? healthLabel(h) : 'Checking') : 'Android app'
                 return (
                   <li key={p.id}>
-                    <a
-                      href={`#${p.id}`}
+                    <Link
+                      to={`/projects/${p.id}`}
+                      viewTransition
                       style={{ '--accent': p.accent } as React.CSSProperties}
                       onPointerEnter={() => onFocus(p.id)}
                       onPointerLeave={() => onFocus(null)}
@@ -88,7 +90,7 @@ export default function ProfileCard({ health, onFocus }: Props) {
                       <i className={`dot dot-${p.live ? (h?.state ?? 'checking') : 'native'}`} aria-hidden="true" />
                       {p.name}
                       <span className="sr-only">, {label}</span>
-                    </a>
+                    </Link>
                   </li>
                 )
               })}
