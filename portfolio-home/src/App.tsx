@@ -38,15 +38,16 @@ function StatusConsole({
     <section className="console" aria-labelledby="console-title">
       <div className="console-head">
         <h2 id="console-title">Live right now</h2>
-        <p>Pinged from your browser as this page loaded</p>
+        <p>Web apps pinged from your browser as this page loaded</p>
       </div>
       <ul>
-        {webProjects.map((p) => {
-          const h = health[p.id] ?? { state: 'checking', history: [] }
+        {projects.map((p) => {
+          // The Android app has no URL to ping; it gets a static badge instead.
+          const h = p.live ? (health[p.id] ?? { state: 'checking' as const, history: [] }) : undefined
           return (
             <li key={p.id} style={{ '--accent': p.accent } as React.CSSProperties}>
               <a
-                href={p.live}
+                href={p.live ?? p.download}
                 target="_blank"
                 rel="noopener noreferrer"
                 onPointerEnter={() => onFocus(p.id)}
@@ -58,11 +59,23 @@ function StatusConsole({
                   {p.glyph}
                 </span>
                 <span className="console-name">{p.name}</span>
-                <span className={`console-state pill-${h.state}`}>
-                  <i aria-hidden="true" />
-                  {healthLabel(h)}
-                </span>
-                <Spark history={h.history} />
+                {h ? (
+                  <>
+                    <span className={`console-state pill-${h.state}`}>
+                      <i aria-hidden="true" />
+                      {healthLabel(h)}
+                    </span>
+                    <Spark history={h.history} />
+                  </>
+                ) : (
+                  <>
+                    <span className="console-state pill-native">
+                      <i aria-hidden="true" />
+                      Android app
+                    </span>
+                    <span className="spark" aria-hidden="true" />
+                  </>
+                )}
               </a>
             </li>
           )
