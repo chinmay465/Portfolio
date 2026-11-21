@@ -97,10 +97,18 @@
         </LinearLayout>
     </LinearLayout>
 
-    <TextView
+    <com.google.android.material.materialswitch.MaterialSwitch
+        android:id="@+id/liveSwitch"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
+        android:layout_marginTop="16dp"
+        android:text="@string/live_switch" />
+
+    <TextView
+        android:id="@+id/listHeader"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
         android:text="@string/recent_header"
         android:textAppearance="?attr/textAppearanceTitleSmall" />
 
@@ -139,12 +147,19 @@
             android:text="@string/update_blocklist" />
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/clearAllowlist"
+            android:id="@+id/blockDomain"
             style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:enabled="false"
-            android:text="@string/clear_allowlist" />
+            android:text="@string/block_domain" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/myRules"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/my_rules" />
     </LinearLayout>
 </LinearLayout>
