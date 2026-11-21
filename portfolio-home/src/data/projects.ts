@@ -1,4 +1,4 @@
-export type ProjectId = 'ekatra' | 'ank' | 'shodh' | 'setu' | 'rail' | 'kavach' | 'swar'
+export type ProjectId = 'rail' | 'kavach' | 'swar' | 'ekatra' | 'ank' | 'shodh' | 'setu'
 
 export interface Project {
   id: ProjectId
@@ -26,6 +26,59 @@ export const REPO_URL = repo
 export const GITHUB_URL = 'https://github.com/chinmay465'
 
 export const projects: Project[] = [
+  {
+    id: 'rail',
+    name: 'Rail Planner',
+    glyph: 'मार्ग',
+    meaning: 'route',
+    tagline: 'When Indian Railways bookings open, and the routes that still get you there when direct trains are full.',
+    points: [
+      'General and Tatkal booking windows for every leg, counted from the train\'s origin, with a calendar reminder',
+      'Alternate routes within your limits on extra time, extra distance and changes, through via stations with planned stops',
+      'A round-by-round search over the useful change points, sorted and filtered on the server, 50 results at a time',
+      'Live seat availability per leg (AVL, RAC, WL), with rate-limit handling and a toggle to hide waitlisted routes',
+    ],
+    stack: ['Python', 'FastAPI', 'React', 'TypeScript', 'Docker'],
+    kind: 'Python web service',
+    live: 'https://rail-planner-08hw.onrender.com',
+    accent: '#ff6b3d',
+  },
+  {
+    id: 'kavach',
+    name: 'Kavach',
+    glyph: 'कवच',
+    meaning: 'armour',
+    tagline: 'A system-wide Android ad blocker that runs as a local VPN.',
+    points: [
+      'Filters DNS for every app through a local VpnService, so ads and trackers are blocked without root or a remote server',
+      'About 76,000 ad and tracker domains, plus your own blocks, allows and wildcard patterns',
+      'Encrypted DNS-over-HTTPS upstream, no analytics SDKs, and a privacy check on every APK in CI',
+      'Live lookups you can export, and Kavach On/Off shortcuts for automation like Samsung Routines',
+    ],
+    stack: ['Kotlin', 'Android VpnService', 'DNS-over-HTTPS', 'Coroutines', 'GitHub Actions'],
+    kind: 'Android app',
+    download: `${repo}/actions/workflows/ci.yml?query=branch%3Amain`,
+    code: `${repo}/tree/main/kavach-adblock`,
+    accent: '#4ade80',
+  },
+  {
+    id: 'swar',
+    name: 'Swar',
+    glyph: 'स्वर',
+    meaning: 'a musical note',
+    tagline: 'YouTube Music that keeps playing with the screen off, and plays no ads.',
+    points: [
+      'Wraps music.youtube.com in a WebView, so your own account, library and recommendations come along',
+      'A script injected before the page loads keeps the player "visible" and strips ad slots from the API data, so no ad is ever scheduled',
+      'A media foreground service mirrors the player into a MediaSession: notification, lock screen, headset and Bluetooth buttons',
+      'Pauses when headphones come out, and blocks Google telemetry; the page script and the APK are privacy-checked in CI',
+    ],
+    stack: ['Kotlin', 'Android WebView', 'MediaSession', 'JavaScript', 'jsdom', 'GitHub Actions'],
+    kind: 'Android app',
+    download: `${repo}/actions/workflows/ci.yml?query=branch%3Amain`,
+    code: `${repo}/tree/main/swar-music`,
+    accent: '#5b8cff',
+  },
   {
     id: 'ekatra',
     name: 'Ekatra',
@@ -97,59 +150,6 @@ export const projects: Project[] = [
     live: 'https://setu-proxy-hub.onrender.com',
     code: `${repo}/tree/main/setu-proxy-hub`,
     accent: '#b9a4ff',
-  },
-  {
-    id: 'rail',
-    name: 'Rail Planner',
-    glyph: 'मार्ग',
-    meaning: 'route',
-    tagline: 'When Indian Railways bookings open, and the routes that still get you there when direct trains are full.',
-    points: [
-      'General and Tatkal booking windows for every leg, counted from the train\'s origin, with a calendar reminder',
-      'Alternate routes within your limits on extra time, extra distance and changes, through via stations with planned stops',
-      'A round-by-round search over the useful change points, sorted and filtered on the server, 50 results at a time',
-      'Live seat availability per leg (AVL, RAC, WL), with rate-limit handling and a toggle to hide waitlisted routes',
-    ],
-    stack: ['Python', 'FastAPI', 'React', 'TypeScript', 'Docker'],
-    kind: 'Python web service',
-    live: 'https://rail-planner-08hw.onrender.com',
-    accent: '#ff6b3d',
-  },
-  {
-    id: 'kavach',
-    name: 'Kavach',
-    glyph: 'कवच',
-    meaning: 'armour',
-    tagline: 'A system-wide Android ad blocker that runs as a local VPN.',
-    points: [
-      'Filters DNS for every app through a local VpnService, so ads and trackers are blocked without root or a remote server',
-      'About 76,000 ad and tracker domains, plus your own blocks, allows and wildcard patterns',
-      'Encrypted DNS-over-HTTPS upstream, no analytics SDKs, and a privacy check on every APK in CI',
-      'Live lookups you can export, and Kavach On/Off shortcuts for automation like Samsung Routines',
-    ],
-    stack: ['Kotlin', 'Android VpnService', 'DNS-over-HTTPS', 'Coroutines', 'GitHub Actions'],
-    kind: 'Android app',
-    download: `${repo}/actions/workflows/ci.yml?query=branch%3Amain`,
-    code: `${repo}/tree/main/kavach-adblock`,
-    accent: '#4ade80',
-  },
-  {
-    id: 'swar',
-    name: 'Swar',
-    glyph: 'स्वर',
-    meaning: 'a musical note',
-    tagline: 'YouTube Music that keeps playing with the screen off, and plays no ads.',
-    points: [
-      'Wraps music.youtube.com in a WebView, so your own account, library and recommendations come along',
-      'A script injected before the page loads keeps the player "visible" and strips ad slots from the API data, so no ad is ever scheduled',
-      'A media foreground service mirrors the player into a MediaSession: notification, lock screen, headset and Bluetooth buttons',
-      'Pauses when headphones come out, and blocks Google telemetry; the page script and the APK are privacy-checked in CI',
-    ],
-    stack: ['Kotlin', 'Android WebView', 'MediaSession', 'JavaScript', 'jsdom', 'GitHub Actions'],
-    kind: 'Android app',
-    download: `${repo}/actions/workflows/ci.yml?query=branch%3Amain`,
-    code: `${repo}/tree/main/swar-music`,
-    accent: '#5b8cff',
   },
 ]
 
