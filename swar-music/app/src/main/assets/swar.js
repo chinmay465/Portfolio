@@ -10,9 +10,10 @@
  *     Skip. Also dismisses the "Are you still there?" dialog.
  *  4. Reports what's playing to the app (notification, lock screen, headset
  *     buttons) and runs commands coming back from it.
- *  4b. Never plays video: whenever a video that has a song version starts,
- *     switches YouTube Music to the song (audio-only) version and keeps
- *     playing.
+ *  4b. Plays songs, not videos: whenever a video starts, switches YouTube
+ *     Music's Song | Video toggle to Song. Where YouTube has disabled that
+ *     toggle, hides the picture behind the cover art and drops the video to
+ *     the lowest quality, so it's effectively audio.
  *  5. Makes the page feel like an app: no tap flashes, no text selection on
  *     long-press, no rubber-band overscroll, and a "ready" signal so the app
  *     can drop its loading screen once the UI has drawn.
@@ -125,6 +126,9 @@
     '.video-ads',
     '#player-ads',
   ].join(',\n') + ' { display: none !important; }\n' + [
+    // Low-data video (see 4b): cover art instead of the picture.
+    'html.swar-low-data ytmusic-player #song-video, html.swar-low-data #movie_player video { visibility: hidden !important; }',
+    'html.swar-low-data ytmusic-player #song-image { display: block !important; visibility: visible !important; }',
     // Feel like an app, not a web page.
     'html { -webkit-tap-highlight-color: transparent; }',
     'html, body { overscroll-behavior: none; }',
@@ -298,7 +302,7 @@
       reason,
       videoType: (pv && pv.type) || 'unknown',
       picture: v ? `${v.videoWidth}x${v.videoHeight}` : 'no-video',
-      avToggle: toggle ? [...toggle.attributes].map((a) => a.name).join(' ') || 'present' : 'missing',
+      avToggle: toggle ? [...toggle.attributes].map((a) => (a.value ? `${a.name}=${a.value}` : a.name)).join(' ') || 'present' : 'missing',
       songButton: !!findSongButton(),
       labels,
       tags: [...tags].slice(0, 60),
@@ -306,16 +310,85 @@
     });
   }
 
-  /** If a music video is playing and it has a song version, switch to the song. */
+  const avToggle = () => document.querySelector('#av-id ytmusic-av-toggle, ytmusic-av-toggle');
+  const toggleDisabled = (t) => !!(t && t.hasAttribute('toggle-disabled'));
+
+  // ---- Low-data video: when YouTube won't switch to the song, make the video
+  // cost as little as possible: lowest quality, picture hidden behind the art.
+  let lowDataFor = '';
+  let modeObserver = null;
+
+  function playerVideoDetails() {
+    try {
+      const p = playerEl();
+      const r = p && typeof p.getPlayerResponse === 'function' ? p.getPlayerResponse() : null;
+      return (r && r.videoDetails) || null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function coverArt() {
+    const d = playerVideoDetails();
+    const thumbs = (d && d.thumbnail && d.thumbnail.thumbnails) || [];
+    const best = thumbs[thumbs.length - 1];
+    return best && best.url ? best.url.split('?')[0] : '';
+  }
+
+  function enterLowData(id) {
+    if (lowDataFor === id) return;
+    lowDataFor = id;
+    document.documentElement.classList.add('swar-low-data');
+    const p = playerEl();
+    try {
+      if (p && typeof p.setPlaybackQualityRange === 'function') p.setPlaybackQualityRange('tiny', 'tiny');
+      else if (p && typeof p.setPlaybackQuality === 'function') p.setPlaybackQuality('tiny');
+    } catch (_) {}
+    // Song-style layout: YouTube Music shows the cover art in ATV mode.
+    const ytPlayer = document.querySelector('ytmusic-player');
+    if (ytPlayer) {
+      ytPlayer.setAttribute('playback-mode', 'ATV_PREFERRED');
+      if (modeObserver) modeObserver.disconnect();
+      modeObserver = new MutationObserver(() => {
+        if (lowDataFor && ytPlayer.getAttribute('playback-mode') !== 'ATV_PREFERRED') ytPlayer.setAttribute('playback-mode', 'ATV_PREFERRED');
+      });
+      modeObserver.observe(ytPlayer, { attributes: true, attributeFilter: ['playback-mode'] });
+    }
+    const img = document.querySelector('ytmusic-player #song-image img');
+    const art = coverArt();
+    if (img && art && (!img.src || img.src.startsWith('data:'))) img.src = art;
+  }
+
+  function leaveLowData() {
+    if (!lowDataFor) return;
+    lowDataFor = '';
+    document.documentElement.classList.remove('swar-low-data');
+    if (modeObserver) modeObserver.disconnect();
+    modeObserver = null;
+    const p = playerEl();
+    try {
+      if (p && typeof p.setPlaybackQualityRange === 'function') p.setPlaybackQualityRange('auto', 'auto');
+    } catch (_) {}
+  }
+
+  /** Plays songs, not videos: switch to Song, or failing that, low-data video. */
   function preferSong() {
     const v = video();
-    if (!v || adShowing() || !isVideoPlayback(v)) return;
+    if (!v || adShowing()) return;
+    if (!isVideoPlayback(v)) {
+      leaveLowData();
+      return;
+    }
     if (Date.now() - lastSwitch < SWITCH_COOLDOWN_MS) return;
     const pv = playerVideo();
+    const id = (pv && pv.id) || location.pathname;
+    const toggle = avToggle();
     const button = findSongButton();
-    if (!button) {
-      // Official music videos almost always have a song version; say so if we can't find it.
-      if (pv && pv.type === 'MUSIC_VIDEO_TYPE_OMV') reportSwitchProblem('no-song-button');
+
+    if (!button || toggleDisabled(toggle)) {
+      // YouTube offers no song for this video, or has turned the switch off.
+      enterLowData(id);
+      if (!button && !toggle && pv && pv.type === 'MUSIC_VIDEO_TYPE_OMV') reportSwitchProblem('no-song-button');
       return;
     }
     const wasPlaying = !v.paused || v.autoplay;
@@ -325,7 +398,10 @@
     const before = pv && pv.id;
     setTimeout(() => {
       const now = playerVideo();
-      if (isVideoPlayback(video()) && (!now || now.id === before)) reportSwitchProblem('click-had-no-effect');
+      if (isVideoPlayback(video()) && (!now || now.id === before)) {
+        enterLowData(id);
+        reportSwitchProblem('click-had-no-effect');
+      }
     }, CHECK_AFTER_MS);
   }
   window.__swar.preferSong = preferSong;
