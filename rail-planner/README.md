@@ -1,6 +1,6 @@
 # Rail Planner
 
-**Live:** https://rail-planner-08hw.onrender.com (free tier, so the first load after a pause takes about 30 s)
+**Live:** https://chinmay-rail-planner.onrender.com (free tier, so the first load after a pause takes about 30 s)
 
 Booking-window calculator and alternate-route finder for Indian Railways.
 Backend: Python (FastAPI). Frontend: React + TypeScript (Vite).
