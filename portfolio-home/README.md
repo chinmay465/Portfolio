@@ -11,7 +11,7 @@ A personal site and an index of everything in this repo. Everything about Chinma
 - **Skills board:** a canvas of a few thousand particles that spell each core skill in turn (React, TypeScript, Next.js, design systems, micro-frontends, performance, KYC and payments, testing), each in its own colour, with a caption saying what was built with it. A row of chips with a timer line picks a skill on hover or click. Particles scatter away from the pointer and burst on click
 - **Decoding headline:** the name resolves out of mixed glyphs, and runs again on hover
 - **About me:** the lead lights up word by word as you scroll; three working principles on cursor-spotlight cards
-- **Journey:** a pinned scroll scene from MIT AoE Pune through Paytm Money and the promotion to KredX in Bangalore. The timeline fills, the year decodes, and a dot travels from Pune to Bangalore
+- **Journey:** a one-screen slider from MIT AoE Pune through Paytm Money and the promotion to KredX in Bangalore. Swipe on a phone; click a year, use the arrow buttons or the arrow keys on desktop. It plays through on its own while on screen and stops for good once someone interacts; the year decodes and a dot travels from Pune to Bangalore
 - **Before and after:** five results in a bento grid; the old value is struck out and the new one counts or decodes in
 - **Experience:** every role in full in an animated accordion, plus education
 - **Projects:** each app with a self-drawing outline of its name, features, stack, live ping (an APK link for the Android apps) and an animated sketch of what it does (Ekatra, Ank, Shodh, Setu, Kavach, Swar). The pings also wake Render's sleeping services
