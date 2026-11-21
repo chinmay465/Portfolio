@@ -40,7 +40,7 @@ export const projects: Project[] = [
     ],
     stack: ['Python', 'FastAPI', 'React', 'TypeScript', 'Docker'],
     kind: 'Python web service',
-    live: 'https://rail-planner-08hw.onrender.com',
+    live: 'https://chinmay-rail-planner.onrender.com',
     code: `${repo}/tree/main/rail-planner`,
     accent: '#ff6b3d',
   },

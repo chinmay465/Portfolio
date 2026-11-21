@@ -1,6 +1,6 @@
 import { Link } from 'react-router'
 import type { ProjectId } from '../data/projects'
-import { projects } from '../data/projects'
+import { REPO_URL, projects } from '../data/projects'
 import type { Health } from '../hooks/usePings'
 import { healthLabel } from '../hooks/usePings'
 import { education } from '../data/profile'
@@ -13,7 +13,7 @@ interface Props {
 const FOCUS = ['Design systems', 'Micro-frontends', 'KYC and payments', 'Web performance', 'AI-assisted dev']
 const STACK = ['React', 'Next.js', 'TypeScript', 'React Query']
 
-/** The hero's summary panel: who I am in five rows, plus the side projects with live status. */
+/** The hero's summary panel: who I am, the side projects with live status, and where the code lives. */
 export default function ProfileCard({ health, onFocus }: Props) {
   return (
     <section className="console pcard" aria-labelledby="pcard-title">
@@ -95,6 +95,21 @@ export default function ProfileCard({ health, onFocus }: Props) {
                 )
               })}
             </ul>
+          </dd>
+        </div>
+        <div style={{ '--i': 6 } as React.CSSProperties}>
+          <dt>Source</dt>
+          <dd>
+            <a className="pcard-repo" href={REPO_URL} target="_blank" rel="noopener noreferrer">
+              <span className="pcard-repo-icon" aria-hidden="true">
+                {'</>'}
+              </span>
+              <span className="pcard-repo-text">
+                <strong>github.com/chinmay465/Portfolio</strong>
+                <small>All {projects.length} apps, one repository</small>
+              </span>
+              <span className="pcard-repo-go" aria-hidden="true" />
+            </a>
           </dd>
         </div>
       </dl>
