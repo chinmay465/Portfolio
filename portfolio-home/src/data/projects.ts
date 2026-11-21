@@ -1,4 +1,4 @@
-export type ProjectId = 'ekatra' | 'ank' | 'shodh' | 'setu'
+export type ProjectId = 'ekatra' | 'ank' | 'shodh' | 'setu' | 'kavach'
 
 export interface Project {
   id: ProjectId
@@ -10,8 +10,11 @@ export interface Project {
   tagline: string
   points: string[]
   stack: string[]
-  kind: 'Static site' | 'Node web service'
-  live: string
+  kind: 'Static site' | 'Node web service' | 'Android app'
+  /** Deployed web app. Pinged by the status console. Absent for the Android app. */
+  live?: string
+  /** Where to get the Android APK (built by CI). */
+  download?: string
   code: string
   accent: string
 }
@@ -94,7 +97,28 @@ export const projects: Project[] = [
     code: `${repo}/tree/main/setu-proxy-hub`,
     accent: '#b9a4ff',
   },
+  {
+    id: 'kavach',
+    name: 'Kavach',
+    glyph: 'कवच',
+    meaning: 'armour',
+    tagline: 'A system-wide Android ad blocker that runs as a local VPN.',
+    points: [
+      'Filters DNS for every app through a local VpnService, so ads and trackers are blocked without root or a remote server',
+      'About 76,000 ad and tracker domains, plus your own blocks, allows and wildcard patterns',
+      'Encrypted DNS-over-HTTPS upstream, no analytics SDKs, and a privacy check on every APK in CI',
+      'Live lookups you can export, and Kavach On/Off shortcuts for automation like Samsung Routines',
+    ],
+    stack: ['Kotlin', 'Android VpnService', 'DNS-over-HTTPS', 'Coroutines', 'GitHub Actions'],
+    kind: 'Android app',
+    download: `${repo}/actions/workflows/ci.yml?query=branch%3Amain`,
+    code: `${repo}/tree/main/kavach-adblock`,
+    accent: '#4ade80',
+  },
 ]
+
+/** Projects with a live web URL to ping and open. */
+export const webProjects = projects.filter((p): p is Project & { live: string } => Boolean(p.live))
 
 export const stack = [
   'React 19',
@@ -110,6 +134,8 @@ export const stack = [
   'Vitest',
   'Express',
   'Server-Sent Events',
+  'Kotlin',
+  'Android',
   'Sentry',
   'GitHub Actions',
   'Jenkins',

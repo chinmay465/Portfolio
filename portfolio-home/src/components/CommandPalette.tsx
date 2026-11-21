@@ -12,7 +12,9 @@ interface Item {
 
 const items: Item[] = [
   ...projects.flatMap((p) => [
-    { id: `${p.id}-live`, title: `Open ${p.name}`, hint: p.live.replace('https://', ''), href: p.live, external: true, accent: p.accent },
+    p.live
+      ? { id: `${p.id}-live`, title: `Open ${p.name}`, hint: p.live.replace('https://', ''), href: p.live, external: true, accent: p.accent }
+      : { id: `${p.id}-apk`, title: `Get the ${p.name} APK`, hint: 'GitHub Actions', href: p.download ?? p.code, external: true, accent: p.accent },
     { id: `${p.id}-code`, title: `${p.name} source code`, hint: 'GitHub', href: p.code, external: true, accent: p.accent },
     { id: `${p.id}-jump`, title: `Read about ${p.name}`, hint: 'On this page', href: `#${p.id}`, external: false, accent: p.accent },
   ]),

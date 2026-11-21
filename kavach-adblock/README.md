@@ -21,9 +21,10 @@ Kavach blocks ads and trackers in every app on the phone by running a local VPN.
 - One-tap on/off, plus a persistent notification with a **Stop** action
 - Live counters for blocked domains, total lookups and blocklist size
 - A "Recently blocked" list: tap a domain to **allow** it when an app breaks
-- **Block domain**: add any ad server yourself. Your blocks win over the downloaded list and over allows, and cover subdomains
+- **Block domain**: add any ad server yourself. Your blocks win over the downloaded list and over allows, and cover subdomains. Wildcards work too: `rr*---sn-ccoa-*.googlevideo.com` blocks every server in that group (`*` matches within one part of the name, and the last two parts must be written out)
 - **Live lookups** (off by default): shows every domain apps look up right now, so you can spot an app's ad server and tap to block it
 - **My rules**: everything you've blocked or allowed, tap a rule to remove it
+- **Export / Clear**: share the list on screen as text (newest first, ✕ = blocked). Tap **Clear**, use one app, then **Export** to get that app's lookups
 - Works with Android's **Always-on VPN** (Settings → Network → VPN → Kavach → Always-on), so it survives reboots
 
 ## Privacy
@@ -33,9 +34,9 @@ Kavach sees every domain your apps look up, so it's built to keep none of it:
 - **Nothing is stored or uploaded.** There are no analytics, ads or crash-reporting SDKs, and no server of our own. The only network calls are DoH lookups and the blocklist download.
 - **Lookups are encrypted.** With plain DNS, your Wi-Fi owner or carrier can read every domain you look up. With DoH they only see a connection to Cloudflare or Quad9, and both state they don't store your IP address with your queries. There is no plaintext fallback.
 - **Nothing reaches the logs.** Domains are never written to logcat, files or the database. By default the only domain record is the "Recently blocked" list (the last 50 *blocked* domains, in memory only), which disappears when the app process ends. Allowed lookups are only counted.
-- **Live lookups are opt-in.** The switch is off on every app start. While it's on, the last 150 looked-up domains are kept in memory so you can see them, and turning it off wipes them. They're never saved or sent anywhere.
+- **Live lookups are opt-in.** The switch is off on every app start. While it's on, the last 500 looked-up domains are kept in memory so you can see them, and turning it off wipes them. They're never saved to storage, and they leave the app only when you tap **Export** and pick where to share them.
 - **Your rules stay on the phone.** Domains you block or allow are stored in the app's private storage, and they're excluded from backups.
-- **Other apps can't reach in.** The VPN service needs `BIND_VPN_SERVICE`, which only the system holds. The launcher screen is the only exported component. There are no listening sockets, no content providers and no shared storage.
+- **Other apps can't reach in.** The VPN service needs `BIND_VPN_SERVICE`, which only the system holds. The only exported components are the launcher entries (the main screen, **Kavach On** and **Kavach Off**), and they take no input. There are no listening sockets, no content providers and no shared storage.
 - **No backups.** `allowBackup=false` plus data-extraction rules keep the allowlist out of cloud backups and phone-to-phone transfers. Cleartext HTTP is disabled.
 - **A generic User-Agent.** Requests send `Kavach` instead of Android's default, which names your phone model and Android version.
 
@@ -63,6 +64,19 @@ Requirements: Android Studio (Ladybug or newer) or JDK 17 + Android SDK 35.
 | `vpn/Blocklist.kt` | Loads, downloads and allowlists domains |
 | `vpn/AdBlockState.kt` | StateFlows shared by the service and the UI |
 | `MainActivity.kt` | The single screen |
+
+## Turn on automatically when an app opens
+
+Kavach adds two extra icons, **Kavach On** and **Kavach Off**. Each switches protection and closes immediately, without opening a screen. Automation apps can open them. On a Samsung phone with **Modes and Routines**:
+
+1. Open Modes and Routines → **Routines** → **+**.
+2. **If:** App opened → **JioHotstar**.
+3. **Then:** Apps → Open an app → **Kavach On**.
+4. To turn it off afterwards, add **Kavach Off** as the action that runs when the routine ends, if your One UI version offers that.
+
+The first time, open Kavach and tap **Turn on** once to allow its VPN. Or use **Always-on VPN** (Settings → Connections → More connection settings → VPN → ⚙️ Kavach) to keep it on all the time. Kavach only handles DNS lookups, so that costs almost no battery.
+
+Like any launcher icon, other apps can start these two entries too. They only switch protection on or off and take no input.
 
 ## Finding an app's ad server
 
