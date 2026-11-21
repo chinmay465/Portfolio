@@ -27,7 +27,7 @@ object DomainRules {
     private val VALID = Regex("^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$")
 
     /**
-     * Turns what the user typed or pasted ("https://Ads.Example.com/x?y",
+     * Turns what the user typed or pasted (a full link with scheme and path,
      * "*.example.com", "example.com.") into a bare domain, or null if it
      * isn't a valid domain name.
      */
