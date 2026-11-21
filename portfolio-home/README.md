@@ -10,7 +10,7 @@ A personal site split into short pages, so no page runs long. Everything about C
 
 | Route | What's there |
 | --- | --- |
-| `/` | Skills board hero, the name, an At a glance card, three featured projects, three results, contact |
+| `/` | Skills board hero, the name, an At a glance card, four featured projects, three results, contact |
 | `/about` | About me, working principles, the career journey slider, skills |
 | `/experience` | Before-and-after results, every role in an accordion, education |
 | `/projects` | All six apps as cards, filterable by web or Android (`?type=web`, `?type=android`) |

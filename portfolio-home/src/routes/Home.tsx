@@ -9,7 +9,7 @@ import ImpactRow from '../components/ImpactRow'
 import RevealHeading from '../components/RevealHeading'
 import ContactCard from '../components/ContactCard'
 
-const FEATURED = ['ekatra', 'swar', 'kavach'] as const
+const FEATURED = ['ekatra', 'setu', 'swar', 'kavach'] as const
 
 export default function Home() {
   const { reduced } = useSite()
@@ -34,7 +34,7 @@ export default function Home() {
             </Link>
           </p>
         </div>
-        <div className="pgrid rail-mobile">
+        <div className="pgrid pgrid-4 rail-mobile">
           {featured.map((p, i) => (
             <ProjectCard key={p.id} project={p} index={i} />
           ))}
