@@ -1,0 +1,85 @@
+name: Refresh timetable
+
+# Adds trains that started since the stored timetable (or refreshes every train) from RailRadar,
+# then commits backend/data/timetable.json.gz. The push redeploys the app on Render.
+# Needs the repo secret RAILRADAR_API_KEY (Settings → Secrets and variables → Actions).
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "new = only add new trains; full = refresh every train (takes several runs on the free quota)"
+        type: choice
+        options: [new, full]
+        default: new
+      stations:
+        description: "Busiest station boards to scan for new trains (1 request each)"
+        default: "300"
+      max_requests:
+        description: "Stop after this many RailRadar requests"
+        default: "800"
+  schedule:
+    - cron: "17 21 1 * *" # 1st of every month, 02:47 IST: pick up newly introduced trains
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-timetable
+  cancel-in-progress: false
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r requirements.txt
+
+      # Keep RailRadar responses between runs so an interrupted crawl resumes without re-spending quota.
+      - uses: actions/cache@v4
+        with:
+          path: backend/data/railradar-crawl.sqlite3
+          key: railradar-crawl-${{ github.run_id }}
+          restore-keys: railradar-crawl-
+
+      - name: Crawl RailRadar
+        env:
+          RAILRADAR_API_KEY: ${{ secrets.RAILRADAR_API_KEY }}
+          MODE: ${{ inputs.mode || 'new' }}
+          STATIONS: ${{ inputs.stations || '300' }}
+          MAX: ${{ inputs.max_requests || '800' }}
+        run: |
+          if [ -z "$RAILRADAR_API_KEY" ]; then
+            echo "::error::Add the RAILRADAR_API_KEY secret first (Settings → Secrets and variables → Actions)"
+            exit 1
+          fi
+          if [ "$MODE" = "new" ]; then
+            python scripts/crawl_railradar.py --new-only --stations "$STATIONS" --max "$MAX" | tee crawl.log
+          else
+            python scripts/crawl_railradar.py --stations "$STATIONS" --max "$MAX" | tee crawl.log
+          fi
+          tail -3 crawl.log >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check the new timetable loads
+        run: python -c "from app.timetable import StaticTimetable; t = StaticTimetable(); print(len(t._trains), 'trains')"
+
+      - name: Commit if changed
+        run: |
+          if git diff --quiet -- data/timetable.json.gz; then
+            echo "No timetable changes." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/timetable.json.gz
+          git commit -m "Timetable: $(tail -2 crawl.log | head -1 | cut -c1-200)"
+          git push

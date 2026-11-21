@@ -1,0 +1,14 @@
+# Render Blueprint: New > Blueprint > pick this repo. Redeploys on every push to main.
+services:
+  - type: web
+    name: rail-planner
+    runtime: docker
+    plan: free
+    branch: main
+    autoDeploy: true
+    healthCheckPath: /api/health
+    envVars:
+      - key: RAILRADAR_API_KEY # seat availability (and live timetables with TIMETABLE_SOURCE=live)
+        sync: false
+      - key: TIMETABLE_SOURCE # snapshot (default: stored timetable, no API calls for routes) or live
+        value: snapshot
