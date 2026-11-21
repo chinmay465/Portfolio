@@ -15,7 +15,7 @@ export const about = {
   body: [
     "I'm a senior frontend developer at KredX in Bangalore. Before that I spent three years at Paytm Money in Pune, where I joined as a Software Engineer and was promoted to Senior. Everything I've shipped has been fintech, in React, Next.js and TypeScript.",
     'Most of my work sits underneath features: a design system so the team stops rebuilding the same button, micro-frontends so teams deploy without waiting on each other, and performance work so a page stays fast on a cheap phone. The rest is KYC, onboarding and payments, which I own end to end, failure states included.',
-    'I review code and mentor junior developers at KredX, and I interviewed frontend candidates at Paytm Money. Outside work I build small, complete apps with AI coding tools like Claude Code and GitHub Copilot, and give them Devanagari names.',
+    'I review code and mentor junior developers at KredX, and I interviewed frontend candidates at Paytm Money. Outside work I ship complete apps end to end, pairing with AI coding tools like Claude Code and GitHub Copilot.',
   ],
   principles: [
     {
@@ -235,7 +235,7 @@ export const journey: Stage[] = [
     org: 'KredX and six side projects',
     points: [
       'Mentoring and reviewing code across the frontend team',
-      'Six side projects, each with a Devanagari name',
+      'Ships side projects end to end with AI pair-programming: four web apps live on Render, two Android apps built and privacy-checked in CI',
     ],
     route: 1,
   },
