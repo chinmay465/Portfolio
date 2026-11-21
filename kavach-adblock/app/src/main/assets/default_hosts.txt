@@ -66,3 +66,8 @@ kochava.com
 # In-app video ads
 hesads.akamaized.net
 imasdk.googleapis.com
+
+# App tracking seen in JioHotstar and Prime Video
+appsflyersdk.com
+bdtelemetry.amazon
+minerva.devices.a2z.com
