@@ -10,9 +10,10 @@ import android.webkit.WebView
  * background or the screen is off.
  *
  * Chromium pauses a playing *video* (unlike audio-only playback) as soon as the
- * page is hidden, whatever the page's own JavaScript does. Hiding happens when
- * the window becomes invisible, so the window's INVISIBLE state is reported as
- * VISIBLE here. GONE (the view really being removed) still passes through.
+ * page is hidden, whatever the page's own JavaScript does. A stopped activity
+ * (screen off, another app opened) reports its window as GONE, so every window
+ * visibility change is passed on as VISIBLE. The view itself stays attached
+ * until MainActivity destroys the WebView.
  */
 class SwarWebView @JvmOverloads constructor(
     context: Context,
@@ -20,6 +21,6 @@ class SwarWebView @JvmOverloads constructor(
 ) : WebView(context, attrs) {
 
     override fun onWindowVisibilityChanged(visibility: Int) {
-        super.onWindowVisibilityChanged(if (visibility == View.GONE) visibility else View.VISIBLE)
+        super.onWindowVisibilityChanged(View.VISIBLE)
     }
 }

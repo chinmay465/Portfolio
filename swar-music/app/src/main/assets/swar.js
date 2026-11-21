@@ -142,9 +142,17 @@
   // Everything below drives the player, which only lives in the top frame.
   if (window.top !== window) return;
 
+  // Messages to the app (MainActivity, over the origin-locked bridge).
+  const post = (message) => {
+    try {
+      if (window.SwarBridge) window.SwarBridge.postMessage(JSON.stringify(message));
+    } catch (_) {}
+  };
+
   // ---------------------------------------------------------------- 3. fallback
   const SKIP_BUTTONS = '.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button, .ytp-ad-skip-button-container button';
-  const video = () => document.querySelector('video');
+  // The player's own <video>; YouTube Music can have other (preview) videos on the page.
+  const video = () => document.querySelector('#movie_player video, ytmusic-player video') || document.querySelector('video');
   const playerEl = () => document.getElementById('movie_player') || document.querySelector('.html5-video-player');
   let mutedByUs = false;
 
@@ -217,12 +225,47 @@
 
   // ---------------------------------------------------------------- 4b. song only
   // A track with both versions shows YouTube Music's Song | Video switch.
-  const SONG_BUTTON = 'ytmusic-av-toggle .song-button, ytmusic-av-toggle #song-button';
-  // A video stream has a picture; the song version is audio only.
-  const showingVideo = (v) => !!(v && v.videoWidth > 0 && v.videoHeight > 0);
+  const SONG_SELECTORS = '#av-id ytmusic-av-toggle .song-button, ytmusic-av-toggle .song-button, ytmusic-av-toggle #song-button, .song-button';
+  // Fallback: the switch's "Song" label, in English and the main Indian languages.
+  const SONG_LABELS = ['song', 'गाना', 'गाणे', 'गाणं', 'ಹಾಡು', 'பாடல்', 'పాట', 'গান', 'ગીત', 'ਗੀਤ', 'ഗാനം', 'گانا'];
+  const LABELLED = 'button, [role="tab"], [role="radio"], tp-yt-paper-tab, tp-yt-paper-button, yt-button-renderer, ytmusic-chip-cloud-chip-renderer, yt-chip-cloud-chip-renderer';
+  const VIDEO_TYPES = ['MUSIC_VIDEO_TYPE_OMV', 'MUSIC_VIDEO_TYPE_UGC'];
   const SWITCH_COOLDOWN_MS = 2500; // the new stream takes a moment to replace the video
+  const CHECK_AFTER_MS = 4500;
   let lastSwitch = 0;
   let resumeTimer = 0;
+  const reported = new Set();
+
+  const showingVideo = (v) => !!(v && v.videoWidth > 0 && v.videoHeight > 0);
+
+  function playerVideo() {
+    try {
+      const p = playerEl();
+      const r = p && typeof p.getPlayerResponse === 'function' ? p.getPlayerResponse() : null;
+      const d = r && r.videoDetails;
+      return d ? { id: d.videoId || '', type: d.musicVideoType || '' } : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /** Playing a music video or uploaded video, rather than a song? */
+  function isVideoPlayback(v) {
+    const pv = playerVideo();
+    if (pv && pv.type) return VIDEO_TYPES.includes(pv.type);
+    return showingVideo(v);
+  }
+
+  function findSongButton() {
+    const direct = document.querySelector(SONG_SELECTORS);
+    if (direct) return direct;
+    const scope = document.querySelector('ytmusic-player-page') || document.body;
+    if (!scope) return null;
+    for (const el of scope.querySelectorAll(LABELLED)) {
+      if (SONG_LABELS.includes((el.textContent || '').trim().toLowerCase())) return el;
+    }
+    return null;
+  }
 
   // Switching loads the song's stream; make sure playback carries on.
   function keepPlaying() {
@@ -236,15 +279,54 @@
     }, 250);
   }
 
-  /** If a video is showing and it has a song version, switch to the song. */
+  /** Once per video: describe the page so a failed switch can be fixed. No personal data. */
+  function reportSwitchProblem(reason) {
+    const pv = playerVideo();
+    const key = `${(pv && pv.id) || location.pathname}:${reason}`;
+    if (reported.has(key)) return;
+    reported.add(key);
+    const page = document.querySelector('ytmusic-player-page') || document.body;
+    const toggle = document.querySelector('ytmusic-av-toggle');
+    const tags = new Set();
+    if (page) for (const el of page.querySelectorAll('*')) if (el.tagName.includes('-')) tags.add(el.tagName.toLowerCase());
+    const labels = page
+      ? [...page.querySelectorAll(LABELLED)].map((el) => (el.textContent || '').trim().replace(/\s+/g, ' ')).filter((t) => t && t.length <= 24).slice(0, 25)
+      : [];
+    const v = video();
+    post({
+      type: 'diag',
+      reason,
+      videoType: (pv && pv.type) || 'unknown',
+      picture: v ? `${v.videoWidth}x${v.videoHeight}` : 'no-video',
+      avToggle: toggle ? [...toggle.attributes].map((a) => a.name).join(' ') || 'present' : 'missing',
+      songButton: !!findSongButton(),
+      labels,
+      tags: [...tags].slice(0, 60),
+      path: location.pathname,
+    });
+  }
+
+  /** If a music video is playing and it has a song version, switch to the song. */
   function preferSong() {
     const v = video();
-    if (!showingVideo(v) || adShowing()) return;
+    if (!v || adShowing() || !isVideoPlayback(v)) return;
     if (Date.now() - lastSwitch < SWITCH_COOLDOWN_MS) return;
+    const pv = playerVideo();
+    const button = findSongButton();
+    if (!button) {
+      // Official music videos almost always have a song version; say so if we can't find it.
+      if (pv && pv.type === 'MUSIC_VIDEO_TYPE_OMV') reportSwitchProblem('no-song-button');
+      return;
+    }
     const wasPlaying = !v.paused || v.autoplay;
-    if (!clickFirst(SONG_BUTTON)) return; // no song version: nothing to switch to
+    button.click();
     lastSwitch = Date.now();
     if (wasPlaying) keepPlaying();
+    const before = pv && pv.id;
+    setTimeout(() => {
+      const now = playerVideo();
+      if (isVideoPlayback(video()) && (!now || now.id === before)) reportSwitchProblem('click-had-no-effect');
+    }, CHECK_AFTER_MS);
   }
   window.__swar.preferSong = preferSong;
 
@@ -283,12 +365,6 @@
     }
     return best;
   }
-
-  const post = (message) => {
-    try {
-      if (window.SwarBridge) window.SwarBridge.postMessage(JSON.stringify(message));
-    } catch (_) {}
-  };
 
   // ---------------------------------------------------------------- 5. ready
   // Tell the app once YouTube Music's UI has drawn, so it can drop its loading

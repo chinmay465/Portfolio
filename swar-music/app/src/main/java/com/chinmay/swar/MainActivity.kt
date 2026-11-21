@@ -289,6 +289,10 @@ class MainActivity : AppCompatActivity() {
                 if (!mainFrameFailed) shell.showPage()
                 return
             }
+            "diag" -> {
+                SwitchReport.show(this, o.toString(2))
+                return
+            }
             "state" -> Unit
             else -> return
         }

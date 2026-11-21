@@ -293,6 +293,85 @@ test('songs, ads and videos without a song version are left alone', () => {
   q.close();
 });
 
+const withPlayerType = (p, type, id = 'abc') => {
+  const mp = p.document.createElement('div');
+  mp.id = 'movie_player';
+  mp.className = 'html5-video-player';
+  mp.getPlayerResponse = () => ({ videoDetails: { videoId: id, musicVideoType: type } });
+  p.document.body.appendChild(mp);
+  return mp;
+};
+
+test('uses the player\'s own track type: official video switches, song does not', () => {
+  const p = page(AV_TOGGLE);
+  const mp = withPlayerType(p, 'MUSIC_VIDEO_TYPE_OMV');
+  const v = fakeVideo(p.document, { paused: false, duration: 200, videoWidth: 0, videoHeight: 0 }); // picture not known yet
+  mp.appendChild(v);
+  let clicks = 0;
+  p.document.querySelector('.song-button').addEventListener('click', () => { clicks += 1; });
+  v.dispatchEvent(new p.window.Event('playing'));
+  assert.equal(clicks, 1, 'official music video switches even before its picture size is known');
+  p.close();
+
+  const q = page(AV_TOGGLE);
+  const mq = withPlayerType(q, 'MUSIC_VIDEO_TYPE_ATV');
+  const w = fakeVideo(q.document, { paused: false, duration: 200, videoWidth: 640, videoHeight: 640 });
+  mq.appendChild(w);
+  let songClicks = 0;
+  q.document.querySelector('.song-button').addEventListener('click', () => { songClicks += 1; });
+  w.dispatchEvent(new q.window.Event('playing'));
+  assert.equal(songClicks, 0, 'already the song (cover art counts as a picture)');
+  q.close();
+});
+
+test('finds the Song switch by its label when the class names differ', () => {
+  const p = page('<ytmusic-player-page><div role="tablist"><button role="tab">Song</button><button role="tab">Video</button></div></ytmusic-player-page>');
+  const mp = withPlayerType(p, 'MUSIC_VIDEO_TYPE_OMV');
+  const v = fakeVideo(p.document, { paused: false, duration: 200, videoWidth: 1280, videoHeight: 720 });
+  mp.appendChild(v);
+  const clicks = [];
+  p.document.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => clicks.push(b.textContent)));
+  v.dispatchEvent(new p.window.Event('playing'));
+  assert.deepEqual(clicks, ['Song']);
+  p.close();
+
+  const hi = page('<ytmusic-player-page><button>गाना</button><button>वीडियो</button></ytmusic-player-page>');
+  const mh = withPlayerType(hi, 'MUSIC_VIDEO_TYPE_OMV');
+  const vh = fakeVideo(hi.document, { paused: false, duration: 200, videoWidth: 1280, videoHeight: 720 });
+  mh.appendChild(vh);
+  let hindi = 0;
+  hi.document.querySelector('button').addEventListener('click', () => { hindi += 1; });
+  vh.dispatchEvent(new hi.window.Event('playing'));
+  assert.equal(hindi, 1, 'Hindi label');
+  hi.close();
+});
+
+test('reports the page layout once when an official video has no findable Song switch', () => {
+  const p = page('<ytmusic-player-page><ytmusic-mystery-switch><button>Audio</button></ytmusic-mystery-switch></ytmusic-player-page>');
+  const mp = withPlayerType(p, 'MUSIC_VIDEO_TYPE_OMV', 'vid1');
+  const v = fakeVideo(p.document, { paused: false, duration: 200, videoWidth: 1280, videoHeight: 720 });
+  mp.appendChild(v);
+  v.dispatchEvent(new p.window.Event('playing'));
+  v.dispatchEvent(new p.window.Event('playing'));
+  const diags = p.messages.filter((m) => m.type === 'diag');
+  assert.equal(diags.length, 1);
+  assert.equal(diags[0].reason, 'no-song-button');
+  assert.equal(diags[0].videoType, 'MUSIC_VIDEO_TYPE_OMV');
+  assert.equal(diags[0].avToggle, 'missing');
+  assert.ok(diags[0].tags.includes('ytmusic-mystery-switch'));
+  assert.deepEqual(plain(diags[0].labels), ['Audio']);
+  assert.equal(JSON.stringify(diags[0]).includes('http'), false, 'no URLs in the report');
+  p.close();
+
+  const q = page(); // uploaded video with no song version: nothing to report
+  const mq = withPlayerType(q, 'MUSIC_VIDEO_TYPE_UGC');
+  const w = fakeVideo(q.document, { paused: false, duration: 200, videoWidth: 1280, videoHeight: 720 });
+  mq.appendChild(w);
+  w.dispatchEvent(new q.window.Event('playing'));
+  assert.equal(q.messages.some((m) => m.type === 'diag'), false);
+  q.close();
+});
+
 test('running the script twice is harmless', () => {
   const p = page();
   const parse = p.window.JSON.parse;
