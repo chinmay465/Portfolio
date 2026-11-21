@@ -1458,6 +1458,130 @@ kbd {
   color: var(--rose);
 }
 
+/* Swar */
+.vis-swar {
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(160deg, #0d1734, #050a1a 70%);
+}
+.vis-swar svg {
+  width: 100%;
+  height: auto;
+  flex: 1;
+}
+.sw-body {
+  fill: #0b1228;
+  stroke: rgba(91, 140, 255, 0.45);
+  stroke-width: 1.5;
+}
+.sw-screen {
+  fill: #101c3d;
+  transition: fill 0.6s var(--ease);
+}
+.vis-swar[data-screen='off'] .sw-screen {
+  fill: #02040a;
+}
+.sw-player,
+.sw-lock {
+  transition: opacity 0.6s var(--ease);
+}
+.sw-lock,
+.vis-swar[data-screen='off'] .sw-player {
+  opacity: 0;
+}
+.vis-swar[data-screen='off'] .sw-lock {
+  opacity: 1;
+}
+.sw-art {
+  fill: var(--accent);
+  opacity: 0.85;
+}
+.sw-title,
+.sw-artist,
+.sw-clock {
+  text-anchor: middle;
+}
+.sw-title,
+.sw-notif-title,
+.sw-item-title {
+  font: 600 11px var(--body);
+  fill: var(--ink);
+}
+.sw-artist,
+.sw-notif-artist,
+.sw-item-artist {
+  font: 10px var(--body);
+  fill: var(--ink-3);
+}
+.sw-clock {
+  font: 300 30px var(--body);
+  fill: var(--ink);
+}
+.sw-notif {
+  fill: rgba(91, 140, 255, 0.16);
+  stroke: rgba(91, 140, 255, 0.4);
+}
+.sw-track {
+  fill: rgba(255, 255, 255, 0.12);
+}
+.sw-progress {
+  fill: var(--accent);
+}
+.sw-eq rect {
+  fill: var(--accent);
+  transform-box: fill-box;
+  transform-origin: bottom;
+  transform: scaleY(0.25);
+  filter: drop-shadow(0 0 4px var(--accent));
+}
+.vis-swar[data-active='true'] .sw-eq rect {
+  animation: eq 0.6s ease-in-out infinite alternate;
+}
+@keyframes eq {
+  to {
+    transform: scaleY(1);
+  }
+}
+.sw-label {
+  font: 600 11px var(--body);
+  fill: var(--ink-3);
+  letter-spacing: 0.04em;
+}
+.sw-item rect {
+  fill: #0f1a38;
+  stroke: rgba(91, 140, 255, 0.35);
+  stroke-width: 1.2;
+}
+.sw-item.new {
+  animation: fade 0.5s ease;
+}
+.sw-item.ad rect {
+  fill: rgba(255, 92, 138, 0.08);
+  stroke: var(--rose);
+  stroke-dasharray: 4 4;
+}
+.sw-item.ad .sw-item-title {
+  fill: var(--rose);
+}
+.sw-strike {
+  stroke: var(--rose);
+  stroke-width: 1.5;
+  stroke-dasharray: 200;
+  stroke-dashoffset: 200;
+  animation: route 0.6s var(--ease) 0.2s forwards;
+}
+.sw-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 14px;
+  padding: 10px 4px 24px;
+  color: var(--ink-3);
+}
+.sw-meta strong {
+  color: var(--ink);
+}
+
 /* ---------- Stack marquee ---------- */
 
 .marquee {
