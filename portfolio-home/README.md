@@ -8,7 +8,7 @@ The landing page for this repo: one place that links to every app, and a showcas
 
 A personal site and an index of everything in this repo. Everything about Chinmay comes from his resume (`src/data/profile.ts`, no phone number by design).
 
-- **Particle hero:** a canvas of a few thousand particles that assemble into चिन्मय, then morph through each project's name. They scatter away from the pointer and burst on click. Hovering an app in the live status panel morphs the field to that app
+- **Particle hero:** a canvas of a few thousand particles that assemble into चिन्मय, then morph through each project's name. They scatter away from the pointer and burst on click. An "At a glance" card beside the name sums up the current role, previous role, focus, stack and education, and lists the side projects with live status; hovering one morphs the particles to its name
 - **Decoding headline:** the name resolves out of mixed glyphs, and runs again on hover
 - **About me:** the lead lights up word by word as you scroll; three working principles on cursor-spotlight cards
 - **Journey:** a pinned scroll scene from MIT AoE Pune through Paytm Money and the promotion to KredX in Bangalore. The timeline fills, the year decodes, and a dot travels from Pune to Bangalore
