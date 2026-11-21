@@ -36,6 +36,7 @@ errors, report = [], []
 # 1. Permissions
 expected = {
     "android.permission.INTERNET",
+    "android.permission.ACCESS_NETWORK_STATE",  # auto-retry when back online
     "android.permission.FOREGROUND_SERVICE",
     "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
     "android.permission.POST_NOTIFICATIONS",

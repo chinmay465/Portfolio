@@ -10,6 +10,9 @@
  *     Skip. Also dismisses the "Are you still there?" dialog.
  *  4. Reports what's playing to the app (notification, lock screen, headset
  *     buttons) and runs commands coming back from it.
+ *  5. Makes the page feel like an app: no tap flashes, no text selection on
+ *     long-press, no rubber-band overscroll, and a "ready" signal so the app
+ *     can drop its loading screen once the UI has drawn.
  */
 (() => {
   'use strict';
@@ -118,7 +121,12 @@
     '.ytp-ad-player-overlay',
     '.video-ads',
     '#player-ads',
-  ].join(',\n') + ' { display: none !important; }';
+  ].join(',\n') + ' { display: none !important; }\n' + [
+    // Feel like an app, not a web page.
+    'html { -webkit-tap-highlight-color: transparent; }',
+    'html, body { overscroll-behavior: none; }',
+    '*:not(input):not(textarea):not([contenteditable]) { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }',
+  ].join('\n');
   const addStyle = () => {
     const style = document.createElement('style');
     style.id = 'swar-style';
@@ -239,6 +247,27 @@
     return best;
   }
 
+  const post = (message) => {
+    try {
+      if (window.SwarBridge) window.SwarBridge.postMessage(JSON.stringify(message));
+    } catch (_) {}
+  };
+
+  // ---------------------------------------------------------------- 5. ready
+  // Tell the app once YouTube Music's UI has drawn, so it can drop its loading
+  // screen. If the expected elements never show up, say so anyway after a while.
+  const READY_SELECTORS = 'ytmusic-pivot-bar-renderer, ytmusic-nav-bar, ytmusic-browse-response, ytmusic-player-page, ytmusic-search-page';
+  const readyStart = Date.now();
+  (function waitForUi() {
+    const drawn = document.querySelector('ytmusic-app') && document.querySelector(READY_SELECTORS);
+    if (drawn || Date.now() - readyStart > 10000) {
+      // One frame later, so the first paint is on screen before the cover lifts.
+      requestAnimationFrame(() => post({ type: 'ready' }));
+      return;
+    }
+    setTimeout(waitForUi, 120);
+  })();
+
   let lastSent = '';
   function report() {
     const v = video();
@@ -257,9 +286,7 @@
     const json = JSON.stringify(state);
     if (json === lastSent) return;
     lastSent = json;
-    try {
-      if (window.SwarBridge) window.SwarBridge.postMessage(json);
-    } catch (_) {}
+    post(state);
   }
   window.__swar.report = report;
 

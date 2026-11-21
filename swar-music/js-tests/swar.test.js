@@ -211,6 +211,26 @@ test('commands fall back to the player bar and the video element', () => {
   p.close();
 });
 
+test('tells the app when the YouTube Music UI has drawn', async () => {
+  const p = page();
+  p.window.requestAnimationFrame = (fn) => setTimeout(fn, 0);
+  await new Promise((r) => setTimeout(r, 200));
+  assert.equal(p.messages.some((m) => m.type === 'ready'), false, 'not before the UI exists');
+  p.document.body.insertAdjacentHTML('beforeend', '<ytmusic-app><ytmusic-pivot-bar-renderer></ytmusic-pivot-bar-renderer></ytmusic-app>');
+  await new Promise((r) => setTimeout(r, 300));
+  assert.equal(p.messages.filter((m) => m.type === 'ready').length, 1);
+  p.close();
+});
+
+test('feels like an app: no tap highlight, selection or overscroll', () => {
+  const p = page();
+  const css = p.document.getElementById('swar-style').textContent;
+  assert.match(css, /-webkit-tap-highlight-color: transparent/);
+  assert.match(css, /overscroll-behavior: none/);
+  assert.match(css, /:not\(input\):not\(textarea\)/);
+  p.close();
+});
+
 test('running the script twice is harmless', () => {
   const p = page();
   const parse = p.window.JSON.parse;

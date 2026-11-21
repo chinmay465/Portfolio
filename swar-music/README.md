@@ -25,6 +25,18 @@ Swar wraps [music.youtube.com](https://music.youtube.com) in an Android app. Mus
 - **Audio focus.** WebView takes audio focus for the song itself, so Android pauses or ducks it for calls and other music apps. Swar doesn't request focus on top of that: a second request from the same app takes focus away from WebView and pauses the song. Swar does pause when headphones are unplugged.
 - **Links.** Sign-in stays inside the app. `intent://` "open in the YouTube Music app" links are blocked. Other sites open in your browser. Shared `music.youtube.com` links can be opened with Swar.
 
+## App experience
+
+The page is YouTube Music's own; around it Swar adds the parts a native app has:
+
+- **Launch:** an animated splash screen (the logo's bars bouncing), handing over to a loading screen with the same bars. The loading screen lifts with a short zoom-and-fade once the page script reports that YouTube Music has drawn its UI, so you never see a half-built page. After 6 s it notes a slow connection.
+- **Progress line:** a thin brand-gradient bar at the top while a page loads.
+- **Offline screen:** instead of WebView's error page, a "Can't reach YouTube Music" screen with **Try again**. It also retries by itself as soon as the connection comes back.
+- **Native feel:** no grey tap flashes, no text-selection handles on long-press, no rubber-band overscroll.
+- **Back gesture:** inside the app, Back goes back a page. At the top on Android 12+, the system's predictive-back animation sends Swar to the background, and the music keeps going.
+- **Icon:** gradient launcher icon with a themed (monochrome) version for Android 13+, and a matching notification icon.
+- Everything respects Android's "Remove animations" setting.
+
 ## Privacy
 
 Swar adds no tracking of its own, and blocks as much of Google's as it can without breaking playback.
@@ -71,6 +83,8 @@ cd js-tests && npm ci && npm test   # swar.js in a simulated YouTube Music page 
 |---|---|
 | `assets/swar.js` | Page script: visibility override, ad-data pruning, ad fallback, state bridge, commands |
 | `MainActivity.kt` | WebView setup, request filtering, link policy, page → app messages |
+| `ui/Shell.kt`, `ui/EqualizerView.kt` | Loading and offline screens, progress line, animated equalizer |
+| `CrashLog.kt` | Saves a crash report on the phone and shows it on next launch |
 | `playback/PlaybackService.kt` | Foreground service, notification, MediaSession, wake lock, headphone unplug |
 | `playback/PlayerBridge.kt` | Shared state flow and command channel between the activity and the service |
 | `web/AdFilter.kt` | Ad and telemetry hosts and endpoints blocked at the network level |
