@@ -372,6 +372,54 @@ test('reports the page layout once when an official video has no findable Song s
   q.close();
 });
 
+test('when YouTube disables the Song switch: lowest quality, cover art instead of the picture', () => {
+  const p = page(`<ytmusic-player playback-mode="OMV_PREFERRED"><div id="song-image"><img src="data:,"></div><div id="song-video"></div></ytmusic-player>
+    <ytmusic-av-toggle toggle-disabled audio-only-playback-available selected-item-has-video><button class="song-button">Song</button><button class="video-button">Video</button></ytmusic-av-toggle>`);
+  const mp = withPlayerType(p, 'MUSIC_VIDEO_TYPE_OMV', 'v1');
+  const quality = [];
+  mp.setPlaybackQualityRange = (lo, hi) => quality.push(`${lo}-${hi}`);
+  mp.getPlayerResponse = () => ({ videoDetails: { videoId: 'v1', musicVideoType: 'MUSIC_VIDEO_TYPE_OMV', thumbnail: { thumbnails: [{ url: 'https://i.ytimg.com/vi/v1/hq.jpg?x=1' }, { url: 'https://i.ytimg.com/vi/v1/maxres.jpg?x=1' }] } } });
+  const v = fakeVideo(p.document, { paused: false, duration: 200, videoWidth: 640, videoHeight: 360 });
+  mp.appendChild(v);
+  let clicks = 0;
+  p.document.querySelector('.song-button').addEventListener('click', () => { clicks += 1; });
+
+  v.dispatchEvent(new p.window.Event('playing'));
+  assert.equal(clicks, 0, 'a disabled switch is not clicked');
+  assert.ok(p.document.documentElement.classList.contains('swar-low-data'));
+  assert.deepEqual(quality, ['tiny-tiny']);
+  assert.equal(p.document.querySelector('ytmusic-player').getAttribute('playback-mode'), 'ATV_PREFERRED');
+  assert.equal(p.document.querySelector('#song-image img').getAttribute('src'), 'https://i.ytimg.com/vi/v1/maxres.jpg');
+  assert.equal(p.messages.some((m) => m.type === 'diag'), false, 'nothing to report: YouTube turned the switch off');
+
+  v.dispatchEvent(new p.window.Event('playing'));
+  assert.deepEqual(quality, ['tiny-tiny'], 'set once per video');
+
+  // Next track is a song: back to normal
+  mp.getPlayerResponse = () => ({ videoDetails: { videoId: 's2', musicVideoType: 'MUSIC_VIDEO_TYPE_ATV' } });
+  v.dispatchEvent(new p.window.Event('playing'));
+  assert.equal(p.document.documentElement.classList.contains('swar-low-data'), false);
+  assert.deepEqual(quality, ['tiny-tiny', 'auto-auto']);
+  p.close();
+});
+
+test('the report includes attribute values', () => {
+  const p = page('<ytmusic-player-page><ytmusic-av-toggle playback-mode="OMV_PREFERRED"><button class="song-button">Song</button></ytmusic-av-toggle></ytmusic-player-page>');
+  p.window.eval("document.querySelector('ytmusic-av-toggle')"); // present, enabled
+  const mp = withPlayerType(p, 'MUSIC_VIDEO_TYPE_OMV', 'v9');
+  const v = fakeVideo(p.document, { paused: false, duration: 200, videoWidth: 640, videoHeight: 360 });
+  mp.appendChild(v);
+  p.window.__swar.cmd('background');
+  return new Promise((resolve) => setTimeout(() => {
+    const d = p.messages.find((m) => m.type === 'diag');
+    assert.ok(d, 'click had no effect is reported');
+    assert.equal(d.reason, 'click-had-no-effect');
+    assert.match(d.avToggle, /playback-mode=OMV_PREFERRED/);
+    p.close();
+    resolve();
+  }, 4800));
+});
+
 test('running the script twice is harmless', () => {
   const p = page();
   const parse = p.window.JSON.parse;
