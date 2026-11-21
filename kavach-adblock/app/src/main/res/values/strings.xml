@@ -10,7 +10,7 @@
     <string name="stat_blocked">Blocked</string>
     <string name="stat_queries">Lookups</string>
     <string name="stat_list">In blocklist</string>
-    <string name="recent_header">Recently blocked · tap to allow</string>
+    <string name="recent_header">Blocked · tap to allow</string>
     <string name="recent_empty">Blocked domains will show up here</string>
     <string name="updating">Updating…</string>
     <string name="blocklist_updated">Blocklist updated: %1$s domains</string>
@@ -26,7 +26,7 @@
     <string name="my_rules">My rules</string>
     <string name="my_rules_count">My rules (%1$d)</string>
     <string name="live_switch">Show live lookups (memory only, wiped when off)</string>
-    <string name="live_header">Live lookups · tap to block or allow</string>
+    <string name="live_header">Lookups · tap to block/allow</string>
     <string name="live_empty">Open an app. Every domain it looks up appears here.</string>
     <string name="allow_message">%1$s and its subdomains will stop being blocked. Use this when an app breaks.</string>
     <string name="block_title">Block this domain?</string>
@@ -49,4 +49,13 @@
     <string name="quick_on">Kavach is on</string>
     <string name="quick_off">Kavach is off</string>
     <string name="quick_needs_setup">Allow Kavach\'s VPN once, then Kavach On will work automatically</string>
+    <string name="clear_list">Clear</string>
+    <string name="export_list">Export</string>
+    <string name="export_empty">Nothing to export yet</string>
+    <string name="export_chooser">Export lookups</string>
+    <string name="export_subject">Kavach lookups %1$s</string>
+    <string name="export_header_live">Kavach live lookups, exported %1$s (newest first)</string>
+    <string name="export_header_blocked">Kavach recently blocked domains, exported %1$s (newest first)</string>
+    <string name="export_legend">✕ = blocked by Kavach, · = allowed</string>
+    <string name="list_cleared">List cleared</string>
 </resources>
