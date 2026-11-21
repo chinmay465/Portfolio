@@ -56,3 +56,10 @@ describe('projects', () => {
     expect(projects.map((p) => p.id)).toContain('kavach')
   })
 })
+
+describe('profile', () => {
+  it('never publishes a phone number', async () => {
+    const profile = await import('../data/profile')
+    expect(JSON.stringify(profile)).not.toMatch(/\+?91[\s-]?\d{5}\s?\d{5}|\b\d{10}\b/)
+  })
+})
