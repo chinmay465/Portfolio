@@ -12,8 +12,10 @@
  *     buttons) and runs commands coming back from it.
  *  4b. Plays songs, not videos: whenever a video starts, switches YouTube
  *     Music's Song | Video toggle to Song. Where YouTube has disabled that
- *     toggle, hides the picture behind the cover art and drops the video to
- *     the lowest quality, so it's effectively audio.
+ *     toggle, looks the same title and artist up in YouTube Music's search
+ *     and plays the song if it clearly matches; until then (or if nothing
+ *     matches) hides the picture behind the cover art and drops the video to
+ *     the lowest quality.
  *  5. Makes the page feel like an app: no tap flashes, no text selection on
  *     long-press, no rubber-band overscroll, and a "ready" signal so the app
  *     can drop its loading screen once the UI has drawn.
@@ -371,6 +373,163 @@
     } catch (_) {}
   }
 
+  // ---- Song version by search: when YouTube offers no usable Song switch, look
+  // the same title and artist up in YouTube Music and play the song if it
+  // clearly matches. Uses the page's own search API on this same site.
+  const INNERTUBE_SEARCH = '/youtubei/v1/search?prettyPrint=false';
+  const searched = new Map(); // video id -> song id ('' when nothing matched)
+
+  const NOISE = /\(([^)]*)\)|\[([^\]]*)\]|\{([^}]*)\}|\|.*$|\s-\s.*(official|video|lyric|audio|full song|hd|4k).*$/gi;
+  const FEAT = /\b(ft|feat|featuring)\b\.?.*$/i;
+
+  /** "Kesariya (Official Video) | Brahmāstra" -> "kesariya" */
+  function normalizeTitle(text) {
+    return String(text || '')
+      .normalize('NFKD').replace(/[̀-ͯ]/g, '')
+      .replace(NOISE, ' ').replace(FEAT, ' ')
+      .toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  }
+
+  const artistNames = (text) => String(text || '')
+    .toLowerCase().split(/\s*(?:,|&|•|\band\b|\bx\b|\bwith\b)\s*/)
+    .map((s) => s.normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^\p{L}\p{N} ]+/gu, '').trim())
+    .filter((s) => s.length >= 2);
+
+  function titlesMatch(a, b) {
+    if (!a || !b) return false;
+    if (a === b) return true;
+    const [short, long] = a.length <= b.length ? [a, b] : [b, a];
+    return long.startsWith(short) && short.length / long.length >= 0.6;
+  }
+
+  function artistsOverlap(wanted, found) {
+    const have = artistNames(found);
+    return artistNames(wanted).some((w) => have.some((h) => h === w || h.includes(w) || w.includes(h)));
+  }
+
+  const runsText = (t) => (t && (t.simpleText || (t.runs || []).map((r) => r.text).join(''))) || '';
+
+  function findVideoType(node) {
+    const stack = [node];
+    let n = 0;
+    while (stack.length && n++ < 400) {
+      const o = stack.pop();
+      if (!o || typeof o !== 'object') continue;
+      if (o.watchEndpointMusicConfig && o.watchEndpointMusicConfig.musicVideoType) return o.watchEndpointMusicConfig.musicVideoType;
+      for (const k of Object.keys(o)) stack.push(o[k]);
+    }
+    return '';
+  }
+
+  function findVideoId(node) {
+    const stack = [node];
+    let n = 0;
+    while (stack.length && n++ < 400) {
+      const o = stack.pop();
+      if (!o || typeof o !== 'object') continue;
+      if (o.watchEndpoint && o.watchEndpoint.videoId) return o.watchEndpoint.videoId;
+      if (o.playlistItemData && o.playlistItemData.videoId) return o.playlistItemData.videoId;
+      for (const k of Object.keys(o)) stack.push(o[k]);
+    }
+    return '';
+  }
+
+  /** Song results (ATV) from a search response, in page order. */
+  function songResults(response) {
+    const out = [];
+    const stack = [response];
+    let n = 0;
+    while (stack.length && n++ < 50000) {
+      const o = stack.pop();
+      if (!o || typeof o !== 'object') continue;
+      const item = o.musicResponsiveListItemRenderer;
+      const card = o.musicCardShelfRenderer;
+      if (item && item.flexColumns) {
+        const cols = item.flexColumns.map((c) => runsText(c.musicResponsiveListItemFlexColumnRenderer && c.musicResponsiveListItemFlexColumnRenderer.text));
+        out.push({ id: findVideoId(item), type: findVideoType(item), title: cols[0] || '', artists: cols.slice(1).join(' • ') });
+      } else if (card) {
+        out.push({ id: findVideoId(card.title || card), type: findVideoType(card.title || card), title: runsText(card.title), artists: runsText(card.subtitle) });
+      }
+      if (Array.isArray(o)) for (let i = o.length - 1; i >= 0; i--) stack.push(o[i]);
+      else for (const k of Object.keys(o)) stack.push(o[k]);
+    }
+    return out.filter((r) => r.id && r.type === 'MUSIC_VIDEO_TYPE_ATV');
+  }
+
+  /** The song version of {title, artist}, or null if nothing clearly matches. */
+  function pickSongVersion(response, wanted) {
+    // "Tum Hi Ho - Aashiqui 2": also try the part before the dash (song - film).
+    const wants = [...new Set([
+      normalizeTitle(wanted.title),
+      normalizeTitle(String(wanted.title || '').split(/\s[-–—]\s/)[0]),
+    ])].filter(Boolean);
+    for (const r of songResults(response).slice(0, 8)) {
+      const got = normalizeTitle(r.title);
+      if (wants.some((w) => titlesMatch(w, got)) && artistsOverlap(wanted.artist, r.artists)) return r;
+    }
+    return null;
+  }
+
+  function ytcfgValue(key) {
+    try {
+      const c = window.ytcfg;
+      if (c && typeof c.get === 'function') return c.get(key);
+      return c && c.data_ ? c.data_[key] : undefined;
+    } catch (_) {
+      return undefined;
+    }
+  }
+
+  /** The same search request YouTube Music sends when you type in its search box. */
+  function searchSongs(query) {
+    const context = ytcfgValue('INNERTUBE_CONTEXT');
+    if (!context || typeof fetch !== 'function') return Promise.resolve(null);
+    const headers = { 'Content-Type': 'application/json' };
+    const visitor = ytcfgValue('VISITOR_DATA');
+    if (visitor) headers['X-Goog-Visitor-Id'] = visitor;
+    return fetch(INNERTUBE_SEARCH, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers,
+      body: JSON.stringify({ context, query }),
+    }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  }
+
+  /** Play a song through YouTube Music's own navigation; reload onto it if that doesn't take. */
+  function playSong(id) {
+    const endpoint = {
+      watchEndpoint: {
+        videoId: id,
+        watchEndpointMusicSupportedConfigs: { watchEndpointMusicConfig: { musicVideoType: 'MUSIC_VIDEO_TYPE_ATV' } },
+      },
+    };
+    const app = document.querySelector('ytmusic-app');
+    if (app) app.dispatchEvent(new CustomEvent('yt-navigate', { bubbles: true, composed: true, detail: { endpoint } }));
+    setTimeout(() => {
+      const now = playerVideo();
+      if (!now || now.id !== id) location.assign(`/watch?v=${encodeURIComponent(id)}`);
+    }, 3000);
+  }
+
+  function playSongVersion(videoId) {
+    if (searched.has(videoId)) return;
+    const md = navigator.mediaSession && navigator.mediaSession.metadata;
+    const details = playerVideoDetails();
+    const title = (md && md.title) || (details && details.title) || '';
+    const artist = (md && md.artist) || (details && details.author) || '';
+    if (!title) return; // metadata not there yet; try again on the next tick
+    searched.set(videoId, '');
+    searchSongs(`${normalizeTitle(title)} ${artist}`.trim()).then((response) => {
+      if (!response) return;
+      const song = pickSongVersion(response, { title, artist });
+      if (!song) return; // no clear match: stay on low-data video
+      searched.set(videoId, song.id);
+      const now = playerVideo();
+      if (now && now.id === videoId) playSong(song.id); // only if that video is still on
+    });
+  }
+  Object.assign(window.__swar, { normalizeTitle, pickSongVersion, songResults });
+
   /** Plays songs, not videos: switch to Song, or failing that, low-data video. */
   function preferSong() {
     const v = video();
@@ -386,8 +545,10 @@
     const button = findSongButton();
 
     if (!button || toggleDisabled(toggle)) {
-      // YouTube offers no song for this video, or has turned the switch off.
+      // YouTube offers no song for this video, or has turned the switch off:
+      // low-data video right away, then look the song up and play it if it matches.
       enterLowData(id);
+      playSongVersion(id);
       if (!button && !toggle && pv && pv.type === 'MUSIC_VIDEO_TYPE_OMV') reportSwitchProblem('no-song-button');
       return;
     }
@@ -400,6 +561,7 @@
       const now = playerVideo();
       if (isVideoPlayback(video()) && (!now || now.id === before)) {
         enterLowData(id);
+        playSongVersion(id);
         reportSwitchProblem('click-had-no-effect');
       }
     }, CHECK_AFTER_MS);

@@ -420,6 +420,102 @@ test('the report includes attribute values', () => {
   }, 4800));
 });
 
+// A trimmed YouTube Music search response: a video result, then songs.
+const listItem = (id, type, title, subtitle) => ({
+  musicResponsiveListItemRenderer: {
+    playlistItemData: { videoId: id },
+    overlay: { musicItemThumbnailOverlayRenderer: { content: { musicPlayButtonRenderer: { playNavigationEndpoint: {
+      watchEndpoint: { videoId: id, watchEndpointMusicSupportedConfigs: { watchEndpointMusicConfig: { musicVideoType: type } } },
+    } } } } },
+    flexColumns: [
+      { musicResponsiveListItemFlexColumnRenderer: { text: { runs: [{ text: title }] } } },
+      { musicResponsiveListItemFlexColumnRenderer: { text: { runs: [{ text: subtitle }] } } },
+    ],
+  },
+});
+const searchResponse = (...items) => ({ contents: { tabbedSearchResultsRenderer: { tabs: [{ tabRenderer: { content: { sectionListRenderer: { contents: [{ musicShelfRenderer: { contents: items } }] } } } }] } } });
+
+test('normalises video titles to the song title', () => {
+  const p = page();
+  const n = p.window.__swar.normalizeTitle;
+  assert.equal(n('Kesariya (Official Video) | Brahmāstra'), 'kesariya');
+  assert.equal(n('Tum Hi Ho [Full Video Song] - Aashiqui 2'), 'tum hi ho aashiqui 2');
+  assert.equal(n('Apna Bana Le - Official Music Video | Bhediya'), 'apna bana le');
+  assert.equal(n('Heeriye (feat. Arijit Singh)'), 'heeriye');
+  assert.equal(n('Song ft. Someone Else'), 'song');
+  p.close();
+});
+
+test('picks the song version only when title and artist clearly match', () => {
+  const p = page();
+  const pick = (resp, wanted) => p.window.__swar.pickSongVersion(resp, wanted);
+  const resp = searchResponse(
+    listItem('omv1', 'MUSIC_VIDEO_TYPE_OMV', 'Kesariya (Official Video)', 'Video • Pritam, Arijit Singh • 120M views'),
+    listItem('cover', 'MUSIC_VIDEO_TYPE_ATV', 'Kesariya (Cover)', 'Song • Some Cover Band • 3:10'),
+    listItem('atv1', 'MUSIC_VIDEO_TYPE_ATV', 'Kesariya', 'Song • Pritam, Arijit Singh & Amitabh Bhattacharya • Brahmastra • 4:28'),
+  );
+  assert.equal(pick(resp, { title: 'Kesariya (Official Video) | Brahmāstra', artist: 'Arijit Singh' }).id, 'atv1');
+  assert.equal(pick(resp, { title: 'Kesariya', artist: 'Some Unrelated Singer' }), null, 'artist must match');
+  const film = searchResponse(listItem('th', 'MUSIC_VIDEO_TYPE_ATV', 'Tum Hi Ho', 'Song • Arijit Singh • Aashiqui 2 • 4:22'));
+  assert.equal(pick(film, { title: 'Tum Hi Ho - Aashiqui 2', artist: 'Arijit Singh' }).id, 'th', 'song - film titles');
+  assert.equal(pick(resp, { title: 'Deva Deva', artist: 'Arijit Singh' }), null, 'title must match');
+  assert.equal(pick(searchResponse(listItem('omv1', 'MUSIC_VIDEO_TYPE_OMV', 'Kesariya', 'Arijit Singh')), { title: 'Kesariya', artist: 'Arijit Singh' }), null, 'videos are not songs');
+  p.close();
+});
+
+test('no usable Song switch: searches, then plays the matching song', async () => {
+  const p = page('<ytmusic-app></ytmusic-app><ytmusic-av-toggle toggle-disabled><button class="song-button">Song</button></ytmusic-av-toggle>');
+  const mp = withPlayerType(p, 'MUSIC_VIDEO_TYPE_OMV', 'omv1');
+  p.window.ytcfg = { get: (k) => ({ INNERTUBE_CONTEXT: { client: { clientName: 'WEB_REMIX' } }, VISITOR_DATA: 'vis' })[k] };
+  p.window.navigator.mediaSession.metadata = { title: 'Kesariya (Official Video)', artist: 'Pritam, Arijit Singh', album: '', artwork: [] };
+  const requests = [];
+  p.window.fetch = (url, init) => {
+    requests.push({ url, init });
+    return Promise.resolve(new Response(JSON.stringify(searchResponse(
+      listItem('atv1', 'MUSIC_VIDEO_TYPE_ATV', 'Kesariya', 'Song • Pritam, Arijit Singh • Brahmastra • 4:28'),
+    ))));
+  };
+  const navigations = [];
+  p.document.querySelector('ytmusic-app').addEventListener('yt-navigate', (e) => {
+    navigations.push(e.detail.endpoint.watchEndpoint.videoId);
+    mp.getPlayerResponse = () => ({ videoDetails: { videoId: 'atv1', musicVideoType: 'MUSIC_VIDEO_TYPE_ATV' } });
+  });
+  const v = fakeVideo(p.document, { paused: false, duration: 260, videoWidth: 640, videoHeight: 360 });
+  mp.appendChild(v);
+
+  v.dispatchEvent(new p.window.Event('playing'));
+  assert.ok(p.document.documentElement.classList.contains('swar-low-data'), 'low-data while searching');
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].url, '/youtubei/v1/search?prettyPrint=false', 'same-site search API only');
+  assert.equal(requests[0].init.credentials, 'same-origin');
+  assert.equal(JSON.parse(requests[0].init.body).query, 'kesariya Pritam, Arijit Singh');
+  assert.deepEqual(navigations, ['atv1']);
+
+  v.dispatchEvent(new p.window.Event('playing'));
+  assert.equal(requests.length, 1, 'searched once per video');
+  p.close();
+});
+
+test('no clear match: stays on low-data video', async () => {
+  const p = page('<ytmusic-app></ytmusic-app>');
+  const mp = withPlayerType(p, 'MUSIC_VIDEO_TYPE_UGC', 'ugc1');
+  p.window.ytcfg = { get: (k) => ({ INNERTUBE_CONTEXT: { client: {} } })[k] };
+  p.window.navigator.mediaSession.metadata = { title: 'My vlog song', artist: 'Random Uploader', album: '', artwork: [] };
+  p.window.fetch = () => Promise.resolve(new Response(JSON.stringify(searchResponse(
+    listItem('x', 'MUSIC_VIDEO_TYPE_ATV', 'Something Else', 'Song • Another Artist'),
+  ))));
+  let navigated = false;
+  p.document.querySelector('ytmusic-app').addEventListener('yt-navigate', () => { navigated = true; });
+  const v = fakeVideo(p.document, { paused: false, duration: 200, videoWidth: 640, videoHeight: 360 });
+  mp.appendChild(v);
+  v.dispatchEvent(new p.window.Event('playing'));
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(navigated, false);
+  assert.ok(p.document.documentElement.classList.contains('swar-low-data'));
+  p.close();
+});
+
 test('running the script twice is harmless', () => {
   const p = page();
   const parse = p.window.JSON.parse;
