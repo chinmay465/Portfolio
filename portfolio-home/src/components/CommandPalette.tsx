@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { GITHUB_URL, REPO_URL, projects } from '../data/projects'
+import { LINKEDIN_URL } from '../data/profile'
 
 interface Item {
   id: string
@@ -20,8 +21,12 @@ const items: Item[] = [
   ]),
   { id: 'repo', title: 'Portfolio repository', hint: 'GitHub', href: REPO_URL, external: true },
   { id: 'github', title: 'GitHub profile', hint: 'github.com/chinmay465', href: GITHUB_URL, external: true },
-  { id: 'stack', title: 'Go to tools and stack', hint: 'On this page', href: '#stack', external: false },
-  { id: 'work', title: 'Go to experience', hint: 'On this page', href: '#work', external: false },
+  { id: 'about', title: 'About me', hint: 'On this page', href: '#about', external: false },
+  { id: 'journey', title: 'Career journey', hint: 'On this page', href: '#journey', external: false },
+  { id: 'work', title: 'Experience and education', hint: 'On this page', href: '#work', external: false },
+  { id: 'stack', title: 'Skills and stack', hint: 'On this page', href: '#stack', external: false },
+  { id: 'contact', title: 'Email and contact', hint: 'On this page', href: '#contact', external: false },
+  { id: 'linkedin', title: 'LinkedIn profile', hint: 'linkedin.com/in/chinmay-upare', href: LINKEDIN_URL, external: true },
 ]
 
 interface Props {
