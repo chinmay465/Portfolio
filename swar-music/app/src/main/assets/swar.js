@@ -10,6 +10,12 @@
  *     Skip. Also dismisses the "Are you still there?" dialog.
  *  4. Reports what's playing to the app (notification, lock screen, headset
  *     buttons) and runs commands coming back from it.
+ *  4b. Plays songs, not videos: whenever a video starts, switches YouTube
+ *     Music's Song | Video toggle to Song. Where YouTube has disabled that
+ *     toggle, looks the same title and artist up in YouTube Music's search
+ *     and plays the song if it clearly matches; until then (or if nothing
+ *     matches) hides the picture behind the cover art and drops the video to
+ *     the lowest quality.
  *  5. Makes the page feel like an app: no tap flashes, no text selection on
  *     long-press, no rubber-band overscroll, and a "ready" signal so the app
  *     can drop its loading screen once the UI has drawn.
@@ -122,6 +128,9 @@
     '.video-ads',
     '#player-ads',
   ].join(',\n') + ' { display: none !important; }\n' + [
+    // Low-data video (see 4b): cover art instead of the picture.
+    'html.swar-low-data ytmusic-player #song-video, html.swar-low-data #movie_player video { visibility: hidden !important; }',
+    'html.swar-low-data ytmusic-player #song-image { display: block !important; visibility: visible !important; }',
     // Feel like an app, not a web page.
     'html { -webkit-tap-highlight-color: transparent; }',
     'html, body { overscroll-behavior: none; }',
@@ -139,9 +148,17 @@
   // Everything below drives the player, which only lives in the top frame.
   if (window.top !== window) return;
 
+  // Messages to the app (MainActivity, over the origin-locked bridge).
+  const post = (message) => {
+    try {
+      if (window.SwarBridge) window.SwarBridge.postMessage(JSON.stringify(message));
+    } catch (_) {}
+  };
+
   // ---------------------------------------------------------------- 3. fallback
   const SKIP_BUTTONS = '.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button, .ytp-ad-skip-button-container button';
-  const video = () => document.querySelector('video');
+  // The player's own <video>; YouTube Music can have other (preview) videos on the page.
+  const video = () => document.querySelector('#movie_player video, ytmusic-player video') || document.querySelector('video');
   const playerEl = () => document.getElementById('movie_player') || document.querySelector('.html5-video-player');
   let mutedByUs = false;
 
@@ -212,8 +229,382 @@
     if (v) v.pause();
   }
 
+  // ---------------------------------------------------------------- 4b. song only
+  // A track with both versions shows YouTube Music's Song | Video switch.
+  const SONG_SELECTORS = '#av-id ytmusic-av-toggle .song-button, ytmusic-av-toggle .song-button, ytmusic-av-toggle #song-button, .song-button';
+  // Fallback: the switch's "Song" label, in English and the main Indian languages.
+  const SONG_LABELS = ['song', 'गाना', 'गाणे', 'गाणं', 'ಹಾಡು', 'பாடல்', 'పాట', 'গান', 'ગીત', 'ਗੀਤ', 'ഗാനം', 'گانا'];
+  const LABELLED = 'button, [role="tab"], [role="radio"], tp-yt-paper-tab, tp-yt-paper-button, yt-button-renderer, ytmusic-chip-cloud-chip-renderer, yt-chip-cloud-chip-renderer';
+  const VIDEO_TYPES = ['MUSIC_VIDEO_TYPE_OMV', 'MUSIC_VIDEO_TYPE_UGC'];
+  const SWITCH_COOLDOWN_MS = 2500; // the new stream takes a moment to replace the video
+  const CHECK_AFTER_MS = 4500;
+  let lastSwitch = 0;
+  let resumeTimer = 0;
+  const reported = new Set();
+
+  const showingVideo = (v) => !!(v && v.videoWidth > 0 && v.videoHeight > 0);
+
+  function playerVideo() {
+    try {
+      const p = playerEl();
+      const r = p && typeof p.getPlayerResponse === 'function' ? p.getPlayerResponse() : null;
+      const d = r && r.videoDetails;
+      return d ? { id: d.videoId || '', type: d.musicVideoType || '' } : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /** Playing a music video or uploaded video, rather than a song? */
+  function isVideoPlayback(v) {
+    const pv = playerVideo();
+    if (pv && pv.type) return VIDEO_TYPES.includes(pv.type);
+    return showingVideo(v);
+  }
+
+  function findSongButton() {
+    const direct = document.querySelector(SONG_SELECTORS);
+    if (direct) return direct;
+    const scope = document.querySelector('ytmusic-player-page') || document.body;
+    if (!scope) return null;
+    for (const el of scope.querySelectorAll(LABELLED)) {
+      if (SONG_LABELS.includes((el.textContent || '').trim().toLowerCase())) return el;
+    }
+    return null;
+  }
+
+  // Switching loads the song's stream; make sure playback carries on.
+  function keepPlaying() {
+    clearInterval(resumeTimer);
+    let ticks = 0;
+    resumeTimer = setInterval(() => {
+      ticks += 1;
+      const v = video();
+      if (v && v.paused && !v.ended && v.readyState >= 2) v.play().catch(() => {});
+      if ((v && !v.paused && ticks >= 4) || ticks >= 24) clearInterval(resumeTimer);
+    }, 250);
+  }
+
+  /** Once per video: describe the page so a failed switch can be fixed. No personal data. */
+  function reportSwitchProblem(reason) {
+    const pv = playerVideo();
+    const key = `${(pv && pv.id) || location.pathname}:${reason}`;
+    if (reported.has(key)) return;
+    reported.add(key);
+    const page = document.querySelector('ytmusic-player-page') || document.body;
+    const toggle = document.querySelector('ytmusic-av-toggle');
+    const tags = new Set();
+    if (page) for (const el of page.querySelectorAll('*')) if (el.tagName.includes('-')) tags.add(el.tagName.toLowerCase());
+    const labels = page
+      ? [...page.querySelectorAll(LABELLED)].map((el) => (el.textContent || '').trim().replace(/\s+/g, ' ')).filter((t) => t && t.length <= 24).slice(0, 25)
+      : [];
+    const v = video();
+    post({
+      type: 'diag',
+      reason,
+      videoType: (pv && pv.type) || 'unknown',
+      picture: v ? `${v.videoWidth}x${v.videoHeight}` : 'no-video',
+      avToggle: toggle ? [...toggle.attributes].map((a) => (a.value ? `${a.name}=${a.value}` : a.name)).join(' ') || 'present' : 'missing',
+      songButton: !!findSongButton(),
+      labels,
+      tags: [...tags].slice(0, 60),
+      path: location.pathname,
+    });
+  }
+
+  // ---- Switch state for the app's "Switching to the song" card. The video is
+  // muted meanwhile, so its audio doesn't play before the song starts.
+  const SWITCH_TIMEOUT_MS = 9000;
+  let switching = null; // { from, muted, timer }
+
+  function startSwitch(fromId, title) {
+    if (switching && switching.from === fromId) return;
+    endSwitch('replaced');
+    const v = video();
+    const muted = !!(v && !v.muted);
+    if (muted) v.muted = true;
+    switching = { from: fromId, muted, timer: setTimeout(() => endSwitch('timeout'), SWITCH_TIMEOUT_MS) };
+    post({ type: 'switch', phase: 'start', title: title || '' });
+  }
+
+  function endSwitch(phase) {
+    if (!switching) return;
+    clearTimeout(switching.timer);
+    const v = video();
+    if (switching.muted && v) v.muted = false;
+    switching = null;
+    post({ type: 'switch', phase });
+  }
+
+  const avToggle = () => document.querySelector('#av-id ytmusic-av-toggle, ytmusic-av-toggle');
+  const toggleDisabled = (t) => !!(t && t.hasAttribute('toggle-disabled'));
+
+  // ---- Low-data video: when YouTube won't switch to the song, make the video
+  // cost as little as possible: lowest quality, picture hidden behind the art.
+  let lowDataFor = '';
+  let modeObserver = null;
+
+  function playerVideoDetails() {
+    try {
+      const p = playerEl();
+      const r = p && typeof p.getPlayerResponse === 'function' ? p.getPlayerResponse() : null;
+      return (r && r.videoDetails) || null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function coverArt() {
+    const d = playerVideoDetails();
+    const thumbs = (d && d.thumbnail && d.thumbnail.thumbnails) || [];
+    const best = thumbs[thumbs.length - 1];
+    return best && best.url ? best.url.split('?')[0] : '';
+  }
+
+  function enterLowData(id) {
+    if (lowDataFor === id) return;
+    lowDataFor = id;
+    document.documentElement.classList.add('swar-low-data');
+    const p = playerEl();
+    try {
+      if (p && typeof p.setPlaybackQualityRange === 'function') p.setPlaybackQualityRange('tiny', 'tiny');
+      else if (p && typeof p.setPlaybackQuality === 'function') p.setPlaybackQuality('tiny');
+    } catch (_) {}
+    // Song-style layout: YouTube Music shows the cover art in ATV mode.
+    const ytPlayer = document.querySelector('ytmusic-player');
+    if (ytPlayer) {
+      ytPlayer.setAttribute('playback-mode', 'ATV_PREFERRED');
+      if (modeObserver) modeObserver.disconnect();
+      modeObserver = new MutationObserver(() => {
+        if (lowDataFor && ytPlayer.getAttribute('playback-mode') !== 'ATV_PREFERRED') ytPlayer.setAttribute('playback-mode', 'ATV_PREFERRED');
+      });
+      modeObserver.observe(ytPlayer, { attributes: true, attributeFilter: ['playback-mode'] });
+    }
+    const img = document.querySelector('ytmusic-player #song-image img');
+    const art = coverArt();
+    if (img && art && (!img.src || img.src.startsWith('data:'))) img.src = art;
+  }
+
+  function leaveLowData() {
+    if (!lowDataFor) return;
+    lowDataFor = '';
+    document.documentElement.classList.remove('swar-low-data');
+    if (modeObserver) modeObserver.disconnect();
+    modeObserver = null;
+    const p = playerEl();
+    try {
+      if (p && typeof p.setPlaybackQualityRange === 'function') p.setPlaybackQualityRange('auto', 'auto');
+    } catch (_) {}
+  }
+
+  // ---- Song version by search: when YouTube offers no usable Song switch, look
+  // the same title and artist up in YouTube Music and play the song if it
+  // clearly matches. Uses the page's own search API on this same site.
+  const INNERTUBE_SEARCH = '/youtubei/v1/search?prettyPrint=false';
+  const searched = new Map(); // video id -> song id ('' when nothing matched)
+
+  const NOISE = /\(([^)]*)\)|\[([^\]]*)\]|\{([^}]*)\}|\|.*$|\s-\s.*(official|video|lyric|audio|full song|hd|4k).*$/gi;
+  const FEAT = /\b(ft|feat|featuring)\b\.?.*$/i;
+
+  /** "Kesariya (Official Video) | Brahmāstra" -> "kesariya" */
+  function normalizeTitle(text) {
+    return String(text || '')
+      .normalize('NFKD').replace(/[̀-ͯ]/g, '')
+      .replace(NOISE, ' ').replace(FEAT, ' ')
+      .toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  }
+
+  const artistNames = (text) => String(text || '')
+    .toLowerCase().split(/\s*(?:,|&|•|\band\b|\bx\b|\bwith\b)\s*/)
+    .map((s) => s.normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^\p{L}\p{N} ]+/gu, '').trim())
+    .filter((s) => s.length >= 2);
+
+  function titlesMatch(a, b) {
+    if (!a || !b) return false;
+    if (a === b) return true;
+    const [short, long] = a.length <= b.length ? [a, b] : [b, a];
+    return long.startsWith(short) && short.length / long.length >= 0.6;
+  }
+
+  function artistsOverlap(wanted, found) {
+    const have = artistNames(found);
+    return artistNames(wanted).some((w) => have.some((h) => h === w || h.includes(w) || w.includes(h)));
+  }
+
+  const runsText = (t) => (t && (t.simpleText || (t.runs || []).map((r) => r.text).join(''))) || '';
+
+  function findVideoType(node) {
+    const stack = [node];
+    let n = 0;
+    while (stack.length && n++ < 400) {
+      const o = stack.pop();
+      if (!o || typeof o !== 'object') continue;
+      if (o.watchEndpointMusicConfig && o.watchEndpointMusicConfig.musicVideoType) return o.watchEndpointMusicConfig.musicVideoType;
+      for (const k of Object.keys(o)) stack.push(o[k]);
+    }
+    return '';
+  }
+
+  function findVideoId(node) {
+    const stack = [node];
+    let n = 0;
+    while (stack.length && n++ < 400) {
+      const o = stack.pop();
+      if (!o || typeof o !== 'object') continue;
+      if (o.watchEndpoint && o.watchEndpoint.videoId) return o.watchEndpoint.videoId;
+      if (o.playlistItemData && o.playlistItemData.videoId) return o.playlistItemData.videoId;
+      for (const k of Object.keys(o)) stack.push(o[k]);
+    }
+    return '';
+  }
+
+  /** Song results (ATV) from a search response, in page order. */
+  function songResults(response) {
+    const out = [];
+    const stack = [response];
+    let n = 0;
+    while (stack.length && n++ < 50000) {
+      const o = stack.pop();
+      if (!o || typeof o !== 'object') continue;
+      const item = o.musicResponsiveListItemRenderer;
+      const card = o.musicCardShelfRenderer;
+      if (item && item.flexColumns) {
+        const cols = item.flexColumns.map((c) => runsText(c.musicResponsiveListItemFlexColumnRenderer && c.musicResponsiveListItemFlexColumnRenderer.text));
+        out.push({ id: findVideoId(item), type: findVideoType(item), title: cols[0] || '', artists: cols.slice(1).join(' • ') });
+      } else if (card) {
+        out.push({ id: findVideoId(card.title || card), type: findVideoType(card.title || card), title: runsText(card.title), artists: runsText(card.subtitle) });
+      }
+      if (Array.isArray(o)) for (let i = o.length - 1; i >= 0; i--) stack.push(o[i]);
+      else for (const k of Object.keys(o)) stack.push(o[k]);
+    }
+    return out.filter((r) => r.id && r.type === 'MUSIC_VIDEO_TYPE_ATV');
+  }
+
+  /** The song version of {title, artist}, or null if nothing clearly matches. */
+  function pickSongVersion(response, wanted) {
+    // "Tum Hi Ho - Aashiqui 2": also try the part before the dash (song - film).
+    const wants = [...new Set([
+      normalizeTitle(wanted.title),
+      normalizeTitle(String(wanted.title || '').split(/\s[-–—]\s/)[0]),
+    ])].filter(Boolean);
+    for (const r of songResults(response).slice(0, 8)) {
+      const got = normalizeTitle(r.title);
+      if (wants.some((w) => titlesMatch(w, got)) && artistsOverlap(wanted.artist, r.artists)) return r;
+    }
+    return null;
+  }
+
+  function ytcfgValue(key) {
+    try {
+      const c = window.ytcfg;
+      if (c && typeof c.get === 'function') return c.get(key);
+      return c && c.data_ ? c.data_[key] : undefined;
+    } catch (_) {
+      return undefined;
+    }
+  }
+
+  /** The same search request YouTube Music sends when you type in its search box. */
+  function searchSongs(query) {
+    const context = ytcfgValue('INNERTUBE_CONTEXT');
+    if (!context || typeof fetch !== 'function') return Promise.resolve(null);
+    const headers = { 'Content-Type': 'application/json' };
+    const visitor = ytcfgValue('VISITOR_DATA');
+    if (visitor) headers['X-Goog-Visitor-Id'] = visitor;
+    return fetch(INNERTUBE_SEARCH, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers,
+      body: JSON.stringify({ context, query }),
+    }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  }
+
+  /** Play a song through YouTube Music's own navigation; reload onto it if that doesn't take. */
+  function playSong(id) {
+    const endpoint = {
+      watchEndpoint: {
+        videoId: id,
+        watchEndpointMusicSupportedConfigs: { watchEndpointMusicConfig: { musicVideoType: 'MUSIC_VIDEO_TYPE_ATV' } },
+      },
+    };
+    const app = document.querySelector('ytmusic-app');
+    if (app) app.dispatchEvent(new CustomEvent('yt-navigate', { bubbles: true, composed: true, detail: { endpoint } }));
+    setTimeout(() => {
+      const now = playerVideo();
+      if (!now || now.id !== id) location.assign(`/watch?v=${encodeURIComponent(id)}`);
+    }, 3000);
+  }
+
+  function playSongVersion(videoId) {
+    if (searched.has(videoId)) return;
+    const md = navigator.mediaSession && navigator.mediaSession.metadata;
+    const details = playerVideoDetails();
+    const title = (md && md.title) || (details && details.title) || '';
+    const artist = (md && md.artist) || (details && details.author) || '';
+    if (!title) return; // metadata not there yet; try again on the next tick
+    searched.set(videoId, '');
+    startSwitch(videoId, normalizeTitle(title) ? title.replace(/\s*[([|].*$/, '').trim() : title);
+    searchSongs(`${normalizeTitle(title)} ${artist}`.trim()).then((response) => {
+      if (!response) {
+        endSwitch('none');
+        return;
+      }
+      const song = pickSongVersion(response, { title, artist });
+      if (!song) {
+        endSwitch('none'); // no clear match: stay on low-data video
+        return;
+      }
+      searched.set(videoId, song.id);
+      const now = playerVideo();
+      if (now && now.id === videoId) playSong(song.id); // only if that video is still on
+      else endSwitch('none');
+    });
+  }
+  Object.assign(window.__swar, { normalizeTitle, pickSongVersion, songResults });
+
+  /** Plays songs, not videos: switch to Song, or failing that, low-data video. */
+  function preferSong() {
+    const v = video();
+    if (!v || adShowing()) return;
+    if (!isVideoPlayback(v)) {
+      leaveLowData();
+      if (switching && !v.paused) endSwitch('done');
+      return;
+    }
+    if (Date.now() - lastSwitch < SWITCH_COOLDOWN_MS) return;
+    const pv = playerVideo();
+    const id = (pv && pv.id) || location.pathname;
+    const toggle = avToggle();
+    const button = findSongButton();
+
+    if (!button || toggleDisabled(toggle)) {
+      // YouTube offers no song for this video, or has turned the switch off:
+      // low-data video right away, then look the song up and play it if it matches.
+      enterLowData(id);
+      playSongVersion(id);
+      if (!button && !toggle && pv && pv.type === 'MUSIC_VIDEO_TYPE_OMV') reportSwitchProblem('no-song-button');
+      return;
+    }
+    const wasPlaying = !v.paused || v.autoplay;
+    startSwitch(id, (navigator.mediaSession && navigator.mediaSession.metadata && navigator.mediaSession.metadata.title) || '');
+    button.click();
+    lastSwitch = Date.now();
+    if (wasPlaying) keepPlaying();
+    const before = pv && pv.id;
+    setTimeout(() => {
+      const now = playerVideo();
+      if (isVideoPlayback(video()) && (!now || now.id === before)) {
+        enterLowData(id);
+        playSongVersion(id);
+        reportSwitchProblem('click-had-no-effect');
+      }
+    }, CHECK_AFTER_MS);
+  }
+  window.__swar.preferSong = preferSong;
+
   function cmd(name, arg) {
     switch (name) {
+      case 'background': preferSong(); break;
       case 'play': play(); break;
       case 'pause': pause(); break;
       case 'next':
@@ -246,12 +637,6 @@
     }
     return best;
   }
-
-  const post = (message) => {
-    try {
-      if (window.SwarBridge) window.SwarBridge.postMessage(JSON.stringify(message));
-    } catch (_) {}
-  };
 
   // ---------------------------------------------------------------- 5. ready
   // Tell the app once YouTube Music's UI has drawn, so it can drop its loading
@@ -290,7 +675,7 @@
   }
   window.__swar.report = report;
 
-  const onMediaEvent = () => { guard(); report(); };
+  const onMediaEvent = () => { guard(); preferSong(); report(); };
   for (const type of ['play', 'playing', 'pause', 'ended', 'loadedmetadata', 'seeked', 'durationchange']) {
     document.addEventListener(type, onMediaEvent, true);
   }

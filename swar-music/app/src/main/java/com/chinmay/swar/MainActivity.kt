@@ -57,6 +57,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var shell: Shell
     private val handler = Handler(Looper.getMainLooper())
     private var mainFrameFailed = false
+    /** The page reloaded onto the song mid-switch; hide the card once it plays. */
+    private var switchSurvivedReload = false
     private val revealFallback = Runnable { shell.showPage() }
 
     private val backCallback = object : OnBackPressedCallback(true) {
@@ -95,6 +97,7 @@ class MainActivity : AppCompatActivity() {
             loading = findViewById(R.id.loading),
             loadingStatus = findViewById<TextView>(R.id.loading_status),
             offline = findViewById(R.id.offline),
+            switching = findViewById(R.id.switching),
             progress = findViewById<ProgressBar>(R.id.progress),
             onRetry = ::retry,
         )
@@ -134,6 +137,8 @@ class MainActivity : AppCompatActivity() {
     // is what would stop playback in the background.
     override fun onStop() {
         super.onStop()
+        // Swar plays songs, not videos; this re-checks right as the screen goes off.
+        webView.evaluateJavascript(PlayerCommand.EnterBackground.js, null)
         CookieManager.getInstance().flush()
     }
 
@@ -228,6 +233,7 @@ class MainActivity : AppCompatActivity() {
 
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
             mainFrameFailed = false
+            switchSurvivedReload = shell.switchingVisible
             // Older WebView without document-start scripts: inject as early as we can.
             if (!documentStartScript && url != null && url.startsWith(ORIGIN)) {
                 view.evaluateJavascript(pageScript, null)
@@ -287,6 +293,19 @@ class MainActivity : AppCompatActivity() {
                 if (!mainFrameFailed) shell.showPage()
                 return
             }
+            "switch" -> {
+                if (o.optString("phase") == "start") {
+                    shell.showSwitching(o.optString("title"))
+                } else {
+                    switchSurvivedReload = false
+                    shell.hideSwitching()
+                }
+                return
+            }
+            "diag" -> {
+                SwitchReport.show(this, o.toString(2))
+                return
+            }
             "state" -> Unit
             else -> return
         }
@@ -301,6 +320,10 @@ class MainActivity : AppCompatActivity() {
             inAd = o.optBoolean("ad"),
         )
         PlayerBridge.publish(state)
+        if (switchSurvivedReload && state.playing && !state.inAd) {
+            switchSurvivedReload = false
+            shell.hideSwitching()
+        }
         if (state.playing) PlaybackService.ensureRunning(this)
     }
 

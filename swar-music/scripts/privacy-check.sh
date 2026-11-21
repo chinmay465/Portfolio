@@ -6,8 +6,8 @@
 #   - backups or cleartext HTTP turned on
 #   - code from a known analytics / ads / crash-reporting SDK
 #   - a network endpoint in Swar's own code that isn't on the allowlist
-#   - a URL in the page script, which runs inside music.youtube.com and must
-#     never send anything anywhere
+#   - a URL in the page script, which runs inside music.youtube.com, or any
+#     request from it other than YouTube Music's own same-site search API
 #   - WebView's own metrics upload or Safe Browsing lookups turned back on
 # Run from swar-music/ after ./gradlew assembleDebug.
 set -euo pipefail
@@ -124,9 +124,20 @@ page = open("app/src/main/assets/swar.js").read()
 page_urls = sorted(set(re.findall(r"(?:https?|wss?)://[^\s'\"`)]+", page)))
 if page_urls:
     errors.append("URLs in the page script: " + ", ".join(page_urls))
-for api in ("XMLHttpRequest(", "fetch(", "sendBeacon", "WebSocket(", "EventSource(", "new Image"):
+for api in ("XMLHttpRequest(", "sendBeacon", "WebSocket(", "EventSource(", "new Image", "window.open("):
     if api in page:
         errors.append(f"Page script uses {api.rstrip('(')}")
+# One request is allowed: YouTube Music's own search API on the same site
+# (relative path, same-origin credentials), used to find a video's song version.
+fetches = re.findall(r"fetch\(\s*([A-Za-z_$][\w$]*|['\"`][^'\"`]*['\"`])", page)
+search_const = re.search(r"const INNERTUBE_SEARCH = '([^']*)';", page)
+if fetches != ["INNERTUBE_SEARCH"] or not search_const or search_const.group(1) != "/youtubei/v1/search?prettyPrint=false":
+    errors.append(f"Page script may only fetch YouTube Music's same-site search API (found: {fetches})")
+if "credentials: 'same-origin'" not in page:
+    errors.append("Page script's search request must use same-origin credentials")
+for nav in re.findall(r"location\.(?:assign|replace|href\s*=)\(?\s*([^;\n]*)", page):
+    if not nav.lstrip("(").startswith("`/watch?v="):
+        errors.append(f"Page script navigates somewhere other than a /watch page: {nav}")
 report.append("pageScript=" + ("clean" if not page_urls else "has-urls"))
 
 # Listening sockets would let other apps on the device or network connect in.
