@@ -1,23 +1,9 @@
-import { useRef, type ComponentType } from 'react'
+import { useRef } from 'react'
 import type { Project } from '../data/projects'
 import { healthLabel, type Health } from '../hooks/usePings'
 import { useInView, useMagnetic, useRevealed } from '../hooks/motion'
 import Tilt from './Tilt'
-import EkatraVisual from './visuals/EkatraVisual'
-import AnkVisual from './visuals/AnkVisual'
-import ShodhVisual from './visuals/ShodhVisual'
-import SetuVisual from './visuals/SetuVisual'
-import KavachVisual from './visuals/KavachVisual'
-import SwarVisual from './visuals/SwarVisual'
-
-const VISUALS: Record<Project['id'], ComponentType<{ active: boolean }>> = {
-  ekatra: EkatraVisual,
-  ank: AnkVisual,
-  shodh: ShodhVisual,
-  setu: SetuVisual,
-  kavach: KavachVisual,
-  swar: SwarVisual,
-}
+import { VISUALS } from './visuals'
 
 interface Props {
   project: Project
