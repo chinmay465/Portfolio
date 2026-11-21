@@ -11,7 +11,7 @@ const FILTERS: { id: string; label: string; test: (p: Project) => boolean }[] = 
 ]
 
 export default function Projects() {
-  usePageMeta('Projects', 'Six side projects by Chinmay Upare: web apps in React and TypeScript, and Android apps in Kotlin.')
+  usePageMeta('Projects', 'Seven side projects by Chinmay Upare: web apps in React, TypeScript and Python, and Android apps in Kotlin.')
   const [params, setParams] = useSearchParams()
   const current = FILTERS.find((f) => f.id === params.get('type')) ?? FILTERS[0]
   const list = projects.filter(current.test)
@@ -22,11 +22,11 @@ export default function Projects() {
         title="Projects"
         intro={
           <>
-            Each is a complete app in{' '}
+            Each is a complete app, tested in CI; most live in{' '}
             <a href={REPO_URL} target="_blank" rel="noopener noreferrer">
               one repository
             </a>
-            , tested in CI. Hover a card to play its preview; open one for the details.
+            . Hover a card to play its preview; open one for the details.
           </>
         }
       >

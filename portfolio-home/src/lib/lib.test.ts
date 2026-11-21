@@ -40,19 +40,21 @@ describe('format', () => {
 })
 
 describe('projects', () => {
-  it('links every project to its folder, and every web app to its live URL', () => {
+  it('links every project to its code (when public), and every web app to its live URL', () => {
     for (const p of projects) {
-      expect(p.code).toContain('github.com/chinmay465/Portfolio/tree/main/')
+      // Rail Planner lives in its own private repo, so it has no public code link yet.
+      if (p.id === 'rail') expect(p.code).toBeUndefined()
+      else expect(p.code).toContain('github.com/chinmay465/Portfolio/tree/main/')
       if (p.kind === 'Android app') {
         expect(p.live).toBeUndefined()
         expect(p.download).toMatch(/^https:\/\/github\.com\/chinmay465\/Portfolio\//)
       } else {
-        expect(p.live).toMatch(/^https:\/\/[a-z-]+\.onrender\.com$/)
+        expect(p.live).toMatch(/^https:\/\/[a-z0-9-]+\.onrender\.com$/)
       }
     }
   })
   it('only pings projects that have a live URL', () => {
-    expect(webProjects.map((p) => p.id)).toEqual(['ekatra', 'ank', 'shodh', 'setu'])
+    expect(webProjects.map((p) => p.id)).toEqual(['ekatra', 'ank', 'shodh', 'setu', 'rail'])
     expect(projects.map((p) => p.id)).toContain('kavach')
     expect(projects.map((p) => p.id)).toContain('swar')
   })

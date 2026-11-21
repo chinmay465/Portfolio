@@ -73,9 +73,11 @@ export default function ProjectPanel({ project: p, health, reduced }: Props) {
           >
             {p.live ? `Open ${p.name}` : 'Get the APK'}
           </a>
-          <a className="btn btn-ghost" href={p.code} target="_blank" rel="noopener noreferrer">
-            View the code
-          </a>
+          {p.code && (
+            <a className="btn btn-ghost" href={p.code} target="_blank" rel="noopener noreferrer">
+              View the code
+            </a>
+          )}
         </div>
       </div>
       <div ref={visRef} className="panel-visual">
