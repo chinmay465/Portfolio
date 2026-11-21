@@ -7,9 +7,8 @@ import java.net.HttpURLConnection
 import java.net.URI
 
 /**
- * Holds the block and allow lists. The block list is the bundled starter list
- * merged with a downloaded hosts file; the allow list is what the user tapped
- * to unblock.
+ * Holds the domain lists: the bundled starter list merged with a downloaded
+ * hosts file, plus the user's own blocks and allows (see [DomainRules]).
  */
 object Blocklist {
 
@@ -20,14 +19,15 @@ object Blocklist {
     private const val BUNDLED_ASSET = "default_hosts.txt"
     private const val PREFS = "kavach"
     private const val KEY_ALLOW = "allowlist"
+    private const val KEY_CUSTOM = "custom_blocks"
     private const val MAX_LIST_BYTES = 20L * 1024 * 1024
 
-    @Volatile private var blocked: DomainSet = DomainSet.EMPTY
+    @Volatile private var list: DomainSet = DomainSet.EMPTY
+    @Volatile private var custom: DomainSet = DomainSet.EMPTY
     @Volatile private var allowed: DomainSet = DomainSet.EMPTY
     @Volatile private var loaded = false
 
-    fun isBlocked(domain: String): Boolean =
-        blocked.matches(domain) && !allowed.matches(domain)
+    fun isBlocked(domain: String): Boolean = DomainRules.isBlocked(domain, list, custom, allowed)
 
     fun hasDownloadedList(ctx: Context): Boolean =
         File(ctx.filesDir, DOWNLOADED_FILE).exists()
@@ -46,11 +46,10 @@ object Blocklist {
         if (downloaded.exists()) {
             downloaded.bufferedReader().useLines { DomainSet.parseInto(it, set) }
         }
-        blocked = DomainSet(set)
-        allowed = DomainSet(prefs(app).getStringSet(KEY_ALLOW, emptySet())!!.toHashSet())
-        loaded = true
+        list = DomainSet(set)
         AdBlockState.blocklistSize.value = set.size
-        AdBlockState.allowlistSize.value = allowed.size
+        applyRules(readSet(app, KEY_CUSTOM), readSet(app, KEY_ALLOW))
+        loaded = true
     }
 
     /** Downloads the hosts list and reloads. Blocking — call off the main thread. */
@@ -94,21 +93,48 @@ object Blocklist {
         return AdBlockState.blocklistSize.value
     }
 
+    /** Your own block: always wins, covers subdomains. */
     @Synchronized
-    fun allow(ctx: Context, domain: String) {
-        val p = prefs(ctx)
-        val next = p.getStringSet(KEY_ALLOW, emptySet())!!.toHashSet().apply { add(domain) }
-        p.edit().putStringSet(KEY_ALLOW, next).apply()
-        allowed = DomainSet(next)
-        AdBlockState.allowlistSize.value = next.size
+    fun block(ctx: Context, domain: String) {
+        val (c, a) = DomainRules.block(domain, readSet(ctx, KEY_CUSTOM), readSet(ctx, KEY_ALLOW))
+        save(ctx, c, a)
+        AdBlockState.markDomain(domain, blocked = true)
     }
 
     @Synchronized
-    fun clearAllowlist(ctx: Context) {
-        prefs(ctx).edit().remove(KEY_ALLOW).apply()
-        allowed = DomainSet.EMPTY
-        AdBlockState.allowlistSize.value = 0
+    fun allow(ctx: Context, domain: String) {
+        val (c, a) = DomainRules.allow(domain, readSet(ctx, KEY_CUSTOM), readSet(ctx, KEY_ALLOW))
+        save(ctx, c, a)
+        AdBlockState.markDomain(domain, blocked = false)
     }
+
+    /** Your rules: (domains you blocked, domains you allowed), sorted. */
+    fun rules(ctx: Context): Pair<List<String>, List<String>> =
+        readSet(ctx, KEY_CUSTOM).sorted() to readSet(ctx, KEY_ALLOW).sorted()
+
+    @Synchronized
+    fun removeRule(ctx: Context, domain: String, wasBlock: Boolean) {
+        val c = readSet(ctx, KEY_CUSTOM)
+        val a = readSet(ctx, KEY_ALLOW)
+        if (wasBlock) save(ctx, c - domain, a) else save(ctx, c, a - domain)
+    }
+
+    private fun save(ctx: Context, customSet: Set<String>, allowSet: Set<String>) {
+        prefs(ctx).edit()
+            .putStringSet(KEY_CUSTOM, HashSet(customSet))
+            .putStringSet(KEY_ALLOW, HashSet(allowSet))
+            .apply()
+        applyRules(customSet, allowSet)
+    }
+
+    private fun applyRules(customSet: Set<String>, allowSet: Set<String>) {
+        custom = DomainSet(HashSet(customSet))
+        allowed = DomainSet(HashSet(allowSet))
+        AdBlockState.ruleCount.value = customSet.size + allowSet.size
+    }
+
+    private fun readSet(ctx: Context, key: String): Set<String> =
+        prefs(ctx).getStringSet(key, emptySet())!!.toHashSet()
 
     private fun prefs(ctx: Context) =
         ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

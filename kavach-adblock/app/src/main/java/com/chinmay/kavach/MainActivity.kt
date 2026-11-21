@@ -5,7 +5,10 @@ import android.content.pm.PackageManager
 import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
+import android.text.InputType
 import android.widget.ArrayAdapter
+import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -17,8 +20,10 @@ import com.chinmay.kavach.databinding.ActivityMainBinding
 import com.chinmay.kavach.vpn.AdBlockState
 import com.chinmay.kavach.vpn.AdBlockVpnService
 import com.chinmay.kavach.vpn.Blocklist
+import com.chinmay.kavach.vpn.DomainRules
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.NumberFormat
@@ -26,8 +31,11 @@ import java.text.NumberFormat
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private lateinit var recentAdapter: ArrayAdapter<String>
+    private lateinit var listAdapter: ArrayAdapter<String>
     private val numbers = NumberFormat.getIntegerInstance()
+
+    /** What each row of the list stands for, in the same order as the adapter. */
+    private var rows: List<AdBlockState.Lookup> = emptyList()
 
     private val vpnConsent = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
@@ -50,21 +58,23 @@ class MainActivity : AppCompatActivity() {
 
         askForNotificationPermission()
 
-        recentAdapter = ArrayAdapter(this, R.layout.item_domain, R.id.domain, mutableListOf<String>())
-        binding.recentList.adapter = recentAdapter
+        listAdapter = ArrayAdapter(this, R.layout.item_domain, R.id.domain, mutableListOf<String>())
+        binding.recentList.adapter = listAdapter
         binding.recentList.emptyView = binding.recentEmpty
         binding.recentList.setOnItemClickListener { _, _, position, _ ->
-            recentAdapter.getItem(position)?.let(::confirmAllow)
+            rows.getOrNull(position)?.let { row ->
+                if (row.blocked) confirmAllow(row.domain) else confirmBlock(row.domain)
+            }
         }
 
         binding.toggle.setOnClickListener {
             if (AdBlockState.running.value) AdBlockVpnService.stop(this) else requestStart()
         }
+        binding.liveSwitch.isChecked = AdBlockState.liveLookups.value
+        binding.liveSwitch.setOnCheckedChangeListener { _, checked -> AdBlockState.setLiveLookups(checked) }
         binding.updateList.setOnClickListener { updateBlocklist() }
-        binding.clearAllowlist.setOnClickListener {
-            Blocklist.clearAllowlist(this)
-            Toast.makeText(this, R.string.allowlist_cleared, Toast.LENGTH_SHORT).show()
-        }
+        binding.blockDomain.setOnClickListener { promptBlockDomain() }
+        binding.myRules.setOnClickListener { showRules() }
 
         observeState()
 
@@ -94,19 +104,35 @@ class MainActivity : AppCompatActivity() {
                     AdBlockState.blocklistSize.collect { binding.listSize.text = numbers.format(it) }
                 }
                 launch {
-                    AdBlockState.allowlistSize.collect {
-                        binding.clearAllowlist.isEnabled = it > 0
-                        binding.clearAllowlist.text = getString(R.string.clear_allowlist, it)
+                    AdBlockState.ruleCount.collect {
+                        binding.myRules.text =
+                            if (it > 0) getString(R.string.my_rules_count, it) else getString(R.string.my_rules)
                     }
                 }
                 launch {
-                    AdBlockState.recentBlocked.collect {
-                        recentAdapter.clear()
-                        recentAdapter.addAll(it)
-                    }
+                    combine(
+                        AdBlockState.liveLookups,
+                        AdBlockState.recentLookups,
+                        AdBlockState.recentBlocked,
+                    ) { live, lookups, blocked ->
+                        live to if (live) lookups else blocked.map { AdBlockState.Lookup(it, true) }
+                    }.collect { (live, list) -> renderList(live, list) }
                 }
             }
         }
+    }
+
+    private fun renderList(live: Boolean, list: List<AdBlockState.Lookup>) {
+        if (binding.liveSwitch.isChecked != live) binding.liveSwitch.isChecked = live
+        binding.listHeader.setText(if (live) R.string.live_header else R.string.recent_header)
+        binding.recentEmpty.setText(if (live) R.string.live_empty else R.string.recent_empty)
+        rows = list
+        listAdapter.clear()
+        listAdapter.addAll(
+            list.map {
+                getString(if (it.blocked) R.string.lookup_blocked else R.string.lookup_allowed, it.domain)
+            },
+        )
     }
 
     private fun renderRunning(running: Boolean) {
@@ -139,10 +165,74 @@ class MainActivity : AppCompatActivity() {
             .setMessage(getString(R.string.allow_message, domain))
             .setPositiveButton(R.string.allow) { _, _ ->
                 Blocklist.allow(this, domain)
-                AdBlockState.recentBlocked.value = AdBlockState.recentBlocked.value - domain
+                toastWithRestartHint(getString(R.string.allowed_toast, domain))
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
+    }
+
+    private fun confirmBlock(domain: String) {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.block_title)
+            .setMessage(getString(R.string.block_message, domain))
+            .setPositiveButton(R.string.block) { _, _ -> block(domain) }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun block(domain: String) {
+        Blocklist.block(this, domain)
+        toastWithRestartHint(getString(R.string.blocked_toast, domain))
+    }
+
+    private fun promptBlockDomain() {
+        val input = EditText(this).apply {
+            hint = getString(R.string.block_hint)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+            isSingleLine = true
+        }
+        val pad = (20 * resources.displayMetrics.density).toInt()
+        val container = FrameLayout(this).apply {
+            setPadding(pad, pad / 2, pad, 0)
+            addView(input)
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.block_domain)
+            .setView(container)
+            .setPositiveButton(R.string.block) { _, _ ->
+                val domain = DomainRules.normalize(input.text.toString())
+                if (domain == null) {
+                    Toast.makeText(this, R.string.invalid_domain, Toast.LENGTH_LONG).show()
+                } else {
+                    block(domain)
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun showRules() {
+        val (blocks, allows) = Blocklist.rules(this)
+        val entries = blocks.map { it to true } + allows.map { it to false }
+        val builder = MaterialAlertDialogBuilder(this)
+            .setTitle(if (entries.isEmpty()) R.string.my_rules else R.string.rules_remove_hint)
+        if (entries.isEmpty()) {
+            builder.setMessage(R.string.rules_empty)
+        } else {
+            val labels = entries.map { (d, isBlock) ->
+                getString(if (isBlock) R.string.rule_blocked else R.string.rule_allowed, d)
+            }.toTypedArray()
+            builder.setItems(labels) { _, which ->
+                val (domain, isBlock) = entries[which]
+                Blocklist.removeRule(this, domain, wasBlock = isBlock)
+                Toast.makeText(this, R.string.rule_removed, Toast.LENGTH_SHORT).show()
+            }
+        }
+        builder.setPositiveButton(android.R.string.ok, null).show()
+    }
+
+    private fun toastWithRestartHint(action: String) {
+        Toast.makeText(this, getString(R.string.restart_app_hint, action), Toast.LENGTH_LONG).show()
     }
 
     private fun askForNotificationPermission() {
