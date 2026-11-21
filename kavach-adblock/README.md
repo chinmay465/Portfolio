@@ -46,30 +46,11 @@ CI enforces this on every build: `scripts/privacy-check.sh` inspects the final A
 Requirements: Android Studio (Ladybug or newer) or JDK 17 + Android SDK 35.
 
 ```bash
-./gradlew assembleRelease      # APK → app/build/outputs/apk/release/app-release.apk
-./gradlew testReleaseUnitTest  # unit tests
+./gradlew assembleDebug        # APK → app/build/outputs/apk/debug/app-debug.apk
+./gradlew testDebugUnitTest    # packet + blocklist unit tests
 ```
 
-**From GitHub instead of a PC:** the repo's CI (`.github/workflows/ci.yml`, job `kavach`) runs the tests and builds the APK on every push and PR. Download `kavach-apk` from the run's **Artifacts** section, unzip it and install `app-release.apk` (allow installing from unknown sources).
-
-## Updates and signing
-
-Android only installs an APK over an existing app if both are signed with the same key. CI signs every build with one permanent key kept in repo secrets, and sets `versionCode` to `1000 + run number`. So each new build installs straight over the last one, and your rules are kept.
-
-One-time setup, on any computer with Java and the [GitHub CLI](https://cli.github.com) signed in:
-
-```bash
-keytool -genkeypair -keystore kavach.p12 -storetype PKCS12 -alias kavach \
-  -keyalg RSA -keysize 4096 -validity 10950 -dname "CN=Kavach"
-# keytool asks for a password; use the same one below.
-
-base64 < kavach.p12 | tr -d '\n' | gh secret set KAVACH_KEYSTORE_BASE64 -R chinmay465/Portfolio
-gh secret set KAVACH_KEYSTORE_PASSWORD -R chinmay465/Portfolio   # paste the password when asked
-```
-
-Keep `kavach.p12` and its password somewhere safe, like a password manager, and never commit it. If the key is lost you can make a new one, but every phone has to uninstall once to switch to it. Anyone who has the key can sign APKs that install over Kavach, so treat it like a password.
-
-Without the secrets (local builds, forks), the APK falls back to a throwaway debug key and CI shows a warning. The privacy check prints the signer's certificate on every run.
+**From GitHub instead of a PC:** the repo's CI (`.github/workflows/ci.yml`, job `kavach`) runs the tests and builds the APK on every push and PR. Download `kavach-debug-apk` from the run's **Artifacts** section, unzip it and install `app-debug.apk` (allow installing from unknown sources).
 
 ## Project layout
 

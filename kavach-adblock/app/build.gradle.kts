@@ -3,14 +3,6 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-// CI builds get an ever-increasing versionCode so each APK installs as an update.
-val ciRunNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0
-
-// Permanent signing key, provided by CI from repo secrets. Every APK signed with
-// it installs over the previous one. Without it (local builds, forks) the build
-// falls back to the machine's debug key.
-val keystorePath: String? = System.getenv("KAVACH_KEYSTORE_PATH")?.takeIf { it.isNotBlank() }
-
 android {
     namespace = "com.chinmay.kavach"
     compileSdk = 35
@@ -19,26 +11,16 @@ android {
         applicationId = "com.chinmay.kavach"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1000 + ciRunNumber
-        versionName = "1.1.$ciRunNumber"
-    }
-
-    signingConfigs {
-        if (keystorePath != null) {
-            create("kavach") {
-                storeFile = file(keystorePath)
-                storePassword = System.getenv("KAVACH_KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("KAVACH_KEY_ALIAS")?.takeIf { it.isNotBlank() } ?: "kavach"
-                keyPassword = System.getenv("KAVACH_KEY_PASSWORD")?.takeIf { it.isNotBlank() }
-                    ?: System.getenv("KAVACH_KEYSTORE_PASSWORD")
-            }
-        }
+        versionCode = 2
+        versionName = "1.1.0"
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.findByName("kavach") ?: signingConfigs.getByName("debug")
+            // Signed with the debug key so the release APK installs directly.
+            // Swap in your own keystore before publishing anywhere.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
