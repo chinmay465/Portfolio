@@ -239,3 +239,59 @@ export const journey: Stage[] = [
     route: 1,
   },
 ]
+
+export interface HeroSkill {
+  /** What the particles spell. */
+  word: string
+  /** Label on the chip. */
+  label: string
+  /** What I've done with it, shown as the caption. */
+  detail: string
+  accent: string
+}
+
+export const heroSkills: HeroSkill[] = [
+  { word: 'React', label: 'React', detail: '4+ years in production at Paytm Money and KredX', accent: '#6ff3ff' },
+  {
+    word: 'TypeScript',
+    label: 'TypeScript',
+    detail: "KredX's vendor and financier user-management module, typed end to end",
+    accent: '#5b9dff',
+  },
+  {
+    word: 'Next.js',
+    label: 'Next.js',
+    detail: 'SSR and SSG pages, plus UserCampaign, an ops tool on Next.js and Express',
+    accent: '#fff1e8',
+  },
+  {
+    word: 'Design',
+    label: 'Design systems',
+    detail: 'Led a 25+ component system with brand tokens and Storybook docs at KredX',
+    accent: '#ff5c8a',
+  },
+  {
+    word: 'MFE',
+    label: 'Micro-frontends',
+    detail: '6 apps on Webpack Module Federation at Paytm Money, deployed independently',
+    accent: '#b9a4ff',
+  },
+  {
+    word: '70→95',
+    label: 'Performance',
+    detail: 'Lighthouse from 70 to 95 for 1M+ users with code splitting and fewer re-renders',
+    accent: '#4ade80',
+  },
+  {
+    word: 'KYC',
+    label: 'KYC and payments',
+    detail: 'Video KYC, cKYC onboarding in 2 hours instead of 2 days, BillDesk payments',
+    accent: '#ff9933',
+  },
+  {
+    word: 'Tests',
+    label: 'Testing',
+    detail: 'Jest and React Testing Library on trading tools used by 740K+ people',
+    accent: '#ffb547',
+  },
+]
