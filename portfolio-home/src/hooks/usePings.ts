@@ -11,18 +11,20 @@ export interface Health {
 const REPEAT_MS = 30_000
 const KEEP = 10
 
-/** Pings every live app on load and every 30 s while the tab is open. */
-export function usePings(list: Project[]): Record<ProjectId, Health> {
+/** Pings every live web app on load and every 30 s while the tab is open. */
+export function usePings(list: (Project & { live: string })[]): Partial<Record<ProjectId, Health>> {
   const [health, setHealth] = useState(() =>
-    Object.fromEntries(list.map((p) => [p.id, { state: 'checking', history: [] } as Health])) as Record<ProjectId, Health>,
+    Object.fromEntries(list.map((p) => [p.id, { state: 'checking', history: [] } as Health])) as Partial<
+      Record<ProjectId, Health>
+    >,
   )
 
   useEffect(() => {
     let alive = true
     const update = (id: ProjectId, fn: (h: Health) => Health) =>
-      alive && setHealth((prev) => ({ ...prev, [id]: fn(prev[id]) }))
+      alive && setHealth((prev) => ({ ...prev, [id]: fn(prev[id] ?? { state: 'checking', history: [] }) }))
 
-    const check = (p: Project) =>
+    const check = (p: Project & { live: string }) =>
       ping(p.live, () => update(p.id, (h) => (h.state === 'online' ? h : { ...h, state: 'waking' }))).then((r) =>
         update(p.id, (h) => ({
           state: r.state,

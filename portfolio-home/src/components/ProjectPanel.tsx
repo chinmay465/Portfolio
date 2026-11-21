@@ -7,17 +7,20 @@ import EkatraVisual from './visuals/EkatraVisual'
 import AnkVisual from './visuals/AnkVisual'
 import ShodhVisual from './visuals/ShodhVisual'
 import SetuVisual from './visuals/SetuVisual'
+import KavachVisual from './visuals/KavachVisual'
 
 const VISUALS: Record<Project['id'], ComponentType<{ active: boolean }>> = {
   ekatra: EkatraVisual,
   ank: AnkVisual,
   shodh: ShodhVisual,
   setu: SetuVisual,
+  kavach: KavachVisual,
 }
 
 interface Props {
   project: Project
-  health: Health
+  /** Ping result for web apps; absent for the Android app. */
+  health?: Health
   reduced: boolean
 }
 
@@ -46,13 +49,20 @@ export default function ProjectPanel({ project: p, health, reduced }: Props) {
         </svg>
         <div className="panel-heading">
           <h3 id={`${p.id}-title`}>{p.name}</h3>
-          <span className={`pill pill-${health.state}`}>
-            <i aria-hidden="true" />
-            {healthLabel(health)}
-          </span>
+          {health ? (
+            <span className={`pill pill-${health.state}`}>
+              <i aria-hidden="true" />
+              {healthLabel(health)}
+            </span>
+          ) : (
+            <span className="pill pill-native">
+              <i aria-hidden="true" />
+              Android app
+            </span>
+          )}
         </div>
         <p className="panel-meaning">
-          {p.glyph} means {p.meaning}. {p.kind} on Render.
+          {p.glyph} means {p.meaning}. {p.live ? `${p.kind} on Render.` : `${p.kind}, built and privacy-checked in CI.`}
         </p>
         <p className="panel-tagline">{p.tagline}</p>
         <ul className="panel-points">
@@ -69,11 +79,11 @@ export default function ProjectPanel({ project: p, health, reduced }: Props) {
           <a
             ref={cta}
             className="btn btn-primary"
-            href={p.live}
+            href={p.live ?? p.download}
             target="_blank"
             rel="noopener noreferrer"
           >
-            Open {p.name}
+            {p.live ? `Open ${p.name}` : 'Get the APK'}
           </a>
           <a className="btn btn-ghost" href={p.code} target="_blank" rel="noopener noreferrer">
             View the code
