@@ -7,5 +7,6 @@ export default defineConfig({
   // preview build overrides it with VITE_BASE=./ because it is served from a subpath.
   base: process.env.VITE_BASE ?? '/',
   plugins: [react()],
-  test: { environment: 'node' },
+  // e2e/ holds the Playwright specs; `npm run test:e2e` runs those.
+  test: { environment: 'node', exclude: ['e2e/**', 'node_modules/**'] },
 })
