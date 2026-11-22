@@ -24,7 +24,7 @@ A personal site split into short pages, so no page runs long. Everything about C
 
 ## Stack
 
-React 19, TypeScript, Vite, Vitest and oxlint. No UI or animation library: the canvas, SVG and CSS are hand-written. Fonts are self-hosted with Fontsource: Unbounded for display, Anek Latin and Anek Devanagari for text.
+React 19, TypeScript, Vite, Vitest, Playwright and oxlint. No UI or animation library: the canvas, SVG and CSS are hand-written. Fonts are self-hosted with Fontsource: Unbounded for display, Anek Latin and Anek Devanagari for text.
 
 ```
 src/
@@ -40,7 +40,13 @@ src/
   components/ProjectCard.tsx  card with hover-to-play preview
   components/visuals/         animated sketches, one per app
   components/CommandPalette.tsx
+e2e/                          Playwright specs: every route, deep links, the command palette
 ```
+
+## Tests
+
+- **Unit (Vitest):** `src/lib/lib.test.ts` covers the headline decode, status ping classification, Marathi formatting, and the project, profile and route data.
+- **End to end (Playwright, Chromium):** `e2e/` visits every page and every `/projects/:id`, unknown paths and ids (404), opens deep links directly and refreshes them, and drives the `Ctrl K` palette by keyboard and mouse. Requests to the live apps are blocked so results never depend on Render, and any uncaught page error fails the test. CI runs it against `vite preview` after the build; on failure the HTML report is uploaded as `home-playwright-report`.
 
 ## Run
 
@@ -49,6 +55,7 @@ npm install
 npm run dev      # http://localhost:5173
 npm test
 npm run build    # static output in dist/
+npm run test:e2e # Playwright against vite preview; build first
 
 # Preview build for hosts that can't rewrite paths: hash routes, relative assets
 VITE_HASH_ROUTER=1 VITE_BASE=./ npx vite build --outDir dist-preview
