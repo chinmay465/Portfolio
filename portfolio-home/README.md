@@ -35,6 +35,7 @@ src/
   lib/scramble.ts             headline decode frames (+ tests)
   lib/ping.ts                 status ping and classification (+ tests)
   lib/format.ts               Devanagari numerals and Marathi dates
+  test/dom.ts                 browser stubs for component tests
   components/Hero.tsx         skills board, name, At a glance
   components/GlyphField.tsx   particle canvas
   components/ProjectCard.tsx  card with hover-to-play preview
@@ -46,6 +47,7 @@ e2e/                          Playwright specs: every route, deep links, the com
 ## Tests
 
 - **Unit (Vitest):** `src/lib/lib.test.ts` covers the headline decode, status ping classification, Marathi formatting, and the project, profile and route data.
+- **Components (Vitest + Testing Library, jsdom):** `ImpactRow` counts from the old value to the new one frame by frame and shows the final value at once with reduced motion; `RoleAccordion` keeps one role open at a time with matching `aria-expanded`; `/projects` shows the right cards for `?type=web`, `?type=android` and the tabs. `src/test/dom.ts` stubs the browser APIs jsdom lacks (IntersectionObserver, animation frames, ResizeObserver, matchMedia) so tests can scroll rows into view and step frames.
 - **End to end (Playwright, Chromium):** `e2e/` visits every page and every `/projects/:id`, unknown paths and ids (404), opens deep links directly and refreshes them, and drives the `Ctrl K` palette by keyboard and mouse. Requests to the live apps are blocked so results never depend on Render, and any uncaught page error fails the test. CI runs it against `vite preview` after the build; on failure the HTML report is uploaded as `home-playwright-report`.
 
 ## Run
