@@ -612,7 +612,7 @@ test('reports the playing audio format and the best on offer, and whether the pl
 
   p.window.__swar.reportAudio();
   let last = p.messages.filter((m) => m.type === 'audio').pop();
-  assert.deepEqual(plain(last), { type: 'audio', open: false, quality: 'low', codec: 'Opus', kbps: 52, measured: false, best: 131 });
+  assert.deepEqual(plain(last), { type: 'audio', open: false, quality: 'low', codec: 'Opus', kbps: 52, measured: false, best: 131, tiers: { low: 68, normal: 131, high: 0 } });
 
   p.document.querySelector('ytmusic-app-layout').setAttribute('player-page-open', '');
   mp.getVideoStats = () => ({});
@@ -724,5 +724,43 @@ test('bitrate follows the playing track through the video-to-song switch', async
   v.dispatchEvent(new p.window.Event('playing'));
   const last = audioMsgs().pop();
   assert.deepEqual([last.codec, last.kbps], ['Opus', 141], 'the song\'s own bitrate');
+  p.close();
+});
+
+const premiumResponse = (id) => {
+  const r = playerResponse(id);
+  r.streamingData.adaptiveFormats.push(
+    { itag: 774, mimeType: 'audio/webm; codecs="opus"', bitrate: 270000, averageBitrate: 256000 },
+    { itag: 141, mimeType: 'audio/mp4; codecs="mp4a.40.2"', bitrate: 260000, averageBitrate: 255000 },
+  );
+  return r;
+};
+
+test('audio quality Normal caps at the Normal tier, even on Premium', () => {
+  const p = page('', { quality: 'normal' });
+  const out = p.window.JSON.parse(JSON.stringify(premiumResponse('s')));
+  assert.deepEqual(plain(itags(out)), [248, 251, 140]);
+  const high = page('', { quality: 'high' });
+  assert.deepEqual(plain(itags(high.window.JSON.parse(JSON.stringify(premiumResponse('s'))))), [248, 774, 141]);
+  p.close();
+  high.close();
+});
+
+test('reports which tiers this song offers, so missing ones can be shown disabled', () => {
+  const p = page();
+  p.window.JSON.parse(JSON.stringify(premiumResponse('prem')));
+  p.window.JSON.parse(JSON.stringify(playerResponse('free')));
+  let id = 'prem';
+  playerFor(p, 'prem', {
+    getPlayerResponse: () => ({ videoDetails: { videoId: id, musicVideoType: 'MUSIC_VIDEO_TYPE_ATV' } }),
+    getVideoStats: () => ({ afmt: id === 'prem' ? '774' : '251' }),
+  });
+  p.window.__swar.reportAudio();
+  let last = p.messages.filter((m) => m.type === 'audio').pop();
+  assert.deepEqual(plain(last.tiers), { low: 68, normal: 131, high: 256 });
+  id = 'free';
+  p.window.__swar.reportAudio();
+  last = p.messages.filter((m) => m.type === 'audio').pop();
+  assert.deepEqual(plain(last.tiers), { low: 68, normal: 131, high: 0 }, 'no 256 kbps on offer: High disabled');
   p.close();
 });

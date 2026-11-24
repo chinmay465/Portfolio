@@ -11,6 +11,7 @@ class AudioQualityTest {
         assertEquals(AudioQuality.AUTO, AudioQuality.fromKey("lossless"))
         assertEquals(AudioQuality.HIGH, AudioQuality.fromKey("high"))
         assertEquals(AudioQuality.LOW, AudioQuality.fromKey("low"))
+        assertEquals(AudioQuality.NORMAL, AudioQuality.fromKey("normal"))
     }
 
     @Test

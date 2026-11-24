@@ -8,6 +8,8 @@ import android.text.style.ForegroundColorSpan
 import android.text.style.RelativeSizeSpan
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
+import android.widget.ArrayAdapter
 import android.widget.TextView
 import com.chinmay.swar.R
 import com.chinmay.swar.web.AudioQuality
@@ -24,7 +26,14 @@ class QualityControl(
     private val onChange: (AudioQuality) -> Unit,
 ) {
     /** What's playing, from the page: codec and bitrate, and the best on offer for this song. */
-    data class Playing(val codec: String = "", val kbps: Int = 0, val best: Int = 0, val measured: Boolean = false)
+    data class Playing(
+        val codec: String = "",
+        val kbps: Int = 0,
+        val best: Int = 0,
+        val measured: Boolean = false,
+        /** Bitrate on offer per tier for this song; 0 = not offered. Empty = not known yet. */
+        val tiers: Map<AudioQuality, Int> = emptyMap(),
+    )
 
     var quality: AudioQuality = initial
         private set
@@ -79,12 +88,25 @@ class QualityControl(
     private fun showPicker() {
         if (dialog?.isShowing == true || activity.isFinishing) return
         val options = AudioQuality.entries
-        val items = options.map { option(it) }.toTypedArray<CharSequence>()
+        val items = options.map { option(it) }
+        val enabled = options.map(::offered)
+        val adapter = object : ArrayAdapter<CharSequence>(activity, android.R.layout.simple_list_item_single_choice, items) {
+            override fun areAllItemsEnabled() = false
+            override fun isEnabled(position: Int) = enabled[position]
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View =
+                super.getView(position, convertView, parent).apply {
+                    alpha = if (enabled[position]) 1f else 0.38f
+                    (this as? TextView)?.apply {
+                        setPadding(paddingLeft, (10 * resources.displayMetrics.density).toInt(), paddingRight, (10 * resources.displayMetrics.density).toInt())
+                    }
+                }
+        }
         val header = LayoutInflater.from(activity).inflate(R.layout.dialog_quality_title, null)
         header.findViewById<TextView>(R.id.quality_now).text = nowText()
         dialog = AlertDialog.Builder(activity)
             .setCustomTitle(header)
-            .setSingleChoiceItems(items, options.indexOf(quality)) { d, which ->
+            .setSingleChoiceItems(adapter, options.indexOf(quality)) { d, which ->
+                if (!enabled[which]) return@setSingleChoiceItems
                 val picked = options[which]
                 if (picked != quality) {
                     quality = picked
@@ -115,13 +137,25 @@ class QualityControl(
         return "$now $best".trim() + "\n" + applies
     }
 
+    /** Auto always; a tier only if this song offers it (or before anything is known). */
+    private fun offered(q: AudioQuality): Boolean =
+        q == AudioQuality.AUTO || playing.tiers.isEmpty() || (playing.tiers[q] ?: 0) > 0
+
     private fun option(q: AudioQuality): CharSequence {
-        val title = activity.getString(label(q))
+        val rate = playing.tiers[q] ?: 0
+        val title = if (q != AudioQuality.AUTO && rate > 0) {
+            activity.getString(R.string.quality_option_rate, activity.getString(label(q)), rate)
+        } else {
+            activity.getString(label(q))
+        }
         val detail = activity.getString(
-            when (q) {
-                AudioQuality.AUTO -> R.string.quality_auto_detail
-                AudioQuality.HIGH -> R.string.quality_high_detail
-                AudioQuality.LOW -> R.string.quality_low_detail
+            when {
+                !offered(q) && q == AudioQuality.HIGH -> R.string.quality_high_unavailable
+                !offered(q) -> R.string.quality_unavailable
+                q == AudioQuality.AUTO -> R.string.quality_auto_detail
+                q == AudioQuality.HIGH -> R.string.quality_high_detail
+                q == AudioQuality.NORMAL -> R.string.quality_normal_detail
+                else -> R.string.quality_low_detail
             },
         )
         return SpannableStringBuilder(title).append('\n').apply {
@@ -141,6 +175,7 @@ class QualityControl(
         fun label(q: AudioQuality) = when (q) {
             AudioQuality.AUTO -> R.string.quality_auto
             AudioQuality.HIGH -> R.string.quality_high
+            AudioQuality.NORMAL -> R.string.quality_normal
             AudioQuality.LOW -> R.string.quality_low
         }
     }

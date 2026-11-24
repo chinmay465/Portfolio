@@ -327,6 +327,11 @@ class MainActivity : AppCompatActivity() {
                     kbps = o.optInt("kbps"),
                     best = o.optInt("best"),
                     measured = o.optBoolean("measured"),
+                    tiers = o.optJSONObject("tiers")?.let { t ->
+                        listOf(AudioQuality.HIGH, AudioQuality.NORMAL, AudioQuality.LOW)
+                            .associateWith { t.optInt(it.key) }
+                            .takeIf { m -> m.values.any { it > 0 } }
+                    } ?: emptyMap(),
                 )
                 PlayerBridge.publishAudio(qualityControl.label(playing))
                 qualityControl.update(o.optBoolean("open") && shell.pageVisible && !mainFrameFailed, playing)

@@ -24,8 +24,11 @@ Swar wraps [music.youtube.com](https://music.youtube.com) in an Android app. Mus
   3. *Fallback:* if an ad still starts, it's muted, jumped to its end, and Skip is clicked. Premium upsell banners are hidden with CSS. The "Are you still there?" dialog is dismissed automatically.
 - **Audio quality.** On YouTube Music's full-screen player, a small chip shows the setting and what's playing (for example *Auto · 128 kbps*). Tap it to pick:
   - **Auto** (default): YouTube Music's own adaptive choice, which follows your connection and your account's audio quality setting.
-  - **High:** the player only gets the highest-bitrate audio YouTube offers for that song, so it never drops lower on a slow connection.
+  - **High:** the player only gets the highest-bitrate audio YouTube offers for that song (up to 256 kbps on Premium), so it never drops lower on a slow connection.
+  - **Normal:** the best audio up to YouTube's Normal tier (about 128 kbps), to save data on Premium.
   - **Low:** only the lowest-bitrate audio, to save data.
+
+  Each tier shows the bitrate it gives for the current song. A tier the song or account doesn't offer (High on a free account, for example) is listed greyed out with the reason, and can't be picked. YouTube Music has no tier above 256 kbps (no lossless).
 
   Swar narrows the audio formats in the player response before the player reads it (one per codec and language track); video formats are untouched. The chip, the picker and the playback notification (where Android shows its small header line) show the codec and bitrate actually playing, in every mode. It comes from the format the player picked; if the player doesn't say, Swar measures it from the audio it downloads (shown as *~128 kbps*). It follows the current track, including the switch from a video to its song: while the switch card is up it shows *… kbps*. The checks are light: the format lookup runs every 2 s on screen and every 4 s in the background, and nothing that reads the page layout runs while the screen is off. Changes apply from the next song. What's on offer depends on the account: free accounts top out around 128 kbps (Opus or AAC); 256 kbps is a YouTube Premium perk that Swar can't unlock.
 - **Controls.** The page reports title, artist, album art, position and play state over a `WebMessageListener` bridge (origin-locked to `https://music.youtube.com`). `PlaybackService` mirrors that into a `MediaSession`. Commands go back as JavaScript, and the page's own media-session handlers are called first so the queue logic stays YouTube's.

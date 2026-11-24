@@ -10,6 +10,9 @@ enum class AudioQuality(val key: String) {
     /** Always the highest bitrate YouTube offers the account for each song. */
     HIGH("high"),
 
+    /** Best audio up to YouTube's Normal tier (about 128 kbps). */
+    NORMAL("normal"),
+
     /** Always the lowest bitrate, to save data. */
     LOW("low");
 

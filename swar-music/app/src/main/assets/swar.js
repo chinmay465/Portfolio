@@ -89,10 +89,14 @@
   //  auto: leave YouTube's choice alone (it adapts to the connection).
   //  high: the player only sees the highest-bitrate audio of each kind, so it
   //        can't drop to a lower one.
+  //  normal: the best audio up to YouTube's Normal tier (about 128 kbps).
   //  low:  only the lowest-bitrate audio, to save data.
   // Video formats are never touched. Applies to player responses as they load,
   // so a change takes effect from the next song.
-  const QUALITIES = ['auto', 'high', 'low'];
+  const QUALITIES = ['auto', 'high', 'normal', 'low'];
+  // YouTube Music's tiers: Low up to ~48 kbps, Normal ~128, High ~256 (Premium).
+  const NORMAL_MAX_KBPS = 180;
+  const LOW_MAX_KBPS = 80;
   let audioQuality = QUALITIES.includes(window.__swarAudioQuality) ? window.__swarAudioQuality : 'auto';
   const audioInfo = new Map(); // video id -> { best: kbps, formats: { itag: { codec, kbps } } }
 
@@ -117,7 +121,7 @@
     if (!audio.length) return;
     const id = (response.videoDetails && response.videoDetails.videoId) || '';
     if (id) rememberAudio(id, audio);
-    if (quality !== 'high' && quality !== 'low') return;
+    if (!['high', 'normal', 'low'].includes(quality)) return;
     // One pick per container, language track and loudness variant, so the
     // player still has a codec it can decode and the right language.
     const groups = new Map();
@@ -129,7 +133,10 @@
     const keep = new Set();
     for (const list of groups.values()) {
       const rates = list.map(kbpsOf);
-      const target = quality === 'high' ? Math.max(...rates) : Math.min(...rates);
+      const capped = rates.filter((r) => r <= NORMAL_MAX_KBPS);
+      const target = quality === 'high' ? Math.max(...rates)
+        : quality === 'normal' ? (capped.length ? Math.max(...capped) : Math.min(...rates))
+          : Math.min(...rates);
       for (const f of list) if (kbpsOf(f) === target) keep.add(f);
     }
     sd.adaptiveFormats = formats.filter((f) => !isAudioFormat(f) || keep.has(f));
@@ -802,6 +809,17 @@
     return '';
   }
 
+  /** Bitrate on offer in each tier for this track (0: not offered). Surround tracks don't count. */
+  function tierRates(info) {
+    const rates = info ? Object.values(info.formats).filter((f) => f.codec !== 'Dolby').map((f) => f.kbps).filter((k) => k > 0) : [];
+    const top = (list) => (list.length ? Math.max(...list) : 0);
+    return {
+      low: top(rates.filter((k) => k <= LOW_MAX_KBPS)),
+      normal: top(rates.filter((k) => k > LOW_MAX_KBPS && k <= NORMAL_MAX_KBPS)),
+      high: top(rates.filter((k) => k > NORMAL_MAX_KBPS)),
+    };
+  }
+
   /** Formats for this track; from the player itself if the response slipped past the hooks. */
   function audioFormats(id) {
     if (!audioInfo.has(id)) {
@@ -827,7 +845,8 @@
   }
 
   let onScreen = true;
-  let nowPlaying = { id: '', codec: '', kbps: 0, measured: false, best: 0 };
+  const NOTHING = { id: '', codec: '', kbps: 0, measured: false, best: 0, tiers: { low: 0, normal: 0, high: 0 } };
+  let nowPlaying = NOTHING;
   let lastAudio = '';
 
   /** refresh: look up the playing format again (otherwise only on a track change). */
@@ -837,16 +856,17 @@
     // Mid-switch from a video to its song, the video's audio is muted and on
     // its way out: show nothing rather than its bitrate.
     if (switching) {
-      nowPlaying = { id: '', codec: '', kbps: 0, measured: false, best: 0 };
+      nowPlaying = NOTHING;
     } else if (refresh || id !== nowPlaying.id) {
       const info = id ? audioFormats(id) : null;
       const itag = info ? currentAudioItag() : '';
       const known = info && itag ? info.formats[itag] : null;
       const live = id ? measuredKbps(id) : 0;
+      const base = { id, best: info ? info.best : 0, tiers: tierRates(info) };
       let next;
-      if (known && known.kbps) next = { id, codec: known.codec, kbps: known.kbps, measured: false, best: info.best };
-      else if (live) next = { id, codec: measured.codec, kbps: live, measured: true, best: info ? info.best : 0 };
-      else next = { id, codec: '', kbps: 0, measured: false, best: info ? info.best : 0 };
+      if (known && known.kbps) next = { ...base, codec: known.codec, kbps: known.kbps, measured: false };
+      else if (live) next = { ...base, codec: measured.codec, kbps: live, measured: true };
+      else next = { ...base, codec: '', kbps: 0, measured: false };
       // A measured figure drifts a little as more audio arrives; only pass on real changes.
       const steady = next.measured && nowPlaying.measured && nowPlaying.id === id &&
         Math.abs(next.kbps - nowPlaying.kbps) < nowPlaying.kbps * 0.05;
@@ -860,6 +880,7 @@
       kbps: nowPlaying.kbps,
       measured: nowPlaying.measured,
       best: nowPlaying.best,
+      tiers: nowPlaying.tiers,
     };
     const json = JSON.stringify(message);
     if (json === lastAudio) return;
