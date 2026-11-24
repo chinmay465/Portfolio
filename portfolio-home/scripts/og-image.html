@@ -1,0 +1,96 @@
+<!doctype html>
+<!-- Source for public/og-image.png, the 1200×630 link preview. Re-render with `npm run og-image`. -->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      @font-face {
+        font-family: 'Unbounded';
+        font-weight: 200 900;
+        src: url('../node_modules/@fontsource-variable/unbounded/files/unbounded-latin-wght-normal.woff2') format('woff2');
+      }
+      @font-face {
+        font-family: 'Anek Latin';
+        font-weight: 100 800;
+        src: url('../node_modules/@fontsource-variable/anek-latin/files/anek-latin-latin-wght-normal.woff2') format('woff2');
+      }
+      @font-face {
+        font-family: 'Anek Devanagari';
+        font-weight: 100 800;
+        src: url('../node_modules/@fontsource-variable/anek-devanagari/files/anek-devanagari-devanagari-wght-normal.woff2') format('woff2');
+      }
+      * { box-sizing: border-box; margin: 0; }
+      html, body { width: 1200px; height: 630px; }
+      body {
+        position: relative;
+        overflow: hidden;
+        padding: 72px 80px;
+        display: flex;
+        flex-direction: column;
+        color: #fff1e8;
+        font-family: 'Anek Latin', sans-serif;
+        background:
+          radial-gradient(640px 420px at 92% 8%, rgba(255, 92, 138, 0.34), transparent 70%),
+          radial-gradient(560px 380px at 104% 100%, rgba(111, 243, 255, 0.2), transparent 70%),
+          radial-gradient(520px 360px at -6% 104%, rgba(255, 153, 51, 0.22), transparent 70%),
+          #1d0711;
+      }
+      .brand { display: flex; align-items: center; gap: 18px; }
+      .brand svg { width: 56px; height: 56px; }
+      .url { font-size: 26px; letter-spacing: 0.02em; color: rgba(255, 241, 232, 0.74); }
+      h1 {
+        margin-top: 64px;
+        font-family: 'Unbounded', sans-serif;
+        font-weight: 700;
+        font-size: 92px;
+        line-height: 1;
+        letter-spacing: -0.02em;
+        background: linear-gradient(100deg, #ff9933 0%, #ff5c8a 55%, #6ff3ff 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      .role { margin-top: 26px; font-size: 40px; font-weight: 600; }
+      .apps { margin-top: 10px; font-size: 30px; color: rgba(255, 241, 232, 0.74); }
+      .glyphs {
+        position: absolute;
+        right: 80px;
+        bottom: 64px;
+        display: flex;
+        gap: 22px;
+        font-family: 'Anek Devanagari', sans-serif;
+        font-weight: 600;
+        font-size: 34px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="brand">
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <defs>
+          <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#ff9933" />
+            <stop offset=".55" stop-color="#ff5c8a" />
+            <stop offset="1" stop-color="#6ff3ff" />
+          </linearGradient>
+        </defs>
+        <rect x="4" y="4" width="56" height="56" rx="16" fill="url(#g)" />
+        <path d="M16 22h32M24 22v22c0 3 2 5 5 5h3M38 22v8c0 4-3 7-7 7" fill="none" stroke="#1d0711" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+      <span class="url">chinmay-upare.onrender.com</span>
+    </div>
+    <h1>Chinmay Upare</h1>
+    <p class="role">Senior frontend developer · React, TypeScript</p>
+    <p class="apps">Five live web apps and two Android apps, built end to end</p>
+    <!-- The apps' Devanagari names, in their accent colours (src/data/projects.ts). -->
+    <div class="glyphs" aria-hidden="true">
+      <span style="color: #ff6b3d">मार्ग</span>
+      <span style="color: #4ade80">कवच</span>
+      <span style="color: #5b8cff">स्वर</span>
+      <span style="color: #ff5c8a">एकत्र</span>
+      <span style="color: #ffb547">अंक</span>
+      <span style="color: #6ff3ff">शोध</span>
+      <span style="color: #b9a4ff">सेतु</span>
+    </div>
+  </body>
+</html>
