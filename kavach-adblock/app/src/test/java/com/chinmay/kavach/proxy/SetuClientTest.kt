@@ -40,4 +40,21 @@ class SetuClientTest {
         assertNull(SetuClient.normalizeUrl("setu-proxy-hub.onrender.com"))
         assertNull(SetuClient.normalizeUrl("https://"))
     }
+
+    @Test
+    fun parsesOwnProxyList() {
+        val list = SetuClient.parseList(
+            """
+            # my proxies
+            203.0.113.10:8080
+            http://proxy.example.com:3128   # office
+            203.0.113.10:8080
+            bad line
+            1.2.3.4:99999
+
+            """.trimIndent(),
+        )
+        assertEquals(listOf("203.0.113.10:8080", "proxy.example.com:3128"), list.map { it.address })
+        assertTrue(SetuClient.parseList("").isEmpty())
+    }
 }

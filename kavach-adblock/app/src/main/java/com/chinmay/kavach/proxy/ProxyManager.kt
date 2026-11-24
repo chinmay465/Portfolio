@@ -1,8 +1,10 @@
 package com.chinmay.kavach.proxy
 
 import android.content.Context
+import android.util.Log
 import com.chinmay.kavach.vpn.AdBlockState
 import com.chinmay.kavach.vpn.AdBlockState.Proxy
+import com.chinmay.kavach.vpn.Blocklist
 import java.io.IOException
 import java.util.concurrent.Callable
 import java.util.concurrent.ExecutorCompletionService
@@ -21,9 +23,13 @@ import java.util.concurrent.TimeUnit
  * All control work runs on one thread, so the steps never overlap.
  */
 class ProxyManager(
-    ctx: Context,
-    /** Local proxy port the VPN should hand to apps, or null to send them direct. */
-    private val onRoute: (Int?) -> Unit,
+    private val ctx: Context,
+    /**
+     * Switches the VPN: a port = capture all traffic into the full tunnel and
+     * send it to Kavach's proxy there; null = DNS-only mode, apps go direct.
+     * Returns false if the full tunnel couldn't start.
+     */
+    private val onRoute: (Int?) -> Boolean,
 ) {
     private val settings = ProxySettings(ctx)
     private val pool = UpstreamPool()
@@ -88,6 +94,8 @@ class ProxyManager(
 
     private fun bringUp() {
         if (pool.size() > 0) return
+        // The proxy blocks by host name, so the blocklist must be ready first.
+        Blocklist.ensureLoaded(ctx)
         AdBlockState.proxy.value = Proxy.Connecting(0, 0)
         val good = try {
             testFresh(exclude = emptySet())
@@ -121,8 +129,12 @@ class ProxyManager(
             return
         }
         if (routedPort != proxy.port) {
+            if (!onRoute(proxy.port)) {
+                AdBlockState.proxy.value = Proxy.Unavailable(Proxy.Reason.ENGINE)
+                return
+            }
             routedPort = proxy.port
-            onRoute(proxy.port)
+            Log.i(TAG, "Proxy mode routing all traffic, ${pool.size()} proxies ready")
         }
         publishActive()
     }
@@ -174,7 +186,9 @@ class ProxyManager(
 
     /** Fetches Setu's pool and tests candidates in parallel until [TARGET_GOOD] pass. */
     private fun testFresh(exclude: Set<String>): List<UpstreamPool.Entry> {
-        val candidates = SetuClient(settings.setuUrl, settings.token).fetchPool()
+        val own = SetuClient.parseList(settings.customProxies)
+        val source = own.ifEmpty { SetuClient(settings.setuUrl, settings.token).fetchPool() }
+        val candidates = source
             .filter { it.address !in exclude }
             .take(MAX_CANDIDATES)
         if (candidates.isEmpty()) return emptyList()
@@ -210,6 +224,7 @@ class ProxyManager(
     }
 
     private companion object {
+        const val TAG = "KavachProxy"
         const val CHECK_THREADS = 12
         const val MAX_CANDIDATES = 40
         const val TARGET_GOOD = 8

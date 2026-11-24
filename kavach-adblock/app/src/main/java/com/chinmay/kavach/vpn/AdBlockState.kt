@@ -24,7 +24,7 @@ object AdBlockState {
             val localPort: Int,
         ) : Proxy
         data class Unavailable(val reason: Reason) : Proxy
-        enum class Reason { AUTH, SETU_UNREACHABLE, NONE_WORKING }
+        enum class Reason { AUTH, SETU_UNREACHABLE, NONE_WORKING, ENGINE }
     }
 
     val running = MutableStateFlow(false)

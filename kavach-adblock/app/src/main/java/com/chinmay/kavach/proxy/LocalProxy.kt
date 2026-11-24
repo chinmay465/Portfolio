@@ -19,21 +19,24 @@ import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * The HTTP proxy that Kavach's VPN hands to every app in proxy mode. It
- * listens on the loopback interface only, so nothing on the Wi-Fi or mobile
- * network can reach it.
+ * Kavach's proxy for proxy mode. It listens on the loopback interface only,
+ * so nothing on the Wi-Fi or mobile network can reach it, and speaks two
+ * protocols on one port:
  *
- * For each request it:
- *  1. blocks it if the host is on the blocklist. With a proxy set, apps don't
- *     look domains up themselves (the proxy does), so this is where ad
- *     blocking happens for proxied traffic;
- *  2. otherwise forwards it to the current free proxy from [pool]. If that
- *     proxy fails, or opens the tunnel but the site never answers, the app's
- *     first bytes are replayed on the next proxy. The app never sees the
- *     failed attempt.
+ *  - SOCKS5 CONNECT, from the full-tunnel engine ([FullTunnel]) that turns
+ *    every app's TCP connection into one request here;
+ *  - HTTP proxy requests (CONNECT and plain), used by Kavach's own Test.
  *
- * HTTPS goes through as a CONNECT tunnel, so neither Kavach nor the free
- * proxy can read it. Plain HTTP is readable by the free proxy's operator.
+ * For each connection it:
+ *  1. blocks it if the host is on the blocklist. The tunnel hands over host
+ *     names, not IPs, so ad blocking works the same as in DNS mode;
+ *  2. otherwise forwards it to the current free proxy from [pool] with an
+ *     HTTP CONNECT. If that proxy fails, or opens the tunnel but the site
+ *     never answers, the app's first bytes are replayed on the next proxy.
+ *     The app never sees the failed attempt.
+ *
+ * TLS goes through untouched, so neither Kavach nor the free proxy can read
+ * it. Plain HTTP is readable by the free proxy's operator.
  */
 class LocalProxy(private val pool: UpstreamPool) {
 
@@ -52,7 +55,10 @@ class LocalProxy(private val pool: UpstreamPool) {
             bind(InetSocketAddress(InetAddress.getLoopbackAddress(), 0), BACKLOG)
         }
     }
-    private val workers: ExecutorService = Executors.newCachedThreadPool()
+    // Two threads per connection with every app's traffic here, so keep stacks small.
+    private val workers: ExecutorService = Executors.newCachedThreadPool { r ->
+        Thread(null, r, "kavach-proxy-conn", 256 * 1024L).apply { isDaemon = true }
+    }
     private val open = Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap<Socket, Boolean>())
     private val active = AtomicInteger()
     @Volatile private var stopped = false
@@ -99,25 +105,48 @@ class LocalProxy(private val pool: UpstreamPool) {
         var upstream: Socket? = null
         try {
             client.soTimeout = HANDSHAKE_TIMEOUT_MS
+            client.tcpNoDelay = true
             val clientIn = BufferedInputStream(client.getInputStream())
             val clientOut = client.getOutputStream()
-            val head = readHead(clientIn) ?: return
-            val target = parseTarget(head.decodeToString()) ?: return reply(clientOut, 400, "Bad Request")
+
+            clientIn.mark(1)
+            val firstByte = clientIn.read()
+            if (firstByte < 0) return
+            clientIn.reset()
+            val socks = firstByte == SOCKS_VERSION
+
+            val head: ByteArray?
+            val target: Target
+            if (socks) {
+                head = null
+                target = readSocksRequest(clientIn, clientOut) ?: return
+            } else {
+                head = readHead(clientIn) ?: return
+                target = parseTarget(head.decodeToString()) ?: return reply(clientOut, 400, "Bad Request")
+            }
 
             val blocked = Blocklist.isBlocked(target.host)
             AdBlockState.onQuery(target.host, wasBlocked = blocked)
-            if (blocked) return reply(clientOut, 403, "Blocked by Kavach")
+            if (blocked) {
+                return if (socks) socksReply(clientOut, SOCKS_NOT_ALLOWED) else reply(clientOut, 403, "Blocked by Kavach")
+            }
 
             // What the app sends first: the HTTP request itself, or, inside a
-            // CONNECT tunnel, the TLS ClientHello. Holding on to it lets us
+            // tunnel, usually the TLS ClientHello. Holding on to it lets us
             // replay it on the next proxy if this one never answers.
             val first = if (target.connect) {
-                clientOut.write("HTTP/1.1 200 Connection established\r\n\r\n".toByteArray())
-                clientOut.flush()
+                if (socks) {
+                    socksReply(clientOut, SOCKS_OK)
+                } else {
+                    clientOut.write("HTTP/1.1 200 Connection established\r\n\r\n".toByteArray())
+                    clientOut.flush()
+                }
+                // Protocols where the server talks first (SMTP, IMAP...) send
+                // nothing, so only wait briefly before connecting without it.
                 client.soTimeout = FIRST_CLIENT_BYTES_TIMEOUT_MS
-                readFirstPayload(clientIn) ?: return // app closed a pre-opened tunnel unused
+                readFirstPayload(clientIn) ?: return // app closed the connection unused
             } else {
-                head
+                head!!
             }
 
             val opened = openUpstream(target, first)
@@ -167,10 +196,13 @@ class LocalProxy(private val pool: UpstreamPool) {
                     val response = readHead(input) ?: throw IOException("No CONNECT reply")
                     if (statusCode(response.decodeToString()) != 200) throw IOException("CONNECT refused")
                 }
-                out.write(first)
-                out.flush()
-                // Plain HTTP may still have a request body to send, so don't wait for a reply.
-                if (!target.connect) {
+                if (first.isNotEmpty()) {
+                    out.write(first)
+                    out.flush()
+                }
+                // Plain HTTP may still have a request body to send, and a
+                // server-first protocol has sent nothing yet: don't wait for a reply.
+                if (!target.connect || first.isEmpty()) {
                     pool.reportSuccess(entry)
                     return Opened(socket, entry, ByteArray(0))
                 }
@@ -225,13 +257,18 @@ class LocalProxy(private val pool: UpstreamPool) {
     companion object {
         const val PREFERRED_PORT = 28_283
         private const val BACKLOG = 128
-        private const val MAX_CONNECTIONS = 256
+        private const val MAX_CONNECTIONS = 768
+        private const val SOCKS_VERSION = 5
+        private const val SOCKS_OK = 0
+        private const val SOCKS_NOT_ALLOWED = 2
+        private const val SOCKS_BAD_COMMAND = 7
+        private const val SOCKS_BAD_ADDRESS = 8
         private const val MAX_ATTEMPTS = 3
         // Kept short: apps give up on a page after ~15-30 s, and up to three proxies are tried.
         private const val CONNECT_TIMEOUT_MS = 4_000
         private const val HANDSHAKE_TIMEOUT_MS = 6_000
         private const val FIRST_REPLY_TIMEOUT_MS = 5_000
-        private const val FIRST_CLIENT_BYTES_TIMEOUT_MS = 60_000
+        private const val FIRST_CLIENT_BYTES_TIMEOUT_MS = 1_500
         private const val IDLE_TIMEOUT_MS = 5 * 60_000
         private const val MAX_HEAD = 32 * 1024
         private const val MAX_FIRST_PAYLOAD = 64 * 1024
@@ -258,12 +295,18 @@ class LocalProxy(private val pool: UpstreamPool) {
         /**
          * Reads the app's first payload in a tunnel. For TLS it waits for the
          * whole first record (the ClientHello), so a replay is complete.
+         * Returns an empty array if the app sends nothing before the socket's
+         * read timeout, and null if it closed the connection.
          */
         fun readFirstPayload(input: InputStream): ByteArray? {
             val out = java.io.ByteArrayOutputStream(2_048)
             val buf = ByteArray(16_384)
             while (true) {
-                val n = input.read(buf)
+                val n = try {
+                    input.read(buf)
+                } catch (_: java.net.SocketTimeoutException) {
+                    return out.toByteArray() // nothing more for now (maybe nothing at all)
+                }
                 if (n < 0) return if (out.size() > 0) out.toByteArray() else null
                 out.write(buf, 0, n)
                 val bytes = out.toByteArray()
@@ -278,6 +321,57 @@ class LocalProxy(private val pool: UpstreamPool) {
             if (bytes.size < 5) return 5 + 1 // need the header first
             val len = ((bytes[3].toInt() and 0xff) shl 8) or (bytes[4].toInt() and 0xff)
             return 5 + len
+        }
+
+        /**
+         * SOCKS5 greeting and request (RFC 1928, no authentication). Answers
+         * the greeting itself; returns the CONNECT target, or null after
+         * replying with an error for anything else (UDP ASSOCIATE, BIND).
+         */
+        fun readSocksRequest(input: InputStream, out: OutputStream): Target? {
+            val data = java.io.DataInputStream(input)
+            if (data.readUnsignedByte() != SOCKS_VERSION) return null
+            val methods = ByteArray(data.readUnsignedByte()).also { data.readFully(it) }
+            if (methods.none { it.toInt() == 0 }) {
+                out.write(byteArrayOf(SOCKS_VERSION.toByte(), 0xff.toByte()))
+                out.flush()
+                return null
+            }
+            out.write(byteArrayOf(SOCKS_VERSION.toByte(), 0))
+            out.flush()
+
+            if (data.readUnsignedByte() != SOCKS_VERSION) return null
+            val cmd = data.readUnsignedByte()
+            data.readUnsignedByte() // reserved
+            val host = when (data.readUnsignedByte()) {
+                1 -> ByteArray(4).also { data.readFully(it) }.joinToString(".") { (it.toInt() and 0xff).toString() }
+                3 -> ByteArray(data.readUnsignedByte()).also { data.readFully(it) }.decodeToString().lowercase()
+                4 -> java.net.InetAddress.getByAddress(ByteArray(16).also { data.readFully(it) }).hostAddress!!
+                else -> {
+                    socksReply(out, SOCKS_BAD_ADDRESS)
+                    return null
+                }
+            }
+            val port = data.readUnsignedShort()
+            if (cmd != 1) {
+                // UDP can't go through an HTTP proxy. Refusing it makes apps
+                // fall back to TCP (QUIC → HTTPS, for example).
+                socksReply(out, SOCKS_BAD_COMMAND)
+                return null
+            }
+            if (host.isEmpty() || port == 0) {
+                socksReply(out, SOCKS_BAD_ADDRESS)
+                return null
+            }
+            return Target(host, port, connect = true)
+        }
+
+        fun socksReply(out: OutputStream, code: Int) {
+            try {
+                out.write(byteArrayOf(SOCKS_VERSION.toByte(), code.toByte(), 0, 1, 0, 0, 0, 0, 0, 0))
+                out.flush()
+            } catch (_: IOException) {
+            }
         }
 
         /** Where a proxy request is going: `CONNECT host:port` or `GET http://host/...`. */

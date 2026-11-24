@@ -18,6 +18,7 @@ WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 "$APKANALYZER" manifest print "$APK" > "$WORK/manifest.xml"
 unzip -q -o "$APK" 'classes*.dex' -d "$WORK/dex"
+unzip -Z1 "$APK" | grep '^lib/.*\.so$' > "$WORK/native-libs.txt" || true
 cat "$WORK"/dex/classes*.dex | strings -n 6 > "$WORK/dex-strings.txt"
 
 python3 - "$WORK" <<'PY'
@@ -92,6 +93,15 @@ found = [n for n, d in trackers.items() if d in strings]
 if found:
     errors.append("Tracking/third-party SDK code found: " + ", ".join(found))
 report.append("trackerSDKs=" + (",".join(found) or "none"))
+
+# 4b. Native code: only the reviewed tunnel engine (hev-socks5-tunnel, MIT).
+libs = [l.strip() for l in open(os.path.join(work, "native-libs.txt")) if l.strip()]
+unknown_libs = sorted({l.rsplit("/", 1)[-1] for l in libs} - {"libhev-socks5-tunnel.so"})
+if unknown_libs:
+    errors.append("Unreviewed native libraries: " + ", ".join(unknown_libs))
+if not any(l.endswith("arm64-v8a/libhev-socks5-tunnel.so") for l in libs):
+    errors.append("Tunnel engine missing for arm64-v8a (run scripts/build-tunnel.sh)")
+report.append("nativeLibs=" + ",".join(sorted({l.split("/")[1] for l in libs})))
 
 # 5. Network endpoints written in Kavach's own source code
 allowed_urls = {

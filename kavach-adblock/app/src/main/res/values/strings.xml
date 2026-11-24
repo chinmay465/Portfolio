@@ -61,7 +61,7 @@
     <string name="notification_text_proxy">Blocking ads · apps exit via proxy %1$s</string>
     <string name="notification_text_proxy_connecting">Blocking ads · finding a working proxy…</string>
     <string name="notification_text_proxy_direct">Blocking ads · no working proxy, apps go direct</string>
-    <string name="proxy_switch">Proxy mode (route apps through Setu\'s proxies)</string>
+    <string name="proxy_switch">Proxy mode (route all apps through Setu\'s proxies)</string>
     <string name="proxy_next">Switch proxy</string>
     <string name="proxy_settings">Proxy settings</string>
     <string name="proxy_status_off">Off. Apps use your normal connection.</string>
@@ -72,7 +72,7 @@
     <string name="proxy_status_active">Via %1$s · exit IP %2$s · %3$d ms · %4$d ready\nApp connections: %5$d in, %6$d ok, %7$d failed · Kavach proxy 127.0.0.1:%8$d</string>
     <string name="proxy_test">Test</string>
     <string name="proxy_test_running">Testing Google through Kavach\'s proxy…</string>
-    <string name="proxy_test_ok">Works: Google answered through the proxy in %1$d ms. If an app still says no internet, it isn\'t using the proxy: force-stop it and open it again.</string>
+    <string name="proxy_test_ok">Works: Google answered through Kavach\'s proxy and a free proxy in %1$d ms.</string>
     <string name="proxy_test_not_listening">Kavach\'s proxy isn\'t running. Turn proxy mode off and on again.</string>
     <string name="proxy_test_upstream">Kavach\'s proxy is running, but the free proxies couldn\'t reach Google. Tap Switch proxy and test again.</string>
     <string name="proxy_test_unavailable">Proxy mode isn\'t connected yet.</string>
@@ -96,4 +96,11 @@
     <string name="proxy_apps_title">Apps that skip the proxy</string>
     <string name="proxy_apps_note">Ticked apps use your normal connection and skip ad blocking too.</string>
     <string name="save">Save</string>
+    <string name="proxy_status_engine">The tunnel engine couldn\'t start on this phone. Apps go direct, ad blocking still works.</string>
+    <string name="proxy_setting_own_none">Own proxies: none (using Setu)</string>
+    <string name="proxy_setting_own_set">Own proxies: in use instead of Setu</string>
+    <string name="proxy_own_title">Own proxies</string>
+    <string name="proxy_own_message">HTTP proxies that support CONNECT, one host:port per line. When set, Kavach uses these instead of Setu. Leave empty to use Setu.</string>
+    <string name="proxy_own_hint">203.0.113.10:8080</string>
+    <string name="proxy_own_invalid">No host:port lines found.</string>
 </resources>

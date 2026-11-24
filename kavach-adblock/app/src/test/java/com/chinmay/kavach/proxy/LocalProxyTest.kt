@@ -209,4 +209,76 @@ class LocalProxyTest {
         assertNull(LocalProxy.tlsRecordSize("GET".toByteArray()))
         assertNull(LocalProxy.readFirstPayload(ByteArrayInputStream(ByteArray(0))))
     }
+
+    @Test
+    fun firstPayloadIsEmptyWhenTheAppWaitsForTheServer() {
+        val input = object : java.io.InputStream() {
+            override fun read(): Int = throw java.net.SocketTimeoutException()
+            override fun read(b: ByteArray, off: Int, len: Int): Int = throw java.net.SocketTimeoutException()
+        }
+        assertEquals(0, LocalProxy.readFirstPayload(input)!!.size)
+    }
+
+    private fun socksRequest(vararg parts: ByteArray): ByteArrayInputStream =
+        ByteArrayInputStream(parts.fold(ByteArray(0)) { acc, p -> acc + p })
+
+    private fun bytes(vararg v: Int) = ByteArray(v.size) { v[it].toByte() }
+
+    @Test
+    fun parsesSocksConnectByNameAndIp() {
+        val out = java.io.ByteArrayOutputStream()
+        val name = "WWW.Google.com".toByteArray()
+        val byName = LocalProxy.readSocksRequest(
+            socksRequest(bytes(5, 1, 0), bytes(5, 1, 0, 3, name.size), name, bytes(1, 0xbb)),
+            out,
+        )
+        assertEquals(LocalProxy.Target("www.google.com", 443, connect = true), byName)
+        assertEquals(listOf<Byte>(5, 0), out.toByteArray().toList()) // no-auth chosen
+
+        val byIp = LocalProxy.readSocksRequest(
+            socksRequest(bytes(5, 2, 0, 2), bytes(5, 1, 0, 1, 142, 250, 183, 4, 0, 80)),
+            java.io.ByteArrayOutputStream(),
+        )
+        assertEquals(LocalProxy.Target("142.250.183.4", 80, connect = true), byIp)
+    }
+
+    @Test
+    fun refusesSocksUdpAndAuthOnly() {
+        val out = java.io.ByteArrayOutputStream()
+        val udp = LocalProxy.readSocksRequest(
+            socksRequest(bytes(5, 1, 0), bytes(5, 3, 0, 1, 0, 0, 0, 0, 0, 0)),
+            out,
+        )
+        assertNull(udp)
+        assertEquals(7, out.toByteArray()[3].toInt()) // second reply: command not supported
+
+        val authOut = java.io.ByteArrayOutputStream()
+        assertNull(LocalProxy.readSocksRequest(socksRequest(bytes(5, 1, 2)), authOut))
+        assertEquals(listOf<Byte>(5, -1), authOut.toByteArray().toList())
+    }
+
+    @Test
+    fun socksTunnelGoesThroughTheFreeProxy() {
+        val seen = mutableListOf<String>()
+        val upstream = fakeUpstream(seen)
+        val pool = UpstreamPool()
+        pool.replace(listOf(UpstreamPool.Entry(ProxyServer("127.0.0.1", upstream.localPort), 10, "198.51.100.2")))
+        val proxy = LocalProxy(pool).also { it.start() }
+        closeables += AutoCloseable { proxy.stop() }
+
+        Socket(InetAddress.getLoopbackAddress(), proxy.port).use { app ->
+            app.soTimeout = 10_000
+            val name = "example.com".toByteArray()
+            app.getOutputStream().write(bytes(5, 1, 0) + bytes(5, 1, 0, 3, name.size) + name + bytes(1, 0xbb))
+            val input = java.io.DataInputStream(app.getInputStream())
+            val greeting = ByteArray(2).also { input.readFully(it) }
+            assertEquals(listOf<Byte>(5, 0), greeting.toList())
+            val reply = ByteArray(10).also { input.readFully(it) }
+            assertEquals(0, reply[1].toInt())
+            app.getOutputStream().write("hello".toByteArray())
+            val echo = ByteArray(5).also { input.readFully(it) }
+            assertEquals("hello", echo.decodeToString())
+        }
+        assertEquals(listOf("CONNECT example.com:443 HTTP/1.1"), synchronized(seen) { seen.toList() })
+    }
 }

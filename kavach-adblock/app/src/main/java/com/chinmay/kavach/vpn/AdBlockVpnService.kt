@@ -8,7 +8,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
-import android.net.ProxyInfo
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
@@ -18,6 +17,7 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.chinmay.kavach.MainActivity
 import com.chinmay.kavach.R
+import com.chinmay.kavach.proxy.FullTunnel
 import com.chinmay.kavach.proxy.ProxyManager
 import com.chinmay.kavach.proxy.ProxySettings
 import kotlinx.coroutines.CoroutineScope
@@ -32,14 +32,17 @@ import kotlinx.coroutines.launch
  * address that exists only inside the tunnel, so every app's lookups arrive
  * here, while all other traffic keeps using the normal network at full speed.
  *
- * In proxy mode the VPN also hands apps an HTTP proxy: Kavach's own
- * loopback proxy, which blocks ad hosts and forwards the rest through free
- * proxies from Setu (see [ProxyManager]).
+ * In proxy mode it captures all traffic instead: the full tunnel hands every
+ * TCP connection to Kavach's loopback proxy, which blocks ad hosts and
+ * forwards the rest through free proxies from Setu (see [ProxyManager]).
  */
 class AdBlockVpnService : VpnService() {
 
+    @Volatile private var running = false
     @Volatile private var tun: ParcelFileDescriptor? = null
+    /** DNS-only mode's loop. Null while the full tunnel runs (proxy mode). */
     @Volatile private var tunnel: DnsTunnel? = null
+    @Volatile private var fullTunnel = false
     @Volatile private var proxy: ProxyManager? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var statusJob: Job? = null
@@ -50,7 +53,7 @@ class AdBlockVpnService : VpnService() {
                 stopVpn()
                 return START_NOT_STICKY
             }
-            ACTION_PROXY_RESTART -> if (tunnel != null) {
+            ACTION_PROXY_RESTART -> if (running) {
                 // Setting, Setu URL or token changed: start over with fresh proxies.
                 proxy?.stop()
                 proxy = null
@@ -58,11 +61,11 @@ class AdBlockVpnService : VpnService() {
                 applyProxySetting()
                 return START_NOT_STICKY
             }
-            ACTION_PROXY_APPS -> if (tunnel != null) {
+            ACTION_PROXY_APPS -> if (running) {
                 proxy?.currentPort?.let { establish(it) }
                 return START_NOT_STICKY
             }
-            ACTION_PROXY_NEXT -> if (tunnel != null) {
+            ACTION_PROXY_NEXT -> if (running) {
                 proxy?.next()
                 return START_NOT_STICKY
             }
@@ -75,7 +78,7 @@ class AdBlockVpnService : VpnService() {
     }
 
     private fun startVpn() {
-        if (tunnel != null) return
+        if (running) return
         try {
             goForeground()
         } catch (e: Exception) {
@@ -87,6 +90,7 @@ class AdBlockVpnService : VpnService() {
             stopVpn()
             return
         }
+        running = true
         AdBlockState.resetSession()
         AdBlockState.running.value = true
         observeProxyStatus()
@@ -94,69 +98,104 @@ class AdBlockVpnService : VpnService() {
     }
 
     /**
-     * Builds the tun interface. With [proxyPort], apps are also handed Kavach's
-     * local proxy (Android 10+), and the bypass apps are left out of the VPN.
+     * Builds the tun interface and starts what reads it. Without [socksPort]
+     * that's DNS-only mode: only the virtual DNS server is routed in, and
+     * [DnsTunnel] answers lookups. With [socksPort] (proxy mode) every app's
+     * traffic is routed in and the full tunnel ([FullTunnel]) sends each
+     * connection to Kavach's proxy on that port; bypass apps are left out.
+     *
      * Calling it again while running swaps the interface in place: Android
      * moves apps to the new one, then the old one is closed.
      */
     @Synchronized
-    private fun establish(proxyPort: Int?): Boolean {
+    private fun establish(socksPort: Int?): Boolean {
+        val fd = buildInterface(full = socksPort != null) ?: return false
+
+        val oldTun = tun
+        val oldDns = tunnel
+        if (fullTunnel) {
+            FullTunnel.stop()
+            fullTunnel = false
+        }
+        tunnel = null
+        tun = fd
+        if (socksPort != null) {
+            if (!FullTunnel.start(this, fd.fd, socksPort)) {
+                // Engine missing or broken: keep ad blocking going in DNS mode.
+                tun = null
+                closeQuietly(fd)
+                oldDns?.stop()
+                closeQuietly(oldTun)
+                establish(socksPort = null)
+                return false
+            }
+            fullTunnel = true
+        } else {
+            tunnel = DnsTunnel(this, fd).also { it.start() }
+        }
+        oldDns?.stop()
+        closeQuietly(oldTun)
+        return true
+    }
+
+    private fun buildInterface(full: Boolean): ParcelFileDescriptor? {
         val builder = Builder()
             .setSession(getString(R.string.app_name))
-            .addAddress(VPN_ADDRESS, 32)
-            .addDnsServer(VPN_DNS)
-            .addRoute(VPN_DNS, 32) // only the virtual DNS server is routed into the tunnel
-            .setBlocking(true)
             .setConfigureIntent(openAppIntent())
+        if (full) {
+            builder.setMtu(FullTunnel.MTU)
+                .addAddress(FullTunnel.ADDRESS_V4, 32)
+                .addAddress(FullTunnel.ADDRESS_V6, 128)
+                .addDnsServer(FullTunnel.DNS)
+                .addRoute("::", 0) // IPv6 goes in too, so it can't leak around the proxy
+            FullTunnel.ROUTES_V4.forEach { (address, prefix) -> builder.addRoute(address, prefix) }
+            // The engine expects a non-blocking fd (the default).
+        } else {
+            builder.addAddress(VPN_ADDRESS, 32)
+                .addDnsServer(VPN_DNS)
+                .addRoute(VPN_DNS, 32) // only the virtual DNS server is routed into the tunnel
+                .setBlocking(true)
+        }
         try {
-            // Our own traffic (blocklist downloads, DoH upstream, the proxies
-            // themselves) must skip the VPN, otherwise it would loop back into it.
+            // Our own traffic (blocklist downloads, DoH upstream, the free
+            // proxies) must skip the VPN, otherwise it would loop back into it.
             builder.addDisallowedApplication(packageName)
         } catch (e: PackageManager.NameNotFoundException) {
             Log.e(TAG, "Could not exclude own package", e)
-            return false
+            return null
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            builder.setMetered(false) // don't make Wi-Fi look metered to other apps
-            if (proxyPort != null) {
-                builder.setHttpProxy(ProxyInfo.buildDirectProxy(LOOPBACK, proxyPort, PROXY_EXCLUSIONS))
-                ProxySettings(this).bypassApps.forEach { pkg ->
-                    try {
-                        builder.addDisallowedApplication(pkg)
-                    } catch (_: PackageManager.NameNotFoundException) {
-                        // Not installed.
-                    }
+        if (full) {
+            ProxySettings(this).bypassApps.forEach { pkg ->
+                try {
+                    builder.addDisallowedApplication(pkg)
+                } catch (_: PackageManager.NameNotFoundException) {
+                    // Not installed.
                 }
             }
         }
-
-        val fd: ParcelFileDescriptor? = try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            builder.setMetered(false) // don't make Wi-Fi look metered to other apps
+        }
+        return try {
             builder.establish()
         } catch (e: Exception) {
             Log.e(TAG, "establish() failed", e)
             null
         }
-        if (fd == null) return false
+    }
 
-        val oldTunnel = tunnel
-        val oldTun = tun
-        tun = fd
-        tunnel = DnsTunnel(this, fd).also { it.start() }
-        oldTunnel?.stop()
+    private fun closeQuietly(fd: ParcelFileDescriptor?) {
         try {
-            oldTun?.close()
+            fd?.close()
         } catch (_: Exception) {
         }
-        return true
     }
 
     /** Starts or stops proxy mode to match the saved setting. */
     private fun applyProxySetting() {
         val want = ProxySettings(this).enabled
         if (want && proxy == null) {
-            proxy = ProxyManager(this) { port ->
-                if (tunnel != null && !establish(port)) Log.w(TAG, "Could not re-establish for proxy change")
-            }.also { it.start() }
+            proxy = ProxyManager(this) { port -> running && establish(port) }.also { it.start() }
         } else if (!want && proxy != null) {
             proxy?.stop()
             proxy = null
@@ -172,17 +211,21 @@ class AdBlockVpnService : VpnService() {
     }
 
     private fun stopVpn() {
+        running = false
         proxy?.stop()
         proxy = null
         statusJob?.cancel()
         statusJob = null
-        tunnel?.stop()
-        tunnel = null
-        try {
-            tun?.close()
-        } catch (_: Exception) {
+        synchronized(this) {
+            if (fullTunnel) {
+                FullTunnel.stop()
+                fullTunnel = false
+            }
+            tunnel?.stop()
+            tunnel = null
+            closeQuietly(tun)
+            tun = null
         }
-        tun = null
         AdBlockState.running.value = false
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -195,7 +238,7 @@ class AdBlockVpnService : VpnService() {
     }
 
     override fun onDestroy() {
-        if (tunnel != null) stopVpn()
+        if (running) stopVpn()
         scope.cancel()
         super.onDestroy()
     }
@@ -253,7 +296,7 @@ class AdBlockVpnService : VpnService() {
     }
 
     private fun updateNotification(proxyState: AdBlockState.Proxy) {
-        if (tunnel == null) return
+        if (!running) return
         try {
             getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, buildNotification(proxyState))
         } catch (_: SecurityException) {
@@ -281,15 +324,6 @@ class AdBlockVpnService : VpnService() {
         // Private addresses that exist only inside the tunnel.
         private const val VPN_ADDRESS = "10.111.222.1"
         private const val VPN_DNS = "10.111.222.53"
-        private const val LOOPBACK = "127.0.0.1"
-
-        /** Hosts apps reach directly even in proxy mode: this phone and the local network. */
-        private val PROXY_EXCLUSIONS = listOf(
-            "localhost", "*.local", "127.*", "10.*", "192.168.*",
-            "172.16.*", "172.17.*", "172.18.*", "172.19.*", "172.2*", "172.30.*", "172.31.*",
-            "169.254.*",
-        )
-
         fun start(ctx: Context) {
             ContextCompat.startForegroundService(
                 ctx,

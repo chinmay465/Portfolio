@@ -5,7 +5,7 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URI
 
-/** One HTTP proxy from Setu's pool. Hosts are IPv4 literals, so using one needs no DNS lookup. */
+/** One HTTP proxy: from Setu's pool (IPv4 literals) or the user's own list. */
 data class ProxyServer(
     val host: String,
     val port: Int,
@@ -71,6 +71,20 @@ class SetuClient(
             val host = runCatching { URI(url).host }.getOrNull()
             return if (host.isNullOrEmpty()) null else url
         }
+
+        private val LIST_ENTRY = Regex("""^(?:https?://)?([A-Za-z0-9.-]+):(\d{1,5})$""")
+
+        /** Parses `host:port` lines (comments with #, blank lines and junk skipped). */
+        fun parseList(text: String): List<ProxyServer> =
+            text.lineSequence()
+                .map { it.substringBefore('#').trim() }
+                .mapNotNull { LIST_ENTRY.matchEntire(it) }
+                .mapNotNull { m ->
+                    val port = m.groupValues[2].toInt()
+                    if (port in 1..65_535) ProxyServer(m.groupValues[1].lowercase(), port) else null
+                }
+                .distinctBy { it.address }
+                .toList()
 
         /** Parses Setu's `GET /api/pool` snapshot, keeping its best-first order. */
         fun parsePool(json: String): List<ProxyServer> {

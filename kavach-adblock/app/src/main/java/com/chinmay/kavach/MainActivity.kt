@@ -360,6 +360,7 @@ class MainActivity : AppCompatActivity() {
                         AdBlockState.Proxy.Reason.AUTH -> R.string.proxy_status_auth
                         AdBlockState.Proxy.Reason.SETU_UNREACHABLE -> R.string.proxy_status_unreachable
                         AdBlockState.Proxy.Reason.NONE_WORKING -> R.string.proxy_status_none
+                        AdBlockState.Proxy.Reason.ENGINE -> R.string.proxy_status_engine
                     },
                 )
             }
@@ -402,6 +403,13 @@ class MainActivity : AppCompatActivity() {
             ),
             getString(R.string.proxy_setting_rotate, rotateLabel(proxySettings.rotateMinutes)),
             getString(R.string.proxy_setting_apps, installedBypassCount()),
+            getString(
+                if (proxySettings.customProxies.isBlank()) {
+                    R.string.proxy_setting_own_none
+                } else {
+                    R.string.proxy_setting_own_set
+                },
+            ),
         )
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.proxy_settings)
@@ -411,6 +419,7 @@ class MainActivity : AppCompatActivity() {
                     1 -> promptToken(onDone = { AdBlockVpnService.restartProxy(this) }, onCancel = {})
                     2 -> chooseRotate()
                     3 -> chooseBypassApps()
+                    4 -> promptOwnProxies()
                 }
             }
             .setPositiveButton(android.R.string.ok, null)
@@ -464,6 +473,30 @@ class MainActivity : AppCompatActivity() {
                     Toast.makeText(this, R.string.proxy_url_invalid, Toast.LENGTH_LONG).show()
                 } else {
                     proxySettings.setuUrl = url
+                    AdBlockVpnService.restartProxy(this)
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun promptOwnProxies() {
+        val (builder, input) = textDialog(
+            R.string.proxy_own_title,
+            R.string.proxy_own_message,
+            proxySettings.customProxies,
+            getString(R.string.proxy_own_hint),
+            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS,
+        )
+        input.isSingleLine = false
+        input.minLines = 3
+        builder
+            .setPositiveButton(R.string.save) { _, _ ->
+                val text = input.text.toString()
+                if (text.isNotBlank() && SetuClient.parseList(text).isEmpty()) {
+                    Toast.makeText(this, R.string.proxy_own_invalid, Toast.LENGTH_LONG).show()
+                } else {
+                    proxySettings.customProxies = text
                     AdBlockVpnService.restartProxy(this)
                 }
             }

@@ -23,6 +23,11 @@ class ProxySettings(ctx: Context) {
         get() = prefs.getString(KEY_TOKEN, null).orEmpty()
         set(value) = prefs.edit().putString(KEY_TOKEN, value.trim()).apply()
 
+    /** Your own proxies, `host:port` one per line. When set, Setu isn't used. */
+    var customProxies: String
+        get() = prefs.getString(KEY_CUSTOM, null).orEmpty()
+        set(value) = prefs.edit().putString(KEY_CUSTOM, value.trim()).apply()
+
     /** 0 = switch only when the current proxy fails. */
     var rotateMinutes: Int
         get() = prefs.getInt(KEY_ROTATE, 0)
@@ -40,8 +45,9 @@ class ProxySettings(ctx: Context) {
         private const val KEY_TOKEN = "setu_token"
         private const val KEY_ROTATE = "rotate_minutes"
         private const val KEY_BYPASS = "bypass_apps"
+        private const val KEY_CUSTOM = "custom_proxies"
 
-        /** VpnService.Builder.setHttpProxy needs Android 10. */
+        /** The bundled tunnel engine is built for Android 10 and newer. */
         val supported: Boolean get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
 
         val ROTATE_CHOICES = intArrayOf(0, 5, 15, 30, 60)

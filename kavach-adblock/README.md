@@ -2,7 +2,7 @@
 
 Kavach blocks ads and trackers in every app on the phone by running a local VPN. It doesn't need root and doesn't send your traffic to any outside server.
 
-Optional **proxy mode** (Android 10+) also reroutes apps' web traffic through free proxies from [Setu](../setu-proxy-hub), switching to another proxy when one fails, while ad blocking keeps working.
+Optional **proxy mode** (Android 10+) reroutes every app's traffic through free proxies from [Setu](../setu-proxy-hub), switching to another proxy when one fails, while ad blocking keeps working.
 
 ## How it works
 
@@ -35,15 +35,18 @@ Optional **proxy mode** (Android 10+) also reroutes apps' web traffic through fr
 Turn on **Proxy mode** under the main button. The first time, Kavach asks for Setu's token (`SETU_TOKEN` from the `setu-proxy-hub` service's **Environment** tab on Render).
 
 ```
- any app ──web traffic──▶ [ Kavach loopback proxy 127.0.0.1 ] ──ad host?──▶ 403 (blocked)
-                                     │
-                                     └──allowed──▶ free proxy from Setu ──▶ site
+ any app ──all TCP──▶ [ Kavach VPN, full tunnel ] ──SOCKS5──▶ [ Kavach proxy 127.0.0.1 ] ──ad host?──▶ refused
+                                                                        │
+                                                                        └──allowed──▶ free proxy (HTTP CONNECT) ──▶ site
 ```
 
-1. Kavach gets the validated pool from Setu (`GET /api/pool`). A sleeping Render free instance takes up to a minute to wake.
-2. It tests up to 40 of them **from the phone**, keeps up to 8 that work, and orders them by latency. Each test is two HTTPS requests through the proxy: Google's `generate_204` (many free proxies relay other sites but get reset by Google, which leaves Google Search showing "No internet") and Cloudflare's trace page for the exit IP. TLS is verified, so a proxy that intercepts HTTPS fails.
-3. The VPN hands every app Kavach's own proxy on `127.0.0.1:28283` (a fixed port, so apps holding an older proxy setting keep working after a restart). That proxy blocks ad hosts (with a proxy set, apps don't do their own DNS lookups, so blocking happens here) and forwards the rest to the current free proxy.
-4. If a free proxy fails, or opens the tunnel but the site never answers, Kavach replays the app's first bytes (the TLS ClientHello) on the next proxy, so the app doesn't see the failure. A proxy that fails twice in a row is dropped. The status line counts app connections that reached Kavach's proxy, got through, and failed. **Test** sends a Google request along the same path apps use and says which hop breaks. Every 60 s Kavach re-tests the current proxy and tops the pool up from Setu when fewer than 3 are left. With none working, apps go direct (still ad-blocked by DNS) and Kavach keeps retrying.
+1. Kavach gets the validated pool from Setu (`GET /api/pool`), or uses **Own proxies** if you've listed some. A sleeping Render free instance takes up to a minute to wake.
+2. It tests up to 40 of them **from the phone**, keeps up to 8 that work, and orders them by latency. Each test is two HTTPS requests through the proxy: Google's `generate_204` (many free proxies relay other sites but get reset by Google) and Cloudflare's trace page for the exit IP. TLS is verified, so a proxy that intercepts HTTPS fails.
+3. The VPN switches to a **full tunnel**: every app's traffic goes into it, whether or not the app supports proxies. [hev-socks5-tunnel](https://github.com/heiher/hev-socks5-tunnel), a userspace TCP/IP stack built into the APK, turns each TCP connection into a SOCKS5 request to Kavach's proxy on `127.0.0.1:28283`.
+4. DNS lookups are answered inside the tunnel with placeholder addresses, so each request reaches Kavach with the real host name. Kavach blocks ad hosts by that name and sends the rest to the current free proxy with `CONNECT host:port`. The free proxy does the real lookup, so no DNS leaves the phone directly.
+5. If a free proxy fails, or opens the tunnel but the site never answers, Kavach replays the app's first bytes (the TLS ClientHello) on the next proxy, so the app doesn't see the failure. A proxy that fails twice in a row is dropped. Every 60 s Kavach re-tests the current proxy and tops the pool up when fewer than 3 are left. With none working, the VPN drops back to DNS-only mode (apps go direct, still ad-blocked) and Kavach keeps retrying.
+
+The status line counts app connections that reached Kavach's proxy, got through, and failed. **Test** sends a Google request through Kavach's proxy and a free proxy and says which hop breaks.
 
 **Proxy settings:**
 
@@ -51,18 +54,21 @@ Turn on **Proxy mode** under the main button. The first time, Kavach asks for Se
 - **Setu token**: stored in Kavach's private storage, never backed up. Use **No token** for a Setu running without one.
 - **Switch proxy**: only when it fails (default), or every 5/15/30/60 min. **Switch proxy** on the main screen or in the notification moves to the next proxy at once.
 - **Apps that skip the proxy**: Google Pay, PhonePe, Paytm, Paytm Money, BHIM and the main bank apps are ticked by default. Skipped apps use your normal connection and also skip ad blocking, because Android can only leave a whole app out of a VPN.
+- **Own proxies**: `host:port` lines of HTTP proxies that support CONNECT. When set, Kavach uses them instead of Setu.
 
 **What to know:**
 
-- HTTPS goes through as a `CONNECT` tunnel, so the free proxy sees which site you open but not what you send. Plain HTTP is readable by the proxy's operator.
-- Apps that ignore Android's proxy setting (some games, apps with their own networking, non-HTTP traffic such as UDP or QUIC) go direct as before. Chrome and most apps follow it.
+- TLS goes through untouched: the free proxy sees which site you open, not what you send. Plain HTTP is readable by the proxy's operator, and many free proxies only allow CONNECT to port 443, so plain-HTTP sites may not load.
+- UDP can't go through an HTTP proxy, so it's dropped in proxy mode. Apps fall back to TCP (QUIC falls back to HTTPS). Calls and games that need UDP won't work while proxy mode is on.
+- Lookups only return IPv4 addresses, and IPv6 traffic is captured too, so nothing goes around the proxy over IPv6.
+- The local network (`10.*`, `192.168.*`, `172.16–31.*`) stays direct, so casting, printers and router pages keep working.
 - Free proxies are slow and short-lived. Expect lower speed than your normal connection.
 
 ## Privacy
 
 Kavach sees every domain your apps look up, so it's built to keep none of it:
 
-- **Nothing is stored or uploaded.** There are no analytics, ads or crash-reporting SDKs, and no server of our own. The only network calls are DoH lookups and the blocklist download, plus, only with proxy mode on, Setu's pool and the proxy tests.
+- **Nothing is stored or uploaded.** There are no analytics, ads or crash-reporting SDKs, and no server of our own. The only network calls are DoH lookups and the blocklist download, plus, only with proxy mode on, Setu's pool and the proxy tests. The only native code is the tunnel engine, built from source in CI at a pinned release.
 - **Lookups are encrypted.** With plain DNS, your Wi-Fi owner or carrier can read every domain you look up. With DoH they only see a connection to Cloudflare or Quad9, and both state they don't store your IP address with your queries. There is no plaintext fallback.
 - **Nothing reaches the logs.** Domains are never written to logcat, files or the database. By default the only domain record is the "Recently blocked" list (the last 50 *blocked* domains, in memory only), which disappears when the app process ends. Allowed lookups are only counted.
 - **Live lookups are opt-in.** The switch is off on every app start. While it's on, the last 500 looked-up domains are kept in memory so you can see them, and turning it off wipes them. They're never saved to storage, and they leave the app only when you tap **Export** and pick where to share them.
@@ -71,13 +77,14 @@ Kavach sees every domain your apps look up, so it's built to keep none of it:
 - **No backups.** `allowBackup=false` plus data-extraction rules keep the allowlist out of cloud backups and phone-to-phone transfers. Cleartext HTTP is disabled.
 - **A generic User-Agent.** Requests send `Kavach` instead of Android's default, which names your phone model and Android version.
 
-CI enforces this on every build: `scripts/privacy-check.sh` inspects the final APK and fails if it gains a permission, an exported component, code from a tracking SDK, a network endpoint that hasn't been reviewed, or a listening socket other than the loopback-only proxy.
+CI enforces this on every build: `scripts/privacy-check.sh` inspects the final APK and fails if it gains a permission, an exported component, code from a tracking SDK, a native library other than the tunnel engine, a network endpoint that hasn't been reviewed, or a listening socket other than the loopback-only proxy. A second workflow (`kavach-e2e.yml`) boots an emulator and checks that a proxy-unaware client is routed through Kavach and a proxy, and that ad hosts are stopped.
 
 ## Build
 
-Requirements: Android Studio (Ladybug or newer) or JDK 17 + Android SDK 35.
+Requirements: Android Studio (Ladybug or newer) or JDK 17 + Android SDK 35, plus the Android NDK for the tunnel engine.
 
 ```bash
+bash scripts/build-tunnel.sh   # tunnel engine via the NDK (needs ANDROID_NDK_HOME)
 ./gradlew assembleDebug        # APK → app/build/outputs/apk/debug/app-debug.apk
 ./gradlew testDebugUnitTest    # packet, blocklist and proxy-mode unit tests
 ```
@@ -95,7 +102,9 @@ Requirements: Android Studio (Ladybug or newer) or JDK 17 + Android SDK 35.
 | `vpn/Blocklist.kt` | Loads, downloads and allowlists domains |
 | `vpn/AdBlockState.kt` | StateFlows shared by the service and the UI |
 | `proxy/ProxyManager.kt` | Proxy mode: fetches and tests proxies, health checks, rotation, failover to direct |
-| `proxy/LocalProxy.kt` | Loopback HTTP proxy handed to apps: blocks ad hosts, forwards to the current free proxy |
+| `proxy/FullTunnel.kt` | Proxy mode's full tunnel: routes, DNS mapping and the engine config |
+| `proxy/TunnelNative.kt` | JNI binding for hev-socks5-tunnel |
+| `proxy/LocalProxy.kt` | Loopback SOCKS5/HTTP proxy: blocks ad hosts, forwards to the current free proxy with failover |
 | `proxy/UpstreamPool.kt` | Working proxies, fastest first; drops ones that keep failing |
 | `proxy/SetuClient.kt` | Reads Setu's `/api/pool` |
 | `proxy/ProxyChecker.kt` | Tests a proxy from the phone and reads its exit IP |
@@ -128,7 +137,7 @@ Like any launcher icon, other apps can start these two entries too. They only sw
 - **Chrome "Secure DNS"** and some apps use their own DNS-over-HTTPS, which bypasses the VPN. Turn off Secure DNS in Chrome settings.
 - **YouTube, Instagram and Google Search/Discover ads** come from the same domains as the real content, so DNS blocking can't remove them without breaking the app. Video ads stitched into a live stream (common in live sport) can't be removed either.
 - Only one VPN can run at a time. Starting another VPN app turns Kavach off.
-- Proxy mode needs Android 10 or newer, the first Android version that lets a VPN set a proxy for apps.
+- Proxy mode needs Android 10 or newer (the tunnel engine is built for it).
 - DNS over TCP isn't handled. It's rare and only used for oversized answers.
 - **Hotel or airport Wi-Fi sign-in pages:** DoH can't connect until you've signed in, so turn Kavach off, sign in, then turn it back on. The same applies on networks that block Cloudflare and Quad9.
 
@@ -137,3 +146,7 @@ Like any launcher icon, other apps can start these two entries too. They only sw
 - A Quick Settings tile to toggle from the notification shade
 - Extra blocklist sources (AdGuard DNS filter, OISD) chosen in settings
 - A per-app log of which app asked for which domain, using `ConnectivityManager.getConnectionOwnerUid`
+
+## Credits
+
+Proxy mode's tunnel engine is [hev-socks5-tunnel](https://github.com/heiher/hev-socks5-tunnel) by hev (MIT), with lwIP (BSD), hev-task-system (MIT) and yaml (MIT).
