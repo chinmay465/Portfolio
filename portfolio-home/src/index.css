@@ -5023,3 +5023,46 @@ body.menu-open {
   place-items: center;
   color: var(--sd-ink);
 }
+.sd-editbar {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+.sd-editbar .sd-link {
+  font-weight: 600;
+  color: var(--sd-cyan);
+}
+.sd-selectall {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--sd-ink);
+}
+.sd-danger {
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+  color: #ff6b8b;
+  box-shadow: 0 0 0 1px rgba(255, 107, 139, 0.5) inset;
+}
+.sd-danger:disabled {
+  opacity: 0.4;
+}
+.sd-check {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0 2px 0 14px;
+  accent-color: var(--sd-cyan);
+}
+.sd-pagedelete {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  z-index: 2;
+}

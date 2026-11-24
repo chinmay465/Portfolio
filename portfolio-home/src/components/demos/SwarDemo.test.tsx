@@ -157,4 +157,20 @@ describe('Swar demo', () => {
     fireEvent.click(within(demo()).getAllByRole('button', { name: 'Previous' })[0])
     expect(mini()?.getAttribute('aria-label')).toBe('Open the player: Monsoon Drive')
   })
+
+  it('deletes chosen downloads in edit mode', () => {
+    render(<SwarDemo reduced />)
+    fireEvent.click(screen.getByRole('button', { name: /^Salt & Sand/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Download all' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Library' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Downloads/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Salt & Sand' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete (1)' }))
+    expect(screen.getByRole('status').textContent).toBe('Deleted 3 songs')
+    expect(screen.queryByRole('button', { name: /^Salt & Sand/ })).toBeNull()
+    // The song downloaded on its own is still there.
+    expect(screen.getByRole('button', { name: 'Play Chai at Dawn by Lo-fi Mumbai' })).toBeTruthy()
+  })
 })

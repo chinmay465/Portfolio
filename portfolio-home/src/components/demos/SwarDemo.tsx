@@ -69,6 +69,7 @@ const PATHS = {
   download: 'M12 4.5v10M7.5 10.5L12 15l4.5-4.5M5.5 19.5h13',
   done: 'M5.5 12.5l4 4L18.5 7.5',
   refresh: 'M19 12a7 7 0 1 1-2.1-5M19 4.5V8h-3.5',
+  trash: 'M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12M10.5 11v5M13.5 11v5',
 } as const
 type IconName = keyof typeof PATHS
 const FILLED: IconName[] = ['play', 'pause', 'next', 'prev']
@@ -132,6 +133,20 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
   const [asking, setAsking] = useState<{ ids: string[]; what: string } | null>(null)
   /** Albums and playlists downloaded as a whole: kept together in Downloads. */
   const [groups, setGroups] = useState<Record<string, DlGroup>>({})
+  /** Downloads' edit mode: the albums ("g:") and songs ("s:") ticked for deleting. */
+  const [editing, setEditing] = useState(false)
+  const [picked, setPicked] = useState<Set<string>>(() => new Set())
+  const togglePick = (k: string) =>
+    setPicked((p) => {
+      const n = new Set(p)
+      if (n.has(k)) n.delete(k)
+      else n.add(k)
+      return n
+    })
+  const stopEditing = () => {
+    setEditing(false)
+    setPicked(new Set())
+  }
 
   const [expand, setExpand] = useState(0)
   const [dragging, setDragging] = useState(false)
@@ -328,7 +343,10 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
     setPages((s) => [...s, p])
     setExpand(0)
   }
-  const back = () => setPages((s) => s.slice(0, -1))
+  const back = () => {
+    stopEditing()
+    setPages((s) => s.slice(0, -1))
+  }
   const switchTab = (t: Tab) => {
     setTab(t)
     setPages([])
@@ -669,12 +687,46 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
     const grouped = new Set(shown.flatMap((g) => g.ids))
     const singles = done.filter((id) => !grouped.has(id))
     const loose = pending.filter((id) => !grouped.has(id))
+    const every = [...shown.map((g) => `g:${g.key}`), ...singles.map((id) => `s:${id}`), ...loose.map((id) => `s:${id}`)]
+    const allPicked = every.length > 0 && every.every((k) => picked.has(k))
+    const check = (k: string, label: string) => (
+      <input type="checkbox" className="sd-check" checked={picked.has(k)} onChange={() => togglePick(k)} aria-label={`Select ${label}`} />
+    )
+    const deletePicked = () => {
+      const ids = [...picked].flatMap((k) => (k.startsWith('g:') ? (groups[k.slice(2)]?.ids ?? []) : [k.slice(2)]))
+      ids.forEach(removeDownload)
+      setGroups((g) => Object.fromEntries(Object.entries(g).filter(([key]) => !picked.has(`g:${key}`))))
+      say(`Deleted ${ids.filter((id) => downloads[id] !== undefined).length} songs`)
+      stopEditing()
+    }
     pageView = (
       <>
+        {(done.length > 0 || pending.length > 0) && (
+          <div className="sd-editbar">
+            {editing ? (
+              <>
+                <label className="sd-selectall">
+                  <input type="checkbox" className="sd-check" checked={allPicked} onChange={() => setPicked(allPicked ? new Set() : new Set(every))} />
+                  Select all
+                </label>
+                <button type="button" className="sd-danger" disabled={!picked.size} onClick={deletePicked}>
+                  Delete{picked.size ? ` (${picked.size})` : ''}
+                </button>
+                <button type="button" className="sd-link" onClick={stopEditing}>
+                  Done
+                </button>
+              </>
+            ) : (
+              <button type="button" className="sd-link" onClick={() => setEditing(true)}>
+                Edit
+              </button>
+            )}
+          </div>
+        )}
         {songPage('Downloads', `${done.length} songs · play offline`, 190, [], {
           empty: done.length || pending.length ? '' : 'Long-press a song or open an album and tap the download button.',
         })}
-        {done.length > 0 && (
+        {done.length > 0 && !editing && (
           <div className="sd-actions">
             <button type="button" className="sd-primary" onClick={() => playList(done)}>
               <Icon name="play" size={16} /> Play
@@ -687,17 +739,24 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
         {shown.length > 0 && <p className="sd-strap">Albums & playlists</p>}
         {shown.map((g) => {
           const have = g.ids.filter(isDownloaded).length
-          const left = g.ids.length - have
+          const left = g.ids.filter((id) => downloads[id] !== undefined && downloads[id] < 100).length
           return (
-            <button key={g.key} type="button" className="sd-row-main sd-listitem" onClick={() => open({ kind: 'dlgroup', key: g.key })}>
-              <Art hue={g.hue} />
-              <span className="sd-row-text">
-                <span className="sd-row-title">{g.title}</span>
-                <span className="sd-row-sub">
-                  {g.isAlbum ? 'Album' : 'Playlist'} • {have} songs{left > 0 ? ` • ${left} downloading` : ''}
+            <div key={g.key} className="sd-row">
+              {editing && check(`g:${g.key}`, g.title)}
+              <button
+                type="button"
+                className="sd-row-main sd-listitem"
+                onClick={() => (editing ? togglePick(`g:${g.key}`) : open({ kind: 'dlgroup', key: g.key }))}
+              >
+                <Art hue={g.hue} />
+                <span className="sd-row-text">
+                  <span className="sd-row-title">{g.title}</span>
+                  <span className="sd-row-sub">
+                    {g.isAlbum ? 'Album' : 'Playlist'} • {have} songs{left > 0 ? ` • ${left} downloading` : ''}
+                  </span>
                 </span>
-              </span>
-            </button>
+              </button>
+            </div>
           )
         })}
         {loose.length > 0 && <p className="sd-strap">In progress</p>}
@@ -705,6 +764,7 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
           const x = songById(id)
           return (
             <div key={id} className="sd-row">
+              {editing && check(`s:${id}`, x.title)}
               <span className="sd-row-main">
                 <Art hue={x.hue} />
                 <span className="sd-row-text">
@@ -720,7 +780,22 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
           )
         })}
         {singles.length > 0 && <p className="sd-strap">Songs</p>}
-        {singles.map((id, i) => songRow(songById(id), { list: singles, i }))}
+        {singles.map((id, i) =>
+          editing ? (
+            <div key={id} className="sd-row">
+              {check(`s:${id}`, songById(id).title)}
+              <button type="button" className="sd-row-main" onClick={() => togglePick(`s:${id}`)}>
+                <Art hue={songById(id).hue} />
+                <span className="sd-row-text">
+                  <span className="sd-row-title">{songById(id).title}</span>
+                  <span className="sd-row-sub">{songById(id).artist}</span>
+                </span>
+              </button>
+            </div>
+          ) : (
+            songRow(songById(id), { list: singles, i })
+          ),
+        )}
       </>
     )
   } else if (page?.kind === 'dlgroup') {
@@ -733,11 +808,23 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
       return [...(shuffled ? mix(ids) : ids), ...mix(rest)]
     }
     pageView = g
-      ? songPage(g.title, `${g.isAlbum ? 'Album' : 'Playlist'} • ${ids.length} songs • downloaded`, g.hue, ids, {
-          numbered: g.isAlbum,
-          empty: 'Not downloaded any more.',
-          queue,
-        })
+      ? (
+          <>
+            <button
+              type="button"
+              className="sd-iconbtn sd-pagedelete"
+              onClick={() => setAsking({ ids: g.ids, what: g.isAlbum ? 'album' : 'playlist' })}
+              aria-label={g.ids.some((id) => downloads[id] !== undefined && downloads[id] < 100) ? 'Stop downloading' : 'Remove downloads'}
+            >
+              <Icon name={g.ids.some((id) => downloads[id] !== undefined && downloads[id] < 100) ? 'close' : 'trash'} size={18} />
+            </button>
+            {songPage(g.title, `${g.isAlbum ? 'Album' : 'Playlist'} • ${ids.length} songs • downloaded`, g.hue, ids, {
+              numbered: g.isAlbum,
+              empty: 'Not downloaded any more.',
+              queue,
+            })}
+          </>
+        )
       : null
   } else if (page?.kind === 'shelf') {
     const items =
