@@ -25,7 +25,7 @@ fi
 C=$WORK/jni/src/core/src/hev-socks5-client.c
 grep -q "connect errno" "$C" || {
   sed -i 's|LOG_I ("%p socks5 client connect", self);|LOG_I ("%p socks5 client connect errno %d", self, errno);|' "$C"
-  sed -i '0,/#include/s//#include <errno.h>\n#include/' "$C"
+  sed -i '1i #include <errno.h>' "$C"
 }
 
 # Register the JNI methods on com.chinmay.kavach.proxy.TunnelNative.
