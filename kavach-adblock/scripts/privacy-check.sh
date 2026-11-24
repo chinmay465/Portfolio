@@ -18,6 +18,7 @@ WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 "$APKANALYZER" manifest print "$APK" > "$WORK/manifest.xml"
 unzip -q -o "$APK" 'classes*.dex' -d "$WORK/dex"
+unzip -Z1 "$APK" | grep '^lib/.*\.so$' > "$WORK/native-libs.txt" || true
 cat "$WORK"/dex/classes*.dex | strings -n 6 > "$WORK/dex-strings.txt"
 
 python3 - "$WORK" <<'PY'
@@ -93,12 +94,26 @@ if found:
     errors.append("Tracking/third-party SDK code found: " + ", ".join(found))
 report.append("trackerSDKs=" + (",".join(found) or "none"))
 
+# 4b. Native code: only the reviewed tunnel engine (hev-socks5-tunnel, MIT).
+libs = [l.strip() for l in open(os.path.join(work, "native-libs.txt")) if l.strip()]
+unknown_libs = sorted({l.rsplit("/", 1)[-1] for l in libs} - {"libhev-socks5-tunnel.so"})
+if unknown_libs:
+    errors.append("Unreviewed native libraries: " + ", ".join(unknown_libs))
+if not any(l.endswith("arm64-v8a/libhev-socks5-tunnel.so") for l in libs):
+    errors.append("Tunnel engine missing for arm64-v8a (run scripts/build-tunnel.sh)")
+report.append("nativeLibs=" + ",".join(sorted({l.split("/")[1] for l in libs})))
+
 # 5. Network endpoints written in Kavach's own source code
 allowed_urls = {
     "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts",
     "https://1.1.1.1/dns-query",
     "https://1.0.0.1/dns-query",
     "https://dns.quad9.net/dns-query",
+    # Proxy mode (off by default): Setu's pool, and the on-phone proxy tests
+    # (sent through the proxy being tested, never directly).
+    "https://setu-proxy-hub.onrender.com",
+    "https://1.1.1.1/cdn-cgi/trace",
+    "https://www.google.com/generate_204",
 }
 src_urls = set()
 for d, _, files in os.walk("app/src/main/java"):
@@ -112,11 +127,24 @@ if any("http://" in u for u in src_urls):
     errors.append("Plaintext http:// endpoint in source")
 
 # Listening sockets would let other apps on the device or network connect in.
+# One exception: proxy mode's LocalProxy, which must bind to loopback only.
 for d, _, files in os.walk("app/src/main/java"):
     for f in files:
         text = open(os.path.join(d, f)).read()
-        if re.search(r"\b(ServerSocket|LocalServerSocket|DatagramSocket\s*\(\s*\d)", text):
-            errors.append(f"Listening socket in {f}")
+        if not re.search(r"\b(ServerSocket|LocalServerSocket|DatagramSocket\s*\(\s*\d)", text):
+            continue
+        if f == "LocalProxy.kt":
+            # Every bind() must use LOOPBACK_V4 (127.0.0.1), and no ServerSocket may bind in its constructor.
+            ctor_args = [a.strip() for a in re.findall(r"ServerSocket\(([^)]*)\)", text)]
+            binds = re.findall(r"\bbind\(([^\n]*)", text)
+            loopback_v4 = re.search(r"LOOPBACK_V4: InetAddress = InetAddress\.getByAddress\(byteArrayOf\(127, 0, 0, 1\)\)", text)
+            if (binds and loopback_v4 and all("LOOPBACK_V4" in b for b in binds)
+                    and all(a == "" for a in ctor_args) and "LocalServerSocket" not in text):
+                report.append("listeners=LocalProxy(loopback)")
+                continue
+            errors.append("LocalProxy must bind its ServerSocket to 127.0.0.1 (LOOPBACK_V4) only")
+            continue
+        errors.append(f"Listening socket in {f}")
 
 print("::notice title=Kavach privacy check::" + " | ".join(report))
 for e in errors:

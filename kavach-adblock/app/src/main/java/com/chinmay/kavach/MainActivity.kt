@@ -18,6 +18,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.chinmay.kavach.databinding.ActivityMainBinding
+import com.chinmay.kavach.proxy.ProxyChecker
+import com.chinmay.kavach.proxy.ProxySettings
+import com.chinmay.kavach.proxy.SetuClient
 import com.chinmay.kavach.vpn.AdBlockState
 import com.chinmay.kavach.vpn.AdBlockVpnService
 import com.chinmay.kavach.vpn.Blocklist
@@ -35,6 +38,10 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var listAdapter: ArrayAdapter<String>
+    private lateinit var proxySettings: ProxySettings
+
+    /** True while the code (not the user) flips the proxy switch. */
+    private var settingProxySwitch = false
     private val numbers = NumberFormat.getIntegerInstance()
 
     /** What each row of the list stands for, in the same order as the adapter. */
@@ -84,6 +91,16 @@ class MainActivity : AppCompatActivity() {
         }
         binding.exportList.setOnClickListener { exportList() }
 
+        proxySettings = ProxySettings(this)
+        setProxySwitch(proxySettings.enabled)
+        binding.proxySwitch.isEnabled = ProxySettings.supported
+        binding.proxySwitch.setOnCheckedChangeListener { _, checked ->
+            if (!settingProxySwitch) onProxySwitch(checked)
+        }
+        binding.proxyNext.setOnClickListener { AdBlockVpnService.nextProxy(this) }
+        binding.proxySettings.setOnClickListener { showProxySettings() }
+        binding.proxyTest.setOnClickListener { testProxy() }
+
         observeState()
 
         lifecycleScope.launch {
@@ -102,6 +119,16 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch { AdBlockState.running.collect(::renderRunning) }
+                launch {
+                    combine(
+                        AdBlockState.running,
+                        AdBlockState.proxy,
+                        AdBlockState.proxyReceived,
+                        AdBlockState.proxyOk,
+                        AdBlockState.proxyFailed,
+                    ) { r, p, _, _, _ -> r to p }
+                        .collect { (running, proxy) -> renderProxy(running, proxy) }
+                }
                 launch {
                     AdBlockState.blocked.collect { binding.blockedCount.text = numbers.format(it) }
                 }
@@ -269,6 +296,277 @@ class MainActivity : AppCompatActivity() {
 
     private fun toastWithRestartHint(action: String) {
         Toast.makeText(this, getString(R.string.restart_app_hint, action), Toast.LENGTH_LONG).show()
+    }
+
+    // ---- Proxy mode ----
+
+    private fun setProxySwitch(on: Boolean) {
+        settingProxySwitch = true
+        binding.proxySwitch.isChecked = on
+        settingProxySwitch = false
+    }
+
+    private fun onProxySwitch(on: Boolean) {
+        if (!on) {
+            proxySettings.enabled = false
+            AdBlockVpnService.restartProxy(this)
+            renderProxy(AdBlockState.running.value, AdBlockState.proxy.value)
+            return
+        }
+        // Setu on Render needs its token, so ask for it the first time.
+        if (proxySettings.token.isBlank()) {
+            promptToken(onDone = ::enableProxy, onCancel = { setProxySwitch(false) })
+        } else {
+            enableProxy()
+        }
+    }
+
+    private fun enableProxy() {
+        proxySettings.enabled = true
+        setProxySwitch(true)
+        if (AdBlockState.running.value) AdBlockVpnService.restartProxy(this) else requestStart()
+        renderProxy(AdBlockState.running.value, AdBlockState.proxy.value)
+    }
+
+    private fun renderProxy(running: Boolean, proxy: AdBlockState.Proxy) {
+        val enabled = proxySettings.enabled
+        binding.proxyNext.isEnabled = running && proxy is AdBlockState.Proxy.Active
+        binding.proxyTest.isEnabled = running && proxy is AdBlockState.Proxy.Active
+        binding.proxyStatus.text = when {
+            !ProxySettings.supported -> getString(R.string.proxy_status_unsupported)
+            !enabled -> getString(R.string.proxy_status_off)
+            !running -> getString(R.string.proxy_status_waiting)
+            else -> when (proxy) {
+                AdBlockState.Proxy.Off -> getString(R.string.proxy_status_fetching)
+                is AdBlockState.Proxy.Connecting ->
+                    if (proxy.total == 0) {
+                        getString(R.string.proxy_status_fetching)
+                    } else {
+                        getString(R.string.proxy_status_testing, proxy.tested, proxy.total)
+                    }
+                is AdBlockState.Proxy.Active -> getString(
+                    R.string.proxy_status_active,
+                    proxy.address,
+                    proxy.exitIp,
+                    proxy.latencyMs,
+                    proxy.poolSize,
+                    AdBlockState.proxyReceived.value,
+                    AdBlockState.proxyOk.value,
+                    AdBlockState.proxyFailed.value,
+                    proxy.localPort,
+                )
+                is AdBlockState.Proxy.Unavailable -> getString(
+                    when (proxy.reason) {
+                        AdBlockState.Proxy.Reason.AUTH -> R.string.proxy_status_auth
+                        AdBlockState.Proxy.Reason.SETU_UNREACHABLE -> R.string.proxy_status_unreachable
+                        AdBlockState.Proxy.Reason.NONE_WORKING -> R.string.proxy_status_none
+                        AdBlockState.Proxy.Reason.ENGINE -> R.string.proxy_status_engine
+                    },
+                )
+            }
+        }
+    }
+
+    /** Checks the whole path apps use: Kavach's loopback proxy → free proxy → Google. */
+    private fun testProxy() {
+        val active = AdBlockState.proxy.value as? AdBlockState.Proxy.Active
+        if (active == null) {
+            Toast.makeText(this, R.string.proxy_test_unavailable, Toast.LENGTH_SHORT).show()
+            return
+        }
+        binding.proxyTest.isEnabled = false
+        Toast.makeText(this, R.string.proxy_test_running, Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) { ProxyChecker.selfTest(active.localPort) }
+            binding.proxyTest.isEnabled = AdBlockState.proxy.value is AdBlockState.Proxy.Active
+            val message = when (result) {
+                is ProxyChecker.SelfTest.Ok -> getString(R.string.proxy_test_ok, result.latencyMs)
+                ProxyChecker.SelfTest.NotListening -> getString(R.string.proxy_test_not_listening)
+                ProxyChecker.SelfTest.Upstream -> getString(R.string.proxy_test_upstream)
+            }
+            MaterialAlertDialogBuilder(this@MainActivity)
+                .setTitle(R.string.proxy_test)
+                .setMessage(message)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+        }
+    }
+
+    private fun rotateLabel(minutes: Int): String =
+        if (minutes == 0) getString(R.string.proxy_rotate_on_fail) else getString(R.string.proxy_rotate_every, minutes)
+
+    private fun showProxySettings() {
+        val items = arrayOf(
+            getString(R.string.proxy_setting_url, proxySettings.setuUrl.removePrefix("https://")),
+            getString(
+                if (proxySettings.token.isBlank()) R.string.proxy_setting_token_missing else R.string.proxy_setting_token_set,
+            ),
+            getString(R.string.proxy_setting_rotate, rotateLabel(proxySettings.rotateMinutes)),
+            getString(R.string.proxy_setting_apps, installedBypassCount()),
+            getString(
+                if (proxySettings.customProxies.isBlank()) {
+                    R.string.proxy_setting_own_none
+                } else {
+                    R.string.proxy_setting_own_set
+                },
+            ),
+        )
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.proxy_settings)
+            .setItems(items) { _, which ->
+                when (which) {
+                    0 -> promptUrl()
+                    1 -> promptToken(onDone = { AdBlockVpnService.restartProxy(this) }, onCancel = {})
+                    2 -> chooseRotate()
+                    3 -> chooseBypassApps()
+                    4 -> promptOwnProxies()
+                }
+            }
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
+    }
+
+    private fun installedBypassCount(): Int = proxySettings.bypassApps.count { pkg ->
+        try {
+            packageManager.getApplicationInfo(pkg, 0)
+            true
+        } catch (_: PackageManager.NameNotFoundException) {
+            false
+        }
+    }
+
+    private fun textDialog(
+        title: Int,
+        message: Int?,
+        value: String,
+        hint: String,
+        inputType: Int,
+    ): Pair<MaterialAlertDialogBuilder, EditText> {
+        val input = EditText(this).apply {
+            setText(value)
+            this.hint = hint
+            this.inputType = inputType
+            isSingleLine = true
+        }
+        val pad = (20 * resources.displayMetrics.density).toInt()
+        val container = FrameLayout(this).apply {
+            setPadding(pad, pad / 2, pad, 0)
+            addView(input)
+        }
+        val builder = MaterialAlertDialogBuilder(this).setTitle(title).setView(container)
+        if (message != null) builder.setMessage(message)
+        return builder to input
+    }
+
+    private fun promptUrl() {
+        val (builder, input) = textDialog(
+            R.string.proxy_url_title,
+            null,
+            proxySettings.setuUrl,
+            SetuClient.DEFAULT_URL,
+            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI,
+        )
+        builder
+            .setPositiveButton(R.string.save) { _, _ ->
+                val url = SetuClient.normalizeUrl(input.text.toString())
+                if (url == null) {
+                    Toast.makeText(this, R.string.proxy_url_invalid, Toast.LENGTH_LONG).show()
+                } else {
+                    proxySettings.setuUrl = url
+                    AdBlockVpnService.restartProxy(this)
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun promptOwnProxies() {
+        val (builder, input) = textDialog(
+            R.string.proxy_own_title,
+            R.string.proxy_own_message,
+            proxySettings.customProxies,
+            getString(R.string.proxy_own_hint),
+            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS,
+        )
+        input.isSingleLine = false
+        input.minLines = 3
+        builder
+            .setPositiveButton(R.string.save) { _, _ ->
+                val text = input.text.toString()
+                if (text.isNotBlank() && SetuClient.parseList(text).isEmpty()) {
+                    Toast.makeText(this, R.string.proxy_own_invalid, Toast.LENGTH_LONG).show()
+                } else {
+                    proxySettings.customProxies = text
+                    AdBlockVpnService.restartProxy(this)
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun promptToken(onDone: () -> Unit, onCancel: () -> Unit) {
+        val (builder, input) = textDialog(
+            R.string.proxy_token_title,
+            R.string.proxy_token_message,
+            proxySettings.token,
+            getString(R.string.proxy_token_hint),
+            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD,
+        )
+        var handled = false
+        builder
+            .setPositiveButton(R.string.save) { _, _ ->
+                handled = true
+                proxySettings.token = input.text.toString()
+                onDone()
+            }
+            .setNeutralButton(R.string.proxy_token_skip) { _, _ ->
+                handled = true
+                proxySettings.token = ""
+                onDone()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .setOnDismissListener { if (!handled) onCancel() }
+            .show()
+    }
+
+    private fun chooseRotate() {
+        val choices = ProxySettings.ROTATE_CHOICES
+        val labels = choices.map(::rotateLabel).toTypedArray()
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.proxy_rotate_title)
+            .setSingleChoiceItems(labels, choices.indexOf(proxySettings.rotateMinutes).coerceAtLeast(0)) { d, which ->
+                proxySettings.rotateMinutes = choices[which]
+                d.dismiss()
+            }
+            .show()
+    }
+
+    private fun chooseBypassApps() {
+        lifecycleScope.launch {
+            val apps = withContext(Dispatchers.IO) {
+                val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+                packageManager.queryIntentActivities(launcher, 0)
+                    .map { it.activityInfo.packageName to it.loadLabel(packageManager).toString() }
+                    .filter { it.first != packageName }
+                    .distinctBy { it.first }
+                    .sortedBy { it.second.lowercase() }
+            }
+            if (isFinishing) return@launch
+            val current = proxySettings.bypassApps
+            val checked = BooleanArray(apps.size) { apps[it].first in current }
+            MaterialAlertDialogBuilder(this@MainActivity)
+                .setTitle(R.string.proxy_apps_title)
+                .setMultiChoiceItems(apps.map { it.second }.toTypedArray(), checked) { _, i, on -> checked[i] = on }
+                .setPositiveButton(R.string.save) { _, _ ->
+                    val listed = apps.map { it.first }.toSet()
+                    // Keep defaults for apps that aren't installed, in case they're installed later.
+                    proxySettings.bypassApps = (current - listed) + apps.filterIndexed { i, _ -> checked[i] }.map { it.first }
+                    AdBlockVpnService.refreshProxyApps(this@MainActivity)
+                    Toast.makeText(this@MainActivity, R.string.proxy_apps_note, Toast.LENGTH_LONG).show()
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+        }
     }
 
     private fun askForNotificationPermission() {
