@@ -6,8 +6,7 @@
 #   - backups or cleartext HTTP turned on
 #   - code from a known analytics / ads / crash-reporting SDK
 #   - a network endpoint in Swar's own code that isn't on the allowlist
-#   - a URL in the page script, which runs inside music.youtube.com, or any
-#     request from it other than YouTube Music's own same-site search API
+#   - a JavaScript bridge into a WebView (the only WebView is Google's sign-in page)
 #   - WebView's own metrics upload or Safe Browsing lookups turned back on
 # Run from swar-music/ after ./gradlew assembleDebug.
 set -euo pipefail
@@ -70,7 +69,10 @@ system_only = {"android.permission.DUMP"}
 # The main screen: the launcher icon plus "Open with Swar" for music.youtube.com
 # links. Like any launcher icon, other apps can start it; the only input it
 # takes is an https://music.youtube.com link, which it checks.
-launchers = {f"{pkg}.MainActivity"}
+# The playback service is Media3's media session entry point: the system,
+# lock screen, Bluetooth and headsets connect to it to show and control
+# what's playing. It only offers transport controls (play, pause, skip, seek).
+launchers = {f"{pkg}.MainActivity", f"{pkg}.playback.PlaybackService"}
 exported = []
 for kind in ("activity", "activity-alias", "service", "receiver", "provider"):
     for c in app.iter(kind):
@@ -105,7 +107,11 @@ report.append("trackerSDKs=" + (",".join(found) or "none"))
 
 # 5. Network endpoints written in Swar's own source code
 allowed_urls = {
-    "https://$HOST",  # MainActivity.ORIGIN = https://music.youtube.com
+    "https://music.youtube.com",              # InnerTube.ORIGIN
+    "https://music.youtube.com/youtubei/v1/",  # YouTube Music's own API
+    "https://www.youtube.com/watch?v=$videoId",  # what NewPipe Extractor looks streams up for
+    "https://www.youtube.com", "https://www.youtube.com/",  # Origin/Referer NewPipe sends for web streams
+    "https://accounts.google.com/ServiceLogin?ltmpl=music&service=youtube&passive=true",  # Google sign-in page
 }
 src_urls = set()
 for d, _, files in os.walk("app/src/main/java"):
@@ -118,27 +124,15 @@ report.append("endpoints=" + ",".join(sorted(src_urls)))
 if any("http://" in u for u in src_urls):
     errors.append("Plaintext http:// endpoint in source")
 
-# 6. The page script runs inside YouTube Music with access to the signed-in
-# page. It must not contain any URL or any way to send data out.
-page = open("app/src/main/assets/swar.js").read()
-page_urls = sorted(set(re.findall(r"(?:https?|wss?)://[^\s'\"`)]+", page)))
-if page_urls:
-    errors.append("URLs in the page script: " + ", ".join(page_urls))
-for api in ("XMLHttpRequest(", "sendBeacon", "WebSocket(", "EventSource(", "new Image", "window.open("):
-    if api in page:
-        errors.append(f"Page script uses {api.rstrip('(')}")
-# One request is allowed: YouTube Music's own search API on the same site
-# (relative path, same-origin credentials), used to find a video's song version.
-fetches = re.findall(r"fetch\(\s*([A-Za-z_$][\w$]*|['\"`][^'\"`]*['\"`])", page)
-search_const = re.search(r"const INNERTUBE_SEARCH = '([^']*)';", page)
-if fetches != ["INNERTUBE_SEARCH"] or not search_const or search_const.group(1) != "/youtubei/v1/search?prettyPrint=false":
-    errors.append(f"Page script may only fetch YouTube Music's same-site search API (found: {fetches})")
-if "credentials: 'same-origin'" not in page:
-    errors.append("Page script's search request must use same-origin credentials")
-for nav in re.findall(r"location\.(?:assign|replace|href\s*=)\(?\s*([^;\n]*)", page):
-    if not nav.lstrip("(").startswith("`/watch?v="):
-        errors.append(f"Page script navigates somewhere other than a /watch page: {nav}")
-report.append("pageScript=" + ("clean" if not page_urls else "has-urls"))
+# 6. The only WebView is Google's sign-in page. No page gets a way to call
+# into the app.
+for d, _, files in os.walk("app/src/main/java"):
+    for f in files:
+        text = open(os.path.join(d, f)).read()
+        for api in ("addJavascriptInterface", "addWebMessageListener", "addDocumentStartJavaScript", "evaluateJavascript"):
+            if api in text:
+                errors.append(f"{f} uses {api}: no page may script into Swar")
+report.append("webviewBridges=none")
 
 # Listening sockets would let other apps on the device or network connect in.
 for d, _, files in os.walk("app/src/main/java"):

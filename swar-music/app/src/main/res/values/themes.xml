@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Swar" parent="Theme.AppCompat.NoActionBar">
-        <item name="colorPrimary">@color/brand</item>
-        <item name="colorAccent">@color/brand</item>
+    <style name="Theme.Swar" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/page_bg</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:colorAccent">@color/brand</item>
     </style>
 
     <!-- Launch screen: animated equalizer on the app's background, then Theme.Swar. -->

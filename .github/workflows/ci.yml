@@ -168,16 +168,6 @@ jobs:
         working-directory: swar-music
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: swar-music/js-tests/package-lock.json
-      - name: Page script tests
-        working-directory: swar-music/js-tests
-        run: |
-          npm ci
-          npm test
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -185,7 +175,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - run: chmod +x gradlew
       - run: ./gradlew testDebugUnitTest assembleDebug
-      - name: Privacy check (permissions, exported components, tracker SDKs, endpoints, page script)
+      - name: Privacy check (permissions, exported components, tracker SDKs, endpoints, WebView bridges)
         run: bash scripts/privacy-check.sh
       - name: Upload APK
         uses: actions/upload-artifact@v4

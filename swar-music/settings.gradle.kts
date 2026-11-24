@@ -11,6 +11,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // NewPipe Extractor (the YouTube stream engine) and its nanojson are published here.
+        maven("https://jitpack.io")
     }
 }
 

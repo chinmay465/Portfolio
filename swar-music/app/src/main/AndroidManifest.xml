@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Only to retry automatically when the connection comes back -->
+    <!-- Audio quality "Auto": high on Wi-Fi, lighter on mobile data -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
@@ -21,20 +21,15 @@
         android:enableOnBackInvokedCallback="true"
         android:usesCleartextTraffic="false">
 
-        <!-- Privacy: don't let Android System WebView upload usage metrics
-             from this app, even if the phone has "usage & diagnostics" on. -->
+        <!-- Privacy: the one WebView (the Google sign-in page) doesn't upload
+             usage metrics or make Safe Browsing lookups. -->
         <meta-data
             android:name="android.webkit.WebView.MetricsOptOut"
             android:value="true" />
-        <!-- No Safe Browsing lookups to Google for every page. Swar only
-             loads YouTube and Google sign-in pages in-app; every other
-             link opens in your browser, which does its own checks. -->
         <meta-data
             android:name="android.webkit.WebView.EnableSafeBrowsing"
             android:value="false" />
 
-        <!-- configChanges: rotation, dark mode etc. must not recreate the
-             activity, or the WebView (and the song) would be torn down. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -46,7 +41,7 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- "Open with Swar" for shared music.youtube.com links -->
+            <!-- "Open with Swar" for shared YouTube Music links -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -55,9 +50,21 @@
             </intent-filter>
         </activity>
 
+        <!-- Google sign-in, once: a WebView on Google's own page. -->
+        <activity
+            android:name=".ui.LoginActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Swar" />
+
+        <!-- Playback. Exported so the system, lock screen, Bluetooth and headsets
+             can control it (Media3's standard media session entry point). -->
         <service
             android:name=".playback.PlaybackService"
-            android:exported="false"
-            android:foregroundServiceType="mediaPlayback" />
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>
