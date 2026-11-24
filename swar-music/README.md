@@ -30,13 +30,25 @@ Swar wraps [music.youtube.com](https://music.youtube.com) in an Android app. Mus
 
 The page is YouTube Music's own; around it Swar adds the parts a native app has:
 
+- **Swar's own look:** the page is restyled with a deep-space backdrop and aurora glows, glass top and bottom bars with glowing hairline edges, a floating mini player, a cyan-to-violet accent on the active tab and the progress bar, softer card corners with a tactile press, glowing artwork and a gradient play button. The loading, offline and "Switching to the song" screens use the same aurora, gradient wordmark and gradient-edged glass.
 - **Launch:** an animated splash screen (the logo's bars bouncing), handing over to a loading screen with the same bars. The loading screen lifts with a short zoom-and-fade once the page script reports that YouTube Music has drawn its UI, so you never see a half-built page. After 6 s it notes a slow connection.
 - **Progress line:** a thin brand-gradient bar at the top while a page loads.
 - **Offline screen:** instead of WebView's error page, a "Can't reach YouTube Music" screen with **Try again**. It also retries by itself as soon as the connection comes back.
 - **Native feel:** no grey tap flashes, no text-selection handles on long-press, no rubber-band overscroll.
-- **Back gesture:** inside the app, Back goes back a page. At the top on Android 12+, the system's predictive-back animation sends Swar to the background, and the music keeps going.
+- **Swipe the player away:** drag the now-playing screen down and it follows your finger, then slides away into the mini player (a quick flick works too). Swipe the mini player up to open it again. Sideways swipes on the artwork, the seek bar and scrolled lists (queue, lyrics) keep their own behaviour.
+- **Back gesture:** with the player open, Back minimises it. Otherwise Back goes back a page. At the top on Android 12+, the system's predictive-back animation sends Swar to the background, and the music keeps going.
 - **Icon:** gradient launcher icon with a themed (monochrome) version for Android 13+, and a matching notification icon.
 - Everything respects Android's "Remove animations" setting.
+
+## Performance
+
+The page is a full web app, so Swar keeps its own work off the scroll path:
+
+- API responses are only walked for ad data when a cheap text check finds ad keys (every browse response used to be walked in full).
+- The look uses static gradients and fixed shadows only: no backdrop blur and no endless animations, which repaint on every scrolled frame.
+- Text selection is switched off once at the root instead of with a `*` rule that slowed every style recalculation; shelves far off screen skip layout and paint (`content-visibility`).
+- The swipe-down listener that can hold the page still is attached to the now-playing screen only, so scrolling everywhere else never waits for scripts.
+- The Song-switch label scan runs at most every few seconds, and WebView pre-rasterises tiles just off screen so fast scrolls don't show blank areas.
 
 ## Privacy
 

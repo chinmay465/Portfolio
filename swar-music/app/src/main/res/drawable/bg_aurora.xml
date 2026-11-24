@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Loading and offline screens: the same aurora glows as the restyled page. Static, drawn once. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape><solid android:color="@color/page_bg" /></shape>
+    </item>
+    <item>
+        <shape>
+            <gradient
+                android:centerX="0.1"
+                android:centerY="0.05"
+                android:endColor="@android:color/transparent"
+                android:gradientRadius="420dp"
+                android:startColor="@color/glow_cyan"
+                android:type="radial" />
+        </shape>
+    </item>
+    <item>
+        <shape>
+            <gradient
+                android:centerX="0.95"
+                android:centerY="0.95"
+                android:endColor="@android:color/transparent"
+                android:gradientRadius="460dp"
+                android:startColor="@color/glow_violet"
+                android:type="radial" />
+        </shape>
+    </item>
+</layer-list>

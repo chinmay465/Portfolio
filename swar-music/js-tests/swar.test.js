@@ -227,7 +227,9 @@ test('feels like an app: no tap highlight, selection or overscroll', () => {
   const css = p.document.getElementById('swar-style').textContent;
   assert.match(css, /-webkit-tap-highlight-color: transparent/);
   assert.match(css, /overscroll-behavior: none/);
-  assert.match(css, /:not\(input\):not\(textarea\)/);
+  assert.match(css, /html \{[^}]*user-select: none/);
+  assert.match(css, /input, textarea, \[contenteditable\] \{[^}]*user-select: text/);
+  assert.doesNotMatch(css, /\*:not\(/, 'no universal selector: it slows every style recalc');
   p.close();
 });
 
@@ -530,5 +532,135 @@ test('running the script twice is harmless', () => {
   const parse = p.window.JSON.parse;
   p.window.eval(SCRIPT);
   assert.equal(p.window.JSON.parse, parse);
+  p.close();
+});
+
+// ---- Gestures: swipe the player down to minimise, mini player up to open, Back minimises.
+const PLAYER = `<ytmusic-app><ytmusic-app-layout player-page-open>
+  <ytmusic-player-page>
+    <button class="minimise" aria-label="Minimise player"></button>
+    <div class="art"></div>
+    <tp-yt-paper-slider id="progress-bar"><div class="knob"></div></tp-yt-paper-slider>
+  </ytmusic-player-page>
+  <ytmusic-player-bar><div class="content-info-wrapper"></div><button class="toggle-player-page-button"></button></ytmusic-player-bar>
+</ytmusic-app-layout></ytmusic-app>`;
+
+function touch(p, el, type, x, y) {
+  const e = new p.window.Event(type, { bubbles: true, cancelable: true });
+  const point = { clientX: x, clientY: y };
+  Object.defineProperty(e, 'touches', { value: type === 'touchend' ? [] : [point] });
+  Object.defineProperty(e, 'changedTouches', { value: [point] });
+  el.dispatchEvent(e);
+  return e;
+}
+
+function swipe(p, el, from, to, steps = 6) {
+  touch(p, el, 'touchstart', from[0], from[1]);
+  let last;
+  for (let i = 1; i <= steps; i++) {
+    last = touch(p, el, 'touchmove', from[0] + ((to[0] - from[0]) * i) / steps, from[1] + ((to[1] - from[1]) * i) / steps);
+  }
+  return last;
+}
+
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function minimiser(p) {
+  const layout = p.document.querySelector('ytmusic-app-layout');
+  const clicks = [];
+  p.document.querySelector('.minimise').addEventListener('click', () => {
+    clicks.push('minimise');
+    layout.removeAttribute('player-page-open');
+  });
+  return clicks;
+}
+
+test('swiping the open player down follows the finger, then minimises it', async () => {
+  const p = page(PLAYER);
+  const clicks = minimiser(p);
+  const art = p.document.querySelector('.art');
+  const pageEl = p.document.querySelector('ytmusic-player-page');
+  const move = swipe(p, art, [200, 150], [205, 450]);
+  assert.equal(move.defaultPrevented, true, 'the page does not scroll under the drag');
+  await wait(40);
+  assert.match(pageEl.style.transform, /translate3d\(0, \d+px, 0\)/);
+  touch(p, art, 'touchend', 205, 450);
+  await wait(700);
+  assert.deepEqual(clicks, ['minimise']);
+  assert.equal(pageEl.style.transform, '', 'inline styles are removed once closed');
+  assert.equal(p.messages.at(-1).type, 'player');
+  assert.equal(p.messages.at(-1).open, false);
+  p.close();
+});
+
+test('a short drag springs back; sideways swipes and the seek bar are left alone', async () => {
+  const p = page(PLAYER);
+  const clicks = minimiser(p);
+  const art = p.document.querySelector('.art');
+  const pageEl = p.document.querySelector('ytmusic-player-page');
+
+  swipe(p, art, [200, 150], [200, 180]); // a small drag: not far enough
+  touch(p, art, 'touchend', 200, 180);
+  await wait(320);
+  assert.equal(pageEl.style.transform, '');
+
+  const side = swipe(p, art, [100, 300], [320, 330]); // next-song swipe on the art
+  assert.equal(side.defaultPrevented, false);
+  touch(p, art, 'touchend', 320, 330);
+
+  const knob = p.document.querySelector('.knob');
+  const seek = swipe(p, knob, [100, 500], [110, 700]);
+  assert.equal(seek.defaultPrevented, false);
+  touch(p, knob, 'touchend', 110, 700);
+  await wait(400);
+  assert.deepEqual(clicks, []);
+  p.close();
+});
+
+test('Back minimises the open player first', () => {
+  const p = page(PLAYER);
+  const clicks = minimiser(p);
+  assert.equal(p.window.__swar.cmd('collapse'), true);
+  assert.deepEqual(clicks, ['minimise']);
+  assert.equal(p.window.__swar.cmd('collapse'), false, 'already minimised: Back does its usual thing');
+  assert.deepEqual(clicks, ['minimise']);
+  p.close();
+});
+
+test('tells the app when the player opens and closes', async () => {
+  const p = page(PLAYER);
+  minimiser(p);
+  p.document.body.click();
+  await wait(450);
+  assert.deepEqual(plain(p.messages.filter((m) => m.type === 'player')), [{ type: 'player', open: true }]);
+  assert.equal(p.document.documentElement.classList.contains('swar-player-open'), true);
+  p.window.__swar.collapsePlayer();
+  await wait(450);
+  assert.deepEqual(plain(p.messages.filter((m) => m.type === 'player')).at(-1), { type: 'player', open: false });
+  assert.equal(p.document.documentElement.classList.contains('swar-player-open'), false);
+  p.close();
+});
+
+test('swiping the mini player up opens the player', () => {
+  const p = page(PLAYER.replace(' player-page-open', ''));
+  let opened = 0;
+  p.document.querySelector('.toggle-player-page-button').addEventListener('click', () => { opened += 1; });
+  const info = p.document.querySelector('.content-info-wrapper');
+  swipe(p, info, [150, 700], [155, 690]); // a tap-sized wobble does nothing
+  touch(p, info, 'touchend', 155, 690);
+  assert.equal(opened, 0);
+  swipe(p, info, [150, 700], [160, 560]);
+  touch(p, info, 'touchend', 160, 560);
+  assert.equal(opened, 1);
+  p.close();
+});
+
+test('restyles the page without costly effects', () => {
+  const p = page();
+  const css = p.document.getElementById('swar-style').textContent;
+  assert.match(css, /--swar-grad/);
+  assert.match(css, /ytmusic-player-bar \{/);
+  assert.doesNotMatch(css, /backdrop-filter/, 'blur behind bars repaints on every scrolled frame');
+  assert.doesNotMatch(css, /@keyframes|animation:/, 'no endless animations on the page');
   p.close();
 });

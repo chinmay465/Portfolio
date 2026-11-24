@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
 import android.util.AttributeSet
@@ -20,6 +21,8 @@ class EqualizerView @JvmOverloads constructor(
 ) : View(context, attrs) {
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    /** A soft glow behind the bars. A static shader: no blur, no extra layer. */
+    private val halo = Paint(Paint.ANTI_ALIAS_FLAG)
     private val rect = RectF()
     private val speeds = floatArrayOf(4.1f, 5.3f, 3.4f, 6.1f, 4.7f)
     private val phases = floatArrayOf(0f, 1.1f, 2.3f, 0.6f, 1.7f)
@@ -31,9 +34,21 @@ class EqualizerView @JvmOverloads constructor(
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         paint.shader = LinearGradient(
             0f, 0f, w.toFloat(), 0f,
-            context.getColor(R.color.brand), context.getColor(R.color.brand_2),
+            intArrayOf(context.getColor(R.color.brand_0), context.getColor(R.color.brand), context.getColor(R.color.brand_2)),
+            null,
             Shader.TileMode.CLAMP,
         )
+        val radius = minOf(w, h) / 2f // fades out inside the view, so no clipped edge
+        halo.shader = if (radius > 0f) {
+            RadialGradient(
+                w / 2f, h / 2f, radius,
+                intArrayOf(0x555B8CFF, 0x22A066FF, 0x00000000),
+                floatArrayOf(0f, 0.55f, 1f),
+                Shader.TileMode.CLAMP,
+            )
+        } else {
+            null
+        }
     }
 
     override fun onVisibilityAggregated(isVisible: Boolean) {
@@ -48,6 +63,7 @@ class EqualizerView @JvmOverloads constructor(
         val gap = width * 0.09f
         val barWidth = (width - gap * (n - 1)) / n
         val t = (System.nanoTime() - startNs) / 1_000_000_000f
+        if (halo.shader != null) canvas.drawCircle(width / 2f, height / 2f, minOf(width, height) / 2f, halo)
         for (i in 0 until n) {
             val level = if (animating) 0.28f + 0.72f * abs(sin(t * speeds[i] / 2f + phases[i])) else rest[i]
             val barHeight = (height * level).coerceAtLeast(barWidth)
