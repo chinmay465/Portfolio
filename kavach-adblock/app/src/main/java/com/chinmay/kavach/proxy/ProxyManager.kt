@@ -134,7 +134,11 @@ class ProxyManager(
                 return
             }
             routedPort = proxy.port
-            Log.i(TAG, "Proxy mode routing all traffic, ${pool.size()} proxies ready")
+            Log.i(TAG, "Proxy mode routing all traffic, ${pool.size()} proxies ready, local proxy on ${proxy.port}")
+            if (settings.engineLog) {
+                // Debug aid for the emulator test: the path Kavach's Test button checks.
+                Log.i(TAG, "Self-test: ${ProxyChecker.selfTest(proxy.port)}")
+            }
         }
         publishActive()
     }

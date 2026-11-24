@@ -48,6 +48,9 @@ fi
 sleep 3
 
 echo "--- probes"
+adb shell 'cat /proc/net/tcp /proc/net/tcp6' | grep -i ':6E5B ' | head -5
+adb shell 'nc -w 2 127.0.0.1 28283 < /dev/null 2>&1; echo "nc loopback rc=$?"'
+adb logcat -d -s KavachProxy KavachLocal | tail -5
 adb shell 'ping -c 1 -W 3 example.com 2>&1' | head -2
 adb shell 'getprop net.dns1; cat /proc/net/route | head -3' 2>&1
 adb shell 'echo | nc -w 5 example.com 80 2>&1; echo "nc rc=$?"'
