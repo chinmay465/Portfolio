@@ -20,7 +20,7 @@ A personal site split into short pages, so no page runs long. Everything about C
 
 **Effects:** a particle skills board (React, AI-assisted dev, TypeScript and more, each with what was built with it), a decoding name and page titles, project cards whose animated preview plays on hover (or mid-screen on touch devices), a swipeable journey slider that autoplays until touched, before-and-after numbers that count in, an animated role accordion, cursor-spotlight cards, page transitions, a cursor ring, magnetic buttons and a `Ctrl K` / `⌘ K` / `/` command palette that reaches every page and link.
 
-**Production details:** React Router with real paths, a per-route title and description, every page except Home loaded on first visit, scroll restored on back and reset on new pages, a phone menu, a route loading bar, an error page, and a Render rewrite so deep links and refreshes work. Everything respects `prefers-reduced-motion`; keyboard focus is visible throughout.
+**Production details:** React Router with real paths, a per-route title and description, every page except Home loaded on first visit, scroll restored on back and reset on new pages, a phone menu, a route loading bar, an error page, and a Render rewrite so deep links and refreshes work. A `sitemap.xml` (linked from `robots.txt`) lists every page, and Open Graph and Twitter card tags give links a 1200×630 preview image on LinkedIn, WhatsApp and X. Everything respects `prefers-reduced-motion`; keyboard focus is visible throughout.
 
 ## Stack
 
@@ -41,14 +41,17 @@ src/
   components/ProjectCard.tsx  card with hover-to-play preview
   components/visuals/         animated sketches, one per app
   components/CommandPalette.tsx
+public/sitemap.xml            every page and project page (kept in step by site.test.ts)
+public/og-image.png           link preview image, rendered from scripts/og-image.html
 e2e/                          Playwright specs: every route, deep links, the command palette
 ```
 
 ## Tests
 
 - **Unit (Vitest):** `src/lib/lib.test.ts` covers the headline decode, status ping classification, Marathi formatting, and the project, profile and route data.
+- **Site files (Vitest):** `src/lib/site.test.ts` checks that `sitemap.xml` lists exactly the router's pages and every project, that `robots.txt` links it, and that the preview tags point at a PNG that really is 1200×630 and under 300 KB.
 - **Components (Vitest + Testing Library, jsdom):** `ImpactRow` counts from the old value to the new one frame by frame and shows the final value at once with reduced motion; `RoleAccordion` keeps one role open at a time with matching `aria-expanded`; `/projects` shows the right cards for `?type=web`, `?type=android` and the tabs. `src/test/dom.ts` stubs the browser APIs jsdom lacks (IntersectionObserver, animation frames, ResizeObserver, matchMedia) so tests can scroll rows into view and step frames.
-- **End to end (Playwright, Chromium):** `e2e/` visits every page and every `/projects/:id`, unknown paths and ids (404), opens deep links directly and refreshes them, and drives the `Ctrl K` palette by keyboard and mouse. Requests to the live apps are blocked so results never depend on Render, and any uncaught page error fails the test. CI runs it against `vite preview` after the build; on failure the HTML report is uploaded as `home-playwright-report`.
+- **End to end (Playwright, Chromium):** `e2e/` visits every page and every `/projects/:id`, unknown paths and ids (404), opens deep links directly and refreshes them, and drives the `Ctrl K` palette by keyboard and mouse. It also checks that the build serves the sitemap, `robots.txt` and the preview image as real files. Requests to the live apps are blocked so results never depend on Render, and any uncaught page error fails the test. CI runs it against `vite preview` after the build; on failure the HTML report is uploaded as `home-playwright-report`.
 
 ## Run
 
@@ -58,6 +61,7 @@ npm run dev      # http://localhost:5173
 npm test
 npm run build    # static output in dist/
 npm run test:e2e # Playwright against vite preview; build first
+npm run og-image # re-render public/og-image.png after editing scripts/og-image.html
 
 # Preview build for hosts that can't rewrite paths: hash routes, relative assets
 VITE_HASH_ROUTER=1 VITE_BASE=./ npx vite build --outDir dist-preview

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Every page of the site. Keep in step with src/router.tsx and src/data/projects.ts:
+     src/lib/site.test.ts fails if a route or project is missing here. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://chinmay-upare.onrender.com/</loc></url>
+  <url><loc>https://chinmay-upare.onrender.com/about</loc></url>
+  <url><loc>https://chinmay-upare.onrender.com/experience</loc></url>
+  <url><loc>https://chinmay-upare.onrender.com/projects</loc></url>
+  <url><loc>https://chinmay-upare.onrender.com/projects/rail</loc></url>
+  <url><loc>https://chinmay-upare.onrender.com/projects/kavach</loc></url>
+  <url><loc>https://chinmay-upare.onrender.com/projects/swar</loc></url>
+  <url><loc>https://chinmay-upare.onrender.com/projects/ekatra</loc></url>
+  <url><loc>https://chinmay-upare.onrender.com/projects/ank</loc></url>
+  <url><loc>https://chinmay-upare.onrender.com/projects/shodh</loc></url>
+  <url><loc>https://chinmay-upare.onrender.com/projects/setu</loc></url>
+  <url><loc>https://chinmay-upare.onrender.com/contact</loc></url>
+</urlset>
