@@ -10,6 +10,8 @@ import {
   albumByTitle,
   art,
   artistByName,
+  forYouFrom,
+  isDisliked,
   radioFor,
   songById,
   time,
@@ -28,6 +30,7 @@ type Page =
   | { kind: 'mix'; id: string }
   | { kind: 'liked' }
   | { kind: 'history' }
+  | { kind: 'downloads' }
   | { kind: 'shelf'; shelf: 'Playlists' | 'Albums' | 'Artists' }
 
 const QUALITY: Record<Quality, { detail: string; label: string }> = {
@@ -61,6 +64,9 @@ const PATHS = {
   album: 'M12 4a8 8 0 1 1 0 16 8 8 0 0 1 0-16zM12 10.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z',
   person: 'M12 4.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7zM5 19.5c.8-3.4 3.6-5 7-5s6.2 1.6 7 5',
   history: 'M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 4.5v3.5H8M12 8v4.5l3 2',
+  download: 'M12 4.5v10M7.5 10.5L12 15l4.5-4.5M5.5 19.5h13',
+  done: 'M5.5 12.5l4 4L18.5 7.5',
+  refresh: 'M19 12a7 7 0 1 1-2.1-5M19 4.5V8h-3.5',
 } as const
 type IconName = keyof typeof PATHS
 const FILLED: IconName[] = ['play', 'pause', 'next', 'prev']
@@ -115,6 +121,11 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
   const [liked, setLiked] = useState<Set<string>>(() => new Set(['s3', 's8']))
   const [history, setHistory] = useState<string[]>(['s5', 's2'])
   const [quality, setQuality] = useState<Quality>('Auto')
+  /** Early skips per song: two or more and Swar leaves it out of radios and For you. */
+  const [skips, setSkips] = useState<Record<string, number>>({})
+  const [round, setRound] = useState(0)
+  /** Download progress per song, 0 to 100. */
+  const [downloads, setDownloads] = useState<Record<string, number>>({ s6: 100 })
 
   const [expand, setExpand] = useState(0)
   const [dragging, setDragging] = useState(false)
@@ -149,7 +160,10 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
     setHistory((h) => [list[start], ...h.filter((x) => x !== list[start])].slice(0, 12))
   }, [])
 
-  const playRadio = useCallback((id: string) => playList(radioFor(id)), [playList])
+  const playRadio = useCallback(
+    (id: string) => playList(radioFor(id).filter((x) => x === id || !isDisliked(skips, x))),
+    [playList, skips],
+  )
 
   const goTo = useCallback(
     (i: number) => {
@@ -166,6 +180,12 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
     else if (repeat === 'all' && queue.length) goTo(0)
     else setPlaying(false)
   }, [index, queue.length, repeat, goTo])
+
+  /** Next from the buttons: moving on in the first 20 s counts as a skip. */
+  const skipNext = () => {
+    if (current && pos < 20) setSkips((k) => ({ ...k, [current.id]: (k[current.id] ?? 0) + 1 }))
+    next()
+  }
 
   const prev = () => {
     if (pos > 3 || index === 0) setPos(0)
@@ -212,6 +232,35 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
     setQueue((q) => q.filter((_, j) => j !== i))
     if (i < index) setIndex((x) => x - 1)
   }
+  // ------------------------------------------------------------- downloads
+
+  const downloadAll = (ids: string[]) => {
+    const fresh = ids.filter((id) => downloads[id] === undefined)
+    if (!fresh.length) return
+    setDownloads((d) => ({ ...d, ...Object.fromEntries(fresh.map((id) => [id, reduced ? 100 : 0])) }))
+    say(fresh.length === 1 ? `Downloading ${songById(fresh[0]).title}` : `Downloading ${fresh.length} songs`)
+  }
+  const removeDownload = (id: string) =>
+    setDownloads((d) => {
+      const n = { ...d }
+      delete n[id]
+      return n
+    })
+  const isDownloaded = (id: string) => downloads[id] === 100
+  const pending = Object.keys(downloads).filter((id) => downloads[id] < 100)
+
+  // Simulated download progress, one song at a time, while on screen.
+  useEffect(() => {
+    if (!pending.length || !visible) return
+    const t = setInterval(() => {
+      setDownloads((d) => {
+        const id = Object.keys(d).find((x) => d[x] < 100)
+        return id ? { ...d, [id]: Math.min(100, d[id] + 20) } : d
+      })
+    }, 300)
+    return () => clearInterval(t)
+  }, [pending.length, visible])
+
   const toggleLike = (id: string) =>
     setLiked((l) => {
       const n = new Set(l)
@@ -300,6 +349,11 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
         <span className="sd-row-text">
           <span className="sd-row-title">{song.title}</span>
           <span className="sd-row-sub">
+            {isDownloaded(song.id) && (
+              <span className="sd-tick" title="Downloaded">
+                <Icon name="done" size={12} />
+              </span>
+            )}
             {numbered ? time(song.secs) : `${song.artist} • ${song.album}`}
           </span>
         </span>
@@ -320,6 +374,7 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
   )
 
   const quickPicks = useMemo(() => (mood ? SONGS.filter((x) => x.mood === mood) : SONGS).slice(0, 4), [mood])
+  const forYou = useMemo(() => forYouFrom(history, skips, round), [history, skips, round])
 
   const home = (
     <>
@@ -331,6 +386,30 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
           </button>
         ))}
       </div>
+      {!mood && forYou.mix.length > 0 && (
+        <>
+          <p className="sd-strap">Made from what you play</p>
+          <div className="sd-h sd-h-row">
+            <h4>Your mix</h4>
+            <button type="button" className="sd-iconbtn" onClick={() => setRound((r) => r + 1)} aria-label="New mix">
+              <Icon name="refresh" size={18} />
+            </button>
+          </div>
+          {forYou.mix.slice(0, 4).map((id) => songRow(songById(id)))}
+          {forYou.because.map(({ seed, songs }) => (
+            <div key={seed.id}>
+              <p className="sd-strap">Because you played</p>
+              <h4 className="sd-h">{seed.title}</h4>
+              <div className="sd-carousel">
+                {songs.map((id) => {
+                  const x = songById(id)
+                  return card(`b-${seed.id}-${id}`, x.title, x.artist, x.hue, () => playRadio(id))
+                })}
+              </div>
+            </div>
+          ))}
+        </>
+      )}
       <p className="sd-strap">Start radio from a song</p>
       <h4 className="sd-h">Quick picks</h4>
       {quickPicks.map((x) => songRow(x))}
@@ -436,18 +515,26 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
           ['album', 'Albums', () => open({ kind: 'shelf', shelf: 'Albums' })],
           ['person', 'Artists', () => open({ kind: 'shelf', shelf: 'Artists' })],
           ['history', 'History', () => open({ kind: 'history' })],
+          ['download', 'Downloads', () => open({ kind: 'downloads' })],
         ] as [IconName, string, () => void][]
       ).map(([icon, label, go]) => (
         <button key={label} type="button" className="sd-tile" onClick={go}>
           <Icon name={icon} filled={icon === 'heart'} />
           {label}
           {label === 'Liked songs' && <small>{liked.size}</small>}
+          {label === 'Downloads' && <small>{Object.keys(downloads).length - pending.length}</small>}
         </button>
       ))}
     </>
   )
 
-  const songPage = (title: string, sub: string, hue: number, ids: string[], opts: { numbered?: boolean; round?: boolean; empty?: string }) => (
+  const songPage = (
+    title: string,
+    sub: string,
+    hue: number,
+    ids: string[],
+    opts: { numbered?: boolean; round?: boolean; empty?: string; download?: boolean },
+  ) => (
     <>
       <div className={`sd-pagehead${opts.round ? ' artist' : ''}`}>
         <Art hue={hue} round={opts.round} className="big" />
@@ -461,10 +548,20 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
             <button type="button" className="sd-ghost" onClick={() => playList(ids, 0, true)}>
               <Icon name="shuffle" size={16} /> Shuffle
             </button>
+            {opts.download && (
+              <button
+                type="button"
+                className={`sd-iconbtn sd-round${ids.every(isDownloaded) ? ' lit' : ''}`}
+                onClick={() => downloadAll(ids)}
+                aria-label={ids.every(isDownloaded) ? 'Downloaded' : 'Download all'}
+              >
+                <Icon name={ids.every(isDownloaded) ? 'done' : 'download'} size={18} />
+              </button>
+            )}
           </div>
         )}
       </div>
-      {ids.length === 0 && <p className="sd-empty">{opts.empty}</p>}
+      {ids.length === 0 && opts.empty && <p className="sd-empty">{opts.empty}</p>}
       {ids.map((id, i) => songRow(songById(id), { list: ids, i, numbered: opts.numbered }))}
     </>
   )
@@ -472,18 +569,46 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
   let pageView: ReactNode = null
   if (page?.kind === 'album') {
     const a = ALBUMS.find((x) => x.id === page.id) ?? ALBUMS[0]
-    pageView = songPage(a.title, `Album • ${a.artist} • ${a.year} • ${a.songs.length} songs`, a.hue, a.songs, { numbered: true })
+    pageView = songPage(a.title, `Album • ${a.artist} • ${a.year} • ${a.songs.length} songs`, a.hue, a.songs, { numbered: true, download: true })
   } else if (page?.kind === 'artist') {
     const r = ARTISTS.find((x) => x.id === page.id) ?? ARTISTS[0]
     const ids = SONGS.filter((x) => x.artist === r.name).map((x) => x.id)
     pageView = songPage(r.name, 'Artist • Top songs', r.hue, ids, { round: true })
   } else if (page?.kind === 'mix') {
     const m = MIXES.find((x) => x.id === page.id) ?? MIXES[0]
-    pageView = songPage(m.title, m.subtitle, m.hue, m.songs, {})
+    pageView = songPage(m.title, m.subtitle, m.hue, m.songs, { download: true })
   } else if (page?.kind === 'liked') {
     pageView = songPage('Liked songs', `${liked.size} songs`, 330, [...liked], { empty: 'Tap ♡ in the player to like a song.' })
   } else if (page?.kind === 'history') {
     pageView = songPage('History', 'Played in this demo', 210, history, {})
+  } else if (page?.kind === 'downloads') {
+    const done = Object.keys(downloads).filter(isDownloaded)
+    pageView = (
+      <>
+        {songPage('Downloads', `${done.length} songs · play offline`, 190, done, {
+          empty: pending.length ? '' : 'Long-press a song or open an album and tap Download.',
+        })}
+        {pending.length > 0 && <p className="sd-strap">In progress</p>}
+        {pending.map((id) => {
+          const x = songById(id)
+          return (
+            <div key={id} className="sd-row">
+              <span className="sd-row-main">
+                <Art hue={x.hue} />
+                <span className="sd-row-text">
+                  <span className="sd-row-title">{x.title}</span>
+                  <span className="sd-row-sub">Downloading · {downloads[id]}%</span>
+                  <i className="sd-dl-bar" style={{ width: `${downloads[id]}%` }} />
+                </span>
+              </span>
+              <button type="button" className="sd-iconbtn" onClick={() => removeDownload(id)} aria-label={`Cancel ${x.title}`}>
+                <Icon name="close" size={16} />
+              </button>
+            </div>
+          )
+        })}
+      </>
+    )
   } else if (page?.kind === 'shelf') {
     const items =
       page.shelf === 'Playlists'
@@ -562,7 +687,7 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
               <button type="button" className="sd-play small" onClick={() => setPlaying((p) => !p)} aria-label={playing ? 'Pause' : 'Play'}>
                 <Icon name={playing ? 'pause' : 'play'} size={18} />
               </button>
-              <button type="button" className="sd-iconbtn" onClick={next} aria-label="Next">
+              <button type="button" className="sd-iconbtn" onClick={skipNext} aria-label="Next">
                 <Icon name="next" />
               </button>
               <i className="sd-mini-progress" style={{ width: `${(pos / current.secs) * 100}%` }} />
@@ -632,6 +757,21 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
                 </span>
                 <button
                   type="button"
+                  className={`sd-iconbtn${isDownloaded(current.id) ? ' lit' : ''}`}
+                  onClick={() => (downloads[current.id] === undefined ? downloadAll([current.id]) : removeDownload(current.id))}
+                  aria-label={
+                    downloads[current.id] === undefined ? 'Download' : isDownloaded(current.id) ? 'Remove download' : 'Cancel download'
+                  }
+                  data-nodrag
+                >
+                  {downloads[current.id] !== undefined && !isDownloaded(current.id) ? (
+                    <i className="sd-ring" style={{ '--p': `${downloads[current.id]}%` } as React.CSSProperties} />
+                  ) : (
+                    <Icon name={isDownloaded(current.id) ? 'done' : 'download'} size={22} />
+                  )}
+                </button>
+                <button
+                  type="button"
                   className={`sd-iconbtn${liked.has(current.id) ? ' liked' : ''}`}
                   onClick={() => toggleLike(current.id)}
                   aria-label={liked.has(current.id) ? 'Unlike' : 'Like'}
@@ -664,7 +804,7 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
                 <button type="button" className="sd-play" onClick={() => setPlaying((p) => !p)} aria-label={playing ? 'Pause' : 'Play'}>
                   <Icon name={playing ? 'pause' : 'play'} size={30} />
                 </button>
-                <button type="button" className="sd-iconbtn big" onClick={next} aria-label="Next">
+                <button type="button" className="sd-iconbtn big" onClick={skipNext} aria-label="Next">
                   <Icon name="next" size={30} />
                 </button>
                 <button
@@ -680,7 +820,7 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
               <div className="sd-player-bottom">
                 <button type="button" className="sd-quality" onClick={() => setSheet('quality')} data-nodrag>
                   <Icon name="eq" size={14} />
-                  {quality} · {QUALITY[quality].label}
+                  {isDownloaded(current.id) ? 'Downloaded · plays offline' : `${quality} · ${QUALITY[quality].label}`}
                 </button>
                 <button type="button" className="sd-iconbtn" onClick={() => setSheet('queue')} aria-label="Up next" data-nodrag>
                   <Icon name="queue" />
@@ -755,6 +895,11 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
                   ['queue', 'Play next', () => playNext(menuSong.id)],
                   ['plus', 'Add to queue', () => addToQueue(menuSong.id)],
                   ['radio', 'Start radio', () => playRadio(menuSong.id)],
+                  downloads[menuSong.id] === undefined
+                    ? ['download', 'Download', () => downloadAll([menuSong.id])]
+                    : isDownloaded(menuSong.id)
+                      ? ['close', 'Remove download', () => removeDownload(menuSong.id)]
+                      : ['close', `Cancel download (${downloads[menuSong.id]}%)`, () => removeDownload(menuSong.id)],
                   [
                     'album',
                     'Go to album',

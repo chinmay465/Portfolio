@@ -96,3 +96,51 @@ export function radioFor(id: string): string[] {
   const rest = SONGS.filter((x) => x.id !== id && x.mood !== seed.mood).map((x) => x.id)
   return [id, ...same, ...rest].slice(0, 10)
 }
+
+/** a1 b1 c1 a2 b2 c2 … */
+export function interleave<T>(lists: T[][]): T[] {
+  const out: T[] = []
+  const longest = Math.max(0, ...lists.map((l) => l.length))
+  for (let i = 0; i < longest; i++) for (const l of lists) if (i < l.length) out.push(l[i])
+  return out
+}
+
+/** Songs Swar leaves out of radios and For you: skipped early twice or more. */
+export const isDisliked = (skips: Record<string, number>, id: string) => (skips[id] ?? 0) >= 2
+
+export interface ForYou {
+  mix: string[]
+  because: { seed: DemoSong; songs: string[] }[]
+}
+
+/**
+ * Home's For you, as Swar builds it: start from a few songs you played (one
+ * per artist; [round] starts somewhere else on each refresh), take what's
+ * like each of them, and leave out what you just played and keep skipping.
+ */
+export function forYouFrom(played: string[], skips: Record<string, number>, round = 0): ForYou {
+  const distinct = [...new Set(played)].filter((id) => !isDisliked(skips, id))
+  if (!distinct.length) return { mix: [], because: [] }
+  const rotated = distinct.map((_, i) => distinct[(i + round) % distinct.length])
+  const seeds: DemoSong[] = []
+  const artists = new Set<string>()
+  for (const id of rotated) {
+    const song = songById(id)
+    if (artists.has(song.artist)) continue
+    artists.add(song.artist)
+    seeds.push(song)
+    if (seeds.length === 3) break
+  }
+  const recent = new Set(played.slice(0, 2))
+  const like = (seed: DemoSong) =>
+    SONGS.filter((x) => x.id !== seed.id && (x.artist === seed.artist || x.mood === seed.mood))
+      .map((x) => x.id)
+      .filter((id) => !recent.has(id) && !isDisliked(skips, id))
+  const radios = seeds.map(like)
+  const mix = [...new Set(interleave(radios.map((r) => r.slice(0, 3))))].slice(0, 6)
+  const because = seeds.slice(0, 2).map((seed, i) => {
+    const rest = radios[i].filter((id) => !mix.includes(id))
+    return { seed, songs: (rest.length >= 3 ? rest : radios[i]).slice(0, 6) }
+  })
+  return { mix, because: because.filter((b) => b.songs.length >= 2) }
+}

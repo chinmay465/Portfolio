@@ -76,4 +76,52 @@ describe('Swar demo', () => {
     act(() => vi.advanceTimersByTime(2100))
     expect(mini()?.getAttribute('aria-label')).not.toBe('Open the player: Monsoon Drive')
   })
+
+  it('builds For you from what was played and drops songs skipped early', () => {
+    render(<SwarDemo reduced />)
+    // For you may list it too once it has been played: either starts its radio.
+    const playMonsoon = () => fireEvent.click(screen.getAllByRole('button', { name: 'Play Monsoon Drive by Indie Pune' })[0])
+    expect(screen.getByText('Your mix')).toBeTruthy()
+    // Played earlier in the demo: Morning Raga, Late Train Home.
+    expect(screen.getAllByText('Because you played').length).toBeGreaterThan(0)
+    playMonsoon()
+    const upNext = () => {
+      fireEvent.click(mini()!)
+      fireEvent.click(screen.getByRole('button', { name: 'Up next' }))
+      const titles = within(screen.getByRole('dialog', { name: 'Up next' }))
+        .getAllByText(/./, { selector: '.sd-row-title' })
+        .map((el) => el.textContent)
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Close the player' }))
+      return titles
+    }
+    const first = upNext()
+    const skipped = first[1]
+    // Skip that song twice, right after it starts.
+    const nextButton = () => within(demo()).getAllByRole('button', { name: 'Next' })[0]
+    for (let i = 0; i < 2; i++) {
+      playMonsoon()
+      fireEvent.click(nextButton())
+      expect(mini()?.getAttribute('aria-label')).toBe(`Open the player: ${skipped}`)
+      fireEvent.click(nextButton())
+    }
+    playMonsoon()
+    expect(upNext()).not.toContain(skipped)
+  })
+
+  it('downloads an album and lists it under Library, Downloads', () => {
+    render(<SwarDemo reduced />)
+    fireEvent.click(screen.getByRole('button', { name: /^Salt & Sand/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Download all' }))
+    expect(screen.getByRole('status').textContent).toBe('Downloading 3 songs')
+    expect(screen.getByRole('button', { name: 'Downloaded' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Library' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Downloads/ }))
+    expect(screen.getByRole('heading', { name: 'Downloads' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Play Konkan Coast by Coastal Folk' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Play Konkan Coast by Coastal Folk' }))
+    fireEvent.click(mini()!)
+    expect(screen.getByText('Downloaded · plays offline')).toBeTruthy()
+  })
 })

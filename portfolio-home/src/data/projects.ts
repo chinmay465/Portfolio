@@ -75,6 +75,8 @@ export const projects: Project[] = [
       'Plays audio streams directly with Media3 ExoPlayer: background and screen-off playback, lock screen, headset and Bluetooth controls',
       'Sign in once and your Home, liked songs and playlists come along; music videos always play as their song version',
       'A player that follows your finger (swipe down to the mini player, up to open), with Up next, likes and an audio quality picker',
+      'Home learns from what you play and skip: For you mixes rebuilt as you listen, and plays shared back to your YouTube Music history',
+      'Downloads songs, albums and playlists in the background with Media3, then plays them offline',
     ],
     stack: ['Kotlin', 'Jetpack Compose', 'Media3 ExoPlayer', 'NewPipe Extractor', 'OkHttp', 'GitHub Actions'],
     kind: 'Android app',
