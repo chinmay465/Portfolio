@@ -32,6 +32,11 @@ sealed interface PlayerCommand {
         override val js = call("foreground")
     }
 
+    /** Back pressed with the now-playing page open: minimise it. Evaluates to true if it did. */
+    data object CollapsePlayer : PlayerCommand {
+        override val js = call("collapse")
+    }
+
     data class SeekTo(val positionMs: Long) : PlayerCommand {
         override val js = call("seek", (positionMs.coerceAtLeast(0) / 1000.0).toString())
     }

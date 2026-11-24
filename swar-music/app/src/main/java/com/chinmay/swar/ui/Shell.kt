@@ -1,5 +1,7 @@
 package com.chinmay.swar.ui
 
+import android.graphics.LinearGradient
+import android.graphics.Shader
 import android.os.Handler
 import android.os.Looper
 import android.view.View
@@ -7,6 +9,7 @@ import android.view.animation.DecelerateInterpolator
 import android.view.animation.PathInterpolator
 import android.widget.ProgressBar
 import android.widget.TextView
+import androidx.core.view.doOnLayout
 import com.chinmay.swar.R
 
 /**
@@ -72,6 +75,8 @@ class Shell(
     }
 
     init {
+        loading.findViewById<TextView>(R.id.loading_title).gradientText()
+        offline.findViewById<TextView>(R.id.offline_title).gradientText()
         offline.findViewById<View>(R.id.offline_retry).setOnClickListener { onRetry() }
         enter(loading, listOf(R.id.loading_eq, R.id.loading_title, R.id.loading_subtitle, R.id.loading_status))
         handler.postDelayed(slowNotice, SLOW_MS)
@@ -160,6 +165,18 @@ class Shell(
                 .setInterpolator(DecelerateInterpolator(2.2f))
                 .start()
         }
+    }
+
+    /** Cyan → blue → violet across the text, like the page's accents. */
+    private fun TextView.gradientText() = doOnLayout {
+        val c = context
+        paint.shader = LinearGradient(
+            0f, 0f, width.toFloat().coerceAtLeast(1f), 0f,
+            intArrayOf(c.getColor(R.color.brand_0), c.getColor(R.color.brand), c.getColor(R.color.brand_2)),
+            null,
+            Shader.TileMode.CLAMP,
+        )
+        invalidate()
     }
 
     private fun TextView.crossfadeText(text: Int) {

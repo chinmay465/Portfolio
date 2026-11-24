@@ -20,6 +20,7 @@ class PlayerCommandTest {
             "window.__swar&&window.__swar.cmd&&window.__swar.cmd('quality','low');",
             PlayerCommand.SetAudioQuality(AudioQuality.LOW).js,
         )
+        assertEquals("window.__swar&&window.__swar.cmd&&window.__swar.cmd('collapse',null);", PlayerCommand.CollapsePlayer.js)
     }
 
     @Test

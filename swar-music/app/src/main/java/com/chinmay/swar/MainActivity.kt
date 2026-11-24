@@ -64,12 +64,26 @@ class MainActivity : AppCompatActivity() {
     /** The page reloaded onto the song mid-switch; hide the card once it plays. */
     private var switchSurvivedReload = false
     private val revealFallback = Runnable { shell.showPage() }
+    /** The now-playing page is open (reported by the page script). Back minimises it first. */
+    private var playerOpen = false
 
     private val backCallback = object : OnBackPressedCallback(true) {
         override fun handleOnBackPressed() {
-            // Leaving the app must not stop the music, so never finish on back.
-            if (webView.canGoBack()) webView.goBack() else moveTaskToBack(true)
+            if (playerOpen) {
+                playerOpen = false
+                updateBackCallback()
+                webView.evaluateJavascript(PlayerCommand.CollapsePlayer.js) { result ->
+                    if (result != "true") leavePage()
+                }
+                return
+            }
+            leavePage()
         }
+    }
+
+    // Leaving the app must not stop the music, so never finish on back.
+    private fun leavePage() {
+        if (webView.canGoBack()) webView.goBack() else moveTaskToBack(true)
     }
 
     // Back online after an error: retry without waiting for a tap.
@@ -195,6 +209,9 @@ class MainActivity : AppCompatActivity() {
             allowFileAccess = false
             allowContentAccess = false
             setSupportMultipleWindows(false)
+            // Rasterise tiles just outside the viewport too, so fast scrolls and
+            // the player sliding in don't show blank or late-painted areas.
+            offscreenPreRaster = true
             userAgentString = UserAgent.chromeLike(WebSettings.getDefaultUserAgent(this@MainActivity))
         }
         CookieManager.getInstance().apply {
@@ -251,6 +268,8 @@ class MainActivity : AppCompatActivity() {
 
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
             mainFrameFailed = false
+            playerOpen = false
+            updateBackCallback()
             switchSurvivedReload = shell.switchingVisible
             // Older WebView without document-start scripts: inject as early as we can.
             if (!documentStartScript && url != null && url.startsWith(ORIGIN)) {
@@ -337,6 +356,11 @@ class MainActivity : AppCompatActivity() {
                 qualityControl.update(o.optBoolean("open") && shell.pageVisible && !mainFrameFailed, playing)
                 return
             }
+            "player" -> {
+                playerOpen = o.optBoolean("open")
+                updateBackCallback()
+                return
+            }
             "diag" -> {
                 SwitchReport.show(this, o.toString(2))
                 return
@@ -385,11 +409,12 @@ class MainActivity : AppCompatActivity() {
     /**
      * Android 12+ moves a root activity to the background on Back instead of
      * finishing it, with the predictive-back animation. So at the top of the
-     * page history, let the system handle Back. Older versions would finish
-     * the activity (and stop the music), so there Swar always handles it.
+     * page history, with the player minimised, let the system handle Back.
+     * Older versions would finish the activity (and stop the music), so there
+     * Swar always handles it.
      */
     private fun updateBackCallback() {
-        backCallback.isEnabled = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || webView.canGoBack()
+        backCallback.isEnabled = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || playerOpen || webView.canGoBack()
     }
 
     private fun openExternally(uri: Uri) {

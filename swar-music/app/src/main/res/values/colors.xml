@@ -1,10 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- YouTube Music's own background, so the status bar area and overlays blend in -->
-    <color name="page_bg">#030303</color>
+    <!-- Deep-space background shared with the restyled page, so bars and overlays blend in -->
+    <color name="page_bg">#05060B</color>
+    <!-- Accent gradient: cyan → blue → violet -->
+    <color name="brand_0">#3DD6FF</color>
     <color name="brand">#5B8CFF</color>
     <color name="brand_2">#A066FF</color>
+    <color name="glow_cyan">#2E3DD6FF</color>
+    <color name="glow_violet">#33A066FF</color>
+    <color name="glass">#F00C0E1A</color>
+    <color name="hairline">#3D8296FF</color>
     <color name="text_primary">#FFFFFF</color>
-    <color name="text_secondary">#B3B3B3</color>
-    <color name="text_tertiary">#7A7A7A</color>
+    <color name="text_secondary">#B6BCD6</color>
+    <color name="text_tertiary">#6F7694</color>
 </resources>

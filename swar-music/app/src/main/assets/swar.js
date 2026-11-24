@@ -18,10 +18,13 @@
  *     the lowest quality.
  *  5. Makes the page feel like an app: no tap flashes, no text selection on
  *     long-press, no rubber-band overscroll, and a "ready" signal so the app
- *     can drop its loading screen once the UI has drawn.
+ *     can drop its loading screen once the UI has drawn. Restyles the page in
+ *     Swar's own look (glass bars, aurora backdrop, gradient accents).
  *  6. Audio quality: Auto leaves YouTube's adaptive choice alone; High and Low
  *     narrow the audio formats the player can pick from. Reports the format
  *     that's playing, for the app's selector on the player page.
+ *  7. Gestures: swipe the now-playing page down to minimise it, swipe the
+ *     mini player up to open it, Back minimises the player first.
  */
 (() => {
   'use strict';
@@ -173,13 +176,17 @@
 
   if (typeof Response !== 'undefined' && Response.prototype.json) {
     const nativeJson = Response.prototype.json;
+    // Read the text first so the cheap marker check runs before pruning:
+    // walking every browse response object was a big source of scroll jank.
     Response.prototype.json = function json() {
       const url = this.url || '';
-      return nativeJson.call(this).then((out) => {
+      if (!url.includes('/youtubei/') || typeof this.text !== 'function') return nativeJson.call(this);
+      return this.text().then((text) => {
+        const out = nativeParse(text);
         try {
-          if (isObject(out) && url.includes('/youtubei/')) {
-            prune(out);
-            shapeAll(out);
+          if (isObject(out)) {
+            if (AD_MARKER.test(text)) prune(out);
+            if (text.includes('"adaptiveFormats"')) shapeAll(out);
           }
         } catch (_) {}
         return out;
@@ -207,6 +214,48 @@
     } catch (_) {}
   }
 
+  // Swar's look: a deep-space backdrop with aurora glows, glass bars with
+  // hairline gradient edges, a cyan-to-violet accent and a glowing play button.
+  // Built for speed: no backdrop blur or animated shadows (they cost a repaint
+  // on every scrolled frame); glows are static gradients and fixed shadows.
+  const THEME = [
+    ':root {',
+    '  --swar-a: #3DD6FF; --swar-b: #5B8CFF; --swar-c: #A066FF;',
+    '  --swar-grad: linear-gradient(90deg, #3DD6FF, #5B8CFF 50%, #A066FF);',
+    '  --swar-glass: rgba(10, 12, 24, 0.94); --swar-line: rgba(130, 150, 255, 0.22);',
+    '  --paper-slider-active-color: #6E8BFF; --paper-slider-knob-color: #FFFFFF; --paper-slider-knob-start-color: #FFFFFF;',
+    '  --paper-slider-secondary-color: rgba(110, 139, 255, 0.35); --paper-progress-active-color: #6E8BFF;',
+    '}',
+    // Backdrop: one fixed, static layer behind everything.
+    'html { background: #05060B !important; }',
+    'body, ytmusic-app, ytmusic-app-layout { background: transparent !important; }',
+    'body::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;',
+    '  background: radial-gradient(120% 55% at 0% 0%, rgba(61, 214, 255, 0.13), transparent 60%),',
+    '    radial-gradient(110% 60% at 100% 100%, rgba(160, 102, 255, 0.16), transparent 62%), #05060B; }',
+    // Top bar and bottom tabs: glass with a glowing hairline edge.
+    'ytmusic-nav-bar, #nav-bar-background { background: linear-gradient(180deg, rgba(5, 6, 11, 0.97), rgba(5, 6, 11, 0.84)) !important; box-shadow: 0 1px 0 var(--swar-line); }',
+    'ytmusic-pivot-bar-renderer { background: var(--swar-glass) !important; box-shadow: 0 -1px 0 var(--swar-line); }',
+    'ytmusic-pivot-bar-item-renderer { transition: color 0.2s ease; }',
+    'ytmusic-pivot-bar-item-renderer[aria-selected="true"], ytmusic-pivot-bar-item-renderer.iron-selected { color: var(--swar-a) !important; --iron-icon-fill-color: var(--swar-a); --yt-icon-color: var(--swar-a); }',
+    'ytmusic-pivot-bar-item-renderer[aria-selected="true"] yt-icon, ytmusic-pivot-bar-item-renderer.iron-selected yt-icon { color: var(--swar-a) !important; fill: var(--swar-a) !important; filter: drop-shadow(0 0 6px rgba(61, 214, 255, 0.6)); }',
+    // Mini player: a floating glass deck with a gradient edge.
+    'ytmusic-player-bar { background: linear-gradient(100deg, rgba(16, 24, 48, 0.97), rgba(30, 18, 52, 0.97)) !important; border-radius: 18px 18px 0 0; box-shadow: 0 -1px 0 var(--swar-line), 0 -12px 32px rgba(0, 0, 0, 0.5); }',
+    // Progress: gradient fill, glowing knob.
+    'tp-yt-paper-slider #primaryProgress, #progress-bar #primaryProgress { background: var(--swar-grad) !important; }',
+    'tp-yt-paper-slider .slider-knob-inner, #progress-bar .slider-knob-inner { background: #FFFFFF !important; border-color: #FFFFFF !important; box-shadow: 0 0 10px rgba(110, 139, 255, 0.95); }',
+    // Cards and rows: softer corners, a tactile press.
+    'ytmusic-two-row-item-renderer .image-wrapper, ytmusic-two-row-item-renderer yt-img-shadow { border-radius: 14px; overflow: hidden; }',
+    'ytmusic-responsive-list-item-renderer .left-items { border-radius: 10px; overflow: hidden; }',
+    'ytmusic-two-row-item-renderer, ytmusic-responsive-list-item-renderer, ytmusic-chip-cloud-chip-renderer { transition: transform 0.14s ease; }',
+    'ytmusic-two-row-item-renderer:active, ytmusic-responsive-list-item-renderer:active, ytmusic-chip-cloud-chip-renderer:active { transform: scale(0.97); }',
+    'ytmusic-chip-cloud-chip-renderer[is-selected], ytmusic-chip-cloud-chip-renderer[selected] { filter: drop-shadow(0 0 8px rgba(91, 140, 255, 0.55)); }',
+    // Now playing: glowing artwork, gradient play button, a grab handle that says "swipe down".
+    'ytmusic-player-page ytmusic-player { border-radius: 20px; overflow: hidden; box-shadow: 0 18px 50px rgba(91, 140, 255, 0.28), 0 0 0 1px rgba(255, 255, 255, 0.06); }',
+    'ytmusic-player-page .play-pause-button, ytmusic-player-page #play-pause-button { background: linear-gradient(135deg, #3DD6FF, #5B8CFF 45%, #A066FF) !important; border-radius: 50% !important; color: #FFFFFF !important; --iron-icon-fill-color: #FFFFFF; --yt-icon-color: #FFFFFF; box-shadow: 0 8px 28px rgba(110, 100, 255, 0.5); }',
+    'html.swar-player-open ytmusic-player-page::before { content: ""; position: absolute; top: 8px; left: 50%; width: 40px; height: 4px; margin-left: -20px; border-radius: 4px; background: rgba(255, 255, 255, 0.35); z-index: 10; pointer-events: none; }',
+    '::selection { background: rgba(91, 140, 255, 0.45); }',
+  ].join('\n');
+
   // Ad slots and Premium banners that survive in the DOM.
   const CSS = [
     'ytmusic-mealbar-promo-renderer',
@@ -222,11 +271,14 @@
     // Low-data video (see 4b): cover art instead of the picture.
     'html.swar-low-data ytmusic-player #song-video, html.swar-low-data #movie_player video { visibility: hidden !important; }',
     'html.swar-low-data ytmusic-player #song-image { display: block !important; visibility: visible !important; }',
-    // Feel like an app, not a web page.
-    'html { -webkit-tap-highlight-color: transparent; }',
+    // Feel like an app, not a web page. Selection is switched off once at the
+    // root and inherited (a universal "*" rule made every style recalc slower).
+    'html { -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }',
     'html, body { overscroll-behavior: none; }',
-    '*:not(input):not(textarea):not([contenteditable]) { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }',
-  ].join('\n');
+    'input, textarea, [contenteditable] { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }',
+    // Shelves far off screen skip layout and paint until scrolled near.
+    'ytmusic-carousel-shelf-renderer { content-visibility: auto; contain-intrinsic-size: auto 320px; }',
+  ].join('\n') + '\n' + THEME;
   const addStyle = () => {
     const style = document.createElement('style');
     style.id = 'swar-style';
@@ -245,6 +297,8 @@
       if (window.SwarBridge) window.SwarBridge.postMessage(JSON.stringify(message));
     } catch (_) {}
   };
+
+  const rafLater = (fn) => (typeof requestAnimationFrame === 'function' ? requestAnimationFrame(fn) : setTimeout(fn, 16));
 
   // ---------------------------------------------------------------- 3. fallback
   const SKIP_BUTTONS = '.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button, .ytp-ad-skip-button-container button';
@@ -353,13 +407,24 @@
     return showingVideo(v);
   }
 
+  // The label scan reads the text of every button on the page; on a video with
+  // no Song switch it used to run every second. Now at most every few seconds.
+  const LABEL_SCAN_MS = 3000;
+  let labelScan = { at: -Infinity, el: null };
+
   function findSongButton() {
     const direct = document.querySelector(SONG_SELECTORS);
     if (direct) return direct;
+    const now = Date.now();
+    if (now - labelScan.at < LABEL_SCAN_MS) return labelScan.el && labelScan.el.isConnected ? labelScan.el : null;
+    labelScan = { at: now, el: null };
     const scope = document.querySelector('ytmusic-player-page') || document.body;
     if (!scope) return null;
     for (const el of scope.querySelectorAll(LABELLED)) {
-      if (SONG_LABELS.includes((el.textContent || '').trim().toLowerCase())) return el;
+      if (SONG_LABELS.includes((el.textContent || '').trim().toLowerCase())) {
+        labelScan.el = el;
+        return el;
+      }
     }
     return null;
   }
@@ -704,6 +769,7 @@
         onScreen = true;
         reportAudio();
         return;
+      case 'collapse': return collapsePlayer(); // Back button: true if the player was minimised
       case 'play': play(); break;
       case 'pause': pause(); break;
       case 'next':
@@ -845,6 +911,7 @@
   }
 
   let onScreen = true;
+  let playerDragging = false; // the player is being swiped away: no chip over it
   const NOTHING = { id: '', codec: '', kbps: 0, measured: false, best: 0, tiers: { low: 0, normal: 0, high: 0 } };
   let nowPlaying = NOTHING;
   let lastAudio = '';
@@ -874,7 +941,7 @@
     }
     const message = {
       type: 'audio',
-      open: onScreen && playerPageOpen(),
+      open: onScreen && !playerDragging && playerPageOpen(),
       quality: audioQuality,
       codec: nowPlaying.codec,
       kbps: nowPlaying.kbps,
@@ -915,7 +982,7 @@
     const drawn = document.querySelector('ytmusic-app') && document.querySelector(READY_SELECTORS);
     if (drawn || Date.now() - readyStart > 10000) {
       // One frame later, so the first paint is on screen before the cover lifts.
-      requestAnimationFrame(() => post({ type: 'ready' }));
+      rafLater(() => post({ type: 'ready' }));
       return;
     }
     setTimeout(waitForUi, 120);
@@ -978,9 +1045,276 @@
   }
   window.__swar.report = report;
 
+  // ---------------------------------------------------------------- 7. gestures
+  // Swipe the now-playing page down to minimise it (it follows the finger and
+  // slides away), swipe the mini player up to open it, and Back minimises the
+  // player before it leaves the page. The page's own minimise button does the
+  // actual work, so YouTube Music's state stays consistent.
+  const BUTTONS = 'button, tp-yt-paper-icon-button, yt-icon-button, [role="button"]';
+  const COLLAPSE_SELECTORS = [
+    'ytmusic-player-page .player-minimize-button',
+    'ytmusic-player-page #minimize-button',
+    'ytmusic-player-page [aria-label*="minimi" i]',
+    'ytmusic-player-page [aria-label*="collapse" i]',
+    'ytmusic-player-page [aria-label*="close player" i]',
+  ];
+  // In order of preference (a selector list would pick whichever comes first on the page).
+  const OPEN_SELECTORS = ['ytmusic-player-bar .toggle-player-page-button', 'ytmusic-player-bar .content-info-wrapper', 'ytmusic-player-bar .middle-controls'];
+  const firstOf = (selectors) => {
+    for (const sel of selectors) {
+      const el = document.querySelector(sel);
+      if (el) return el;
+    }
+    return null;
+  };
+  // Touches here are for the control, never a swipe.
+  const NO_SWIPE = 'tp-yt-paper-slider, #progress-bar, input, textarea, [role="slider"], .volume-slider, .play-pause-button, #play-pause-button';
+  const SLOP_PX = 10;
+  const nowMs = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
+  const reducedMotion = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  const playerPage = () => document.querySelector('ytmusic-player-page');
+  const appLayout = () => document.querySelector('ytmusic-app-layout');
+
+  const playerOpen = () => playerPageOpen();
+  /** The open mark YouTube Music puts on the layout, if this version uses one. */
+  const OPEN_MARKS = ['player-page-open', 'player-page-open_'];
+  const markedOpen = (el) => !!el && OPEN_MARKS.some((a) => el.hasAttribute(a));
+
+  /** The player's minimise control: named button, else the top-left button on the page. */
+  function collapseButton() {
+    const named = firstOf(COLLAPSE_SELECTORS);
+    if (named) return named;
+    const page = playerPage();
+    if (page) {
+      let best = null;
+      let bestRect = null;
+      const maxLeft = (window.innerWidth || 0) * 0.34;
+      for (const el of page.querySelectorAll(BUTTONS)) {
+        const r = el.getBoundingClientRect();
+        if (!r.width || !r.height || r.top > 140 || r.left > maxLeft) continue;
+        // Ties go to the later (inner) element: the real <button> inside a wrapper.
+        if (!bestRect || r.top < bestRect.top - 4 || (Math.abs(r.top - bestRect.top) <= 4 && r.left <= bestRect.left + 1)) {
+          best = el;
+          bestRect = r;
+        }
+      }
+      if (best) return best;
+    }
+    return document.querySelector('ytmusic-player-bar .toggle-player-page-button');
+  }
+
+  let lastOpen = null;
+  function syncPlayerState() {
+    if (drag.state === 'drag' || drag.state === 'settling') return;
+    const open = playerOpen();
+    if (open === lastOpen) return;
+    lastOpen = open;
+    document.documentElement.classList.toggle('swar-player-open', open);
+    post({ type: 'player', open });
+  }
+
+  function collapsePlayer() {
+    if (!playerOpen()) return false;
+    const button = collapseButton();
+    if (!button) return false;
+    button.click();
+    setTimeout(syncPlayerState, 400);
+    return true;
+  }
+
+  const drag = { state: 'idle', mini: false, x: 0, y: 0, dy: 0, v: 0, lastY: 0, lastT: 0, page: null, button: null, raf: 0 };
+
+  function scrolledWithin(el, stop) {
+    for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
+      if (n.scrollTop > 0 && n.scrollHeight > n.clientHeight + 1) return true;
+      if (n === stop) break;
+    }
+    return false;
+  }
+
+  function onTouchStart(e) {
+    if (drag.state === 'settling') return;
+    drag.state = 'idle';
+    drag.mini = false;
+    const t = e.touches && e.touches.length === 1 ? e.touches[0] : null;
+    const target = e.target && e.target.nodeType === 1 ? e.target : null;
+    if (!t || !target || target.closest(NO_SWIPE)) return;
+    bindPage();
+    if (playerOpen()) {
+      const page = playerPage();
+      // Inside a scrolled list (queue, lyrics) the swipe scrolls the list instead.
+      if (!page || !page.contains(target) || scrolledWithin(target, page)) return;
+      drag.page = page;
+    } else if (target.closest('ytmusic-player-bar')) {
+      drag.mini = true;
+    } else {
+      return;
+    }
+    drag.state = 'pending';
+    drag.x = t.clientX;
+    drag.y = t.clientY;
+    drag.lastY = t.clientY;
+    drag.lastT = nowMs();
+    drag.dy = 0;
+    drag.v = 0;
+  }
+
+  // Registered on the player page only (not passive, so it can stop the page
+  // from scrolling while it follows the finger). Elsewhere scrolling stays on
+  // the fast path that never waits for the page's scripts.
+  function onTouchMove(e) {
+    if (drag.mini || (drag.state !== 'pending' && drag.state !== 'drag')) return;
+    const t = e.touches && e.touches[0];
+    if (!t) return;
+    const dx = t.clientX - drag.x;
+    const dy = t.clientY - drag.y;
+    if (drag.state === 'pending') {
+      if (Math.abs(dx) < SLOP_PX && Math.abs(dy) < SLOP_PX) return;
+      // Down and mostly vertical; sideways swipes (next song on the art) are YouTube's.
+      if (!(dy > 0 && dy > Math.abs(dx) * 1.2)) { drag.state = 'idle'; return; }
+      drag.state = 'drag';
+      playerDragging = true;
+      reportAudio(false); // hide the quality chip while the page moves
+      drag.button = collapseButton(); // before the page moves: it's found by position
+      drag.page.style.transition = 'none';
+      drag.page.style.willChange = 'transform, opacity';
+    }
+    if (e.cancelable) e.preventDefault();
+    const now = nowMs();
+    const dt = now - drag.lastT;
+    if (dt > 0) drag.v = 0.8 * ((t.clientY - drag.lastY) / dt) + 0.2 * drag.v;
+    drag.lastY = t.clientY;
+    drag.lastT = now;
+    drag.dy = Math.max(0, dy - SLOP_PX);
+    if (!drag.raf) drag.raf = rafLater(paintDrag);
+  }
+
+  function paintDrag() {
+    drag.raf = 0;
+    if (drag.state !== 'drag' || !drag.page) return;
+    const h = window.innerHeight || 800;
+    drag.page.style.transform = `translate3d(0, ${drag.dy}px, 0)`;
+    drag.page.style.opacity = String(1 - Math.min(0.35, (drag.dy / h) * 0.5));
+  }
+
+  function onTouchEnd(e) {
+    if (drag.mini) {
+      const t = e.changedTouches && e.changedTouches[0];
+      if (drag.state === 'pending' && t) {
+        const dx = t.clientX - drag.x;
+        const dy = t.clientY - drag.y;
+        if (dy < -40 && -dy > Math.abs(dx) * 1.2) {
+          const open = firstOf(OPEN_SELECTORS);
+          if (open) { open.click(); setTimeout(syncPlayerState, 400); }
+        }
+      }
+      drag.mini = false;
+      drag.state = 'idle';
+      return;
+    }
+    if (drag.state !== 'drag') {
+      if (drag.state === 'pending') drag.state = 'idle';
+      return;
+    }
+    const h = window.innerHeight || 800;
+    const fling = drag.v > 0.5 && drag.dy > 24;
+    const farEnough = drag.dy > Math.max(96, h * 0.16);
+    if ((farEnough || fling) && drag.button) slideAway();
+    else springBack();
+  }
+
+  function onTouchCancel() {
+    if (drag.state === 'drag') springBack();
+    else if (drag.state === 'pending') drag.state = 'idle';
+    drag.mini = false;
+  }
+
+  function settle(transform, opacity, ms, done) {
+    drag.state = 'settling';
+    const page = drag.page;
+    const s = page.style;
+    s.transition = `transform ${ms}ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity ${ms}ms ease`;
+    s.transform = transform;
+    s.opacity = opacity;
+    setTimeout(() => done(page), ms + 20);
+  }
+
+  function release(page) {
+    const s = page.style;
+    s.transition = 'none';
+    s.transform = '';
+    s.opacity = '';
+    s.willChange = '';
+    rafLater(() => { s.transition = ''; });
+    drag.page = null;
+    drag.button = null;
+    drag.state = 'idle';
+    playerDragging = false;
+    syncPlayerState();
+    reportAudio(false);
+  }
+
+  function springBack() {
+    if (!drag.page) { drag.state = 'idle'; return; }
+    settle('translate3d(0, 0, 0)', '1', reducedMotion() ? 0 : 240, release);
+  }
+
+  function slideAway() {
+    const h = window.innerHeight || 800;
+    const ms = reducedMotion() ? 0 : Math.round(Math.max(120, Math.min(240, (h - drag.dy) / Math.max(drag.v, 1.6))));
+    const button = drag.button;
+    const layout = appLayout();
+    const marked = markedOpen(layout);
+    settle(`translate3d(0, ${h}px, 0)`, '0.6', ms, (page) => {
+      button.click();
+      // Keep it off screen until YouTube Music has closed it, so it never
+      // flashes back: until the open mark goes, or a moment if there is none.
+      const started = Date.now();
+      (function waitClosed() {
+        const waited = Date.now() - started;
+        const closed = marked ? !markedOpen(layout) : waited >= 350;
+        if (closed || waited >= 700) release(page);
+        else setTimeout(waitClosed, 50);
+      })();
+    });
+  }
+
+  const boundPages = new WeakSet();
+  function bindPage() {
+    const page = playerPage();
+    if (page && !boundPages.has(page)) {
+      boundPages.add(page);
+      page.addEventListener('touchmove', onTouchMove, { passive: false });
+    }
+  }
+
+  let observedLayout = null;
+  function watchLayout() {
+    const layout = appLayout();
+    if (!layout || layout === observedLayout || typeof MutationObserver === 'undefined') return;
+    observedLayout = layout;
+    new MutationObserver(syncPlayerState).observe(layout, { attributes: true, attributeFilter: OPEN_MARKS });
+  }
+
+  document.addEventListener('touchstart', onTouchStart, { capture: true, passive: true });
+  document.addEventListener('touchend', onTouchEnd, { capture: true, passive: true });
+  document.addEventListener('touchcancel', onTouchCancel, { capture: true, passive: true });
+  // Taps on the arrow or the mini player: pick up the new state promptly.
+  document.addEventListener('click', () => setTimeout(syncPlayerState, 400), { capture: true, passive: true });
+  Object.assign(window.__swar, { collapsePlayer, playerOpen });
+
+  // Off screen there's nothing to swipe: skip the layout-reading check.
+  const onTick = () => {
+    if (!onScreen) return;
+    bindPage();
+    watchLayout();
+    syncPlayerState();
+  };
+
   const onMediaEvent = () => { guard(); preferSong(); report(); reportAudio(false); };
   for (const type of ['play', 'playing', 'pause', 'ended', 'loadedmetadata', 'seeked', 'durationchange']) {
     document.addEventListener(type, onMediaEvent, true);
   }
-  setInterval(onMediaEvent, 1000);
+  setInterval(() => { onMediaEvent(); onTick(); }, 1000);
 })();
