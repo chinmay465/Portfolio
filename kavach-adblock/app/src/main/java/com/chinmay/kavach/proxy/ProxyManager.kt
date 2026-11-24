@@ -4,6 +4,7 @@ import android.content.Context
 import com.chinmay.kavach.vpn.AdBlockState
 import com.chinmay.kavach.vpn.AdBlockState.Proxy
 import java.io.IOException
+import java.util.concurrent.Callable
 import java.util.concurrent.ExecutorCompletionService
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
@@ -182,9 +183,10 @@ class ProxyManager(
         val futures = ArrayList<Future<UpstreamPool.Entry?>>()
         try {
             candidates.forEach { c ->
-                futures += done.submit<UpstreamPool.Entry?> {
+                val task = Callable<UpstreamPool.Entry?> {
                     ProxyChecker.check(c)?.let { UpstreamPool.Entry(c, it.latencyMs, it.exitIp) }
                 }
+                futures.add(done.submit(task))
             }
         } catch (_: RejectedExecutionException) {
             return emptyList()
