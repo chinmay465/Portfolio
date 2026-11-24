@@ -45,6 +45,8 @@ done
 if ! adb logcat -d -s KavachProxy:I | grep -q "routing all traffic"; then
   echo "::error::proxy mode never started routing"; dump; exit 1
 fi
+echo "--- listener right after routing"
+adb shell 'cat /proc/net/tcp /proc/net/tcp6' | grep -i ':6E5B ' | head -3
 sleep 3
 
 echo "--- probes"

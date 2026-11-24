@@ -70,6 +70,7 @@ class LocalProxy(private val pool: UpstreamPool) {
     }
 
     fun stop() {
+        debug("stop() called", Throwable("stop trace"))
         stopped = true
         closeQuietly(server)
         open.toList().forEach(::closeQuietly)
@@ -80,7 +81,8 @@ class LocalProxy(private val pool: UpstreamPool) {
         while (!stopped) {
             val client = try {
                 server.accept()
-            } catch (_: IOException) {
+            } catch (e: IOException) {
+                debug("accept loop ended (stopped=$stopped, closed=${server.isClosed})", e)
                 break
             }
             AdBlockState.proxyReceived.update { it + 1 }
@@ -252,9 +254,9 @@ class LocalProxy(private val pool: UpstreamPool) {
     }
 
     /** Stage-level debug log. Never includes host names or addresses. */
-    private fun debug(msg: String) {
+    private fun debug(msg: String, e: Throwable? = null) {
         try {
-            android.util.Log.d(TAG, msg)
+            android.util.Log.d(TAG, msg, e)
         } catch (_: RuntimeException) {
             // JVM unit tests: android.util.Log is a stub.
         }
