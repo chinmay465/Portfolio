@@ -2,6 +2,8 @@
 import { describe, expect, it } from 'vitest'
 import sitemap from '../../public/sitemap.xml?raw'
 import robots from '../../public/robots.txt?raw'
+import indexHtml from '../../index.html?raw'
+import ogImage from '../../public/og-image.png?inline'
 import { projects } from '../data/projects'
 import { routes } from '../router'
 
@@ -33,5 +35,34 @@ describe('sitemap.xml', () => {
   })
   it('is linked from robots.txt', () => {
     expect(robots).toContain(`Sitemap: ${ORIGIN}/sitemap.xml`)
+  })
+})
+
+describe('link preview', () => {
+  const doc = new DOMParser().parseFromString(indexHtml, 'text/html')
+  const meta = (key: string) =>
+    doc.querySelector<HTMLMetaElement>(`meta[property="${key}"], meta[name="${key}"]`)?.content
+
+  it('points og:image and twitter:image at the PNG by absolute URL', () => {
+    expect(meta('og:image')).toBe(`${ORIGIN}/og-image.png`)
+    expect(meta('twitter:image')).toBe(`${ORIGIN}/og-image.png`)
+    expect(meta('og:image:width')).toBe('1200')
+    expect(meta('og:image:height')).toBe('630')
+    expect(meta('og:image:alt')).toBeTruthy()
+  })
+  it('asks for the large card', () => {
+    expect(meta('twitter:card')).toBe('summary_large_image')
+    expect(meta('og:type')).toBe('website')
+    expect(meta('og:url')).toBe(`${ORIGIN}/`)
+    expect(meta('og:title')).toBeTruthy()
+    expect(meta('og:description')).toBeTruthy()
+  })
+  it('ships an image that really is 1200×630 and small enough for WhatsApp', () => {
+    const bytes = Uint8Array.from(atob(ogImage.split(',')[1]), (c) => c.charCodeAt(0))
+    expect([...bytes.slice(1, 4)].map((b) => String.fromCharCode(b)).join('')).toBe('PNG')
+    const view = new DataView(bytes.buffer)
+    expect(view.getUint32(16)).toBe(1200)
+    expect(view.getUint32(20)).toBe(630)
+    expect(bytes.length).toBeLessThan(300 * 1024)
   })
 })
