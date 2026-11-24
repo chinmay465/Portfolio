@@ -99,9 +99,11 @@ allowed_urls = {
     "https://1.1.1.1/dns-query",
     "https://1.0.0.1/dns-query",
     "https://dns.quad9.net/dns-query",
-    # Proxy mode (off by default): Setu's pool, and the on-phone proxy test.
+    # Proxy mode (off by default): Setu's pool, and the on-phone proxy tests
+    # (sent through the proxy being tested, never directly).
     "https://setu-proxy-hub.onrender.com",
     "https://1.1.1.1/cdn-cgi/trace",
+    "https://www.google.com/generate_204",
 }
 src_urls = set()
 for d, _, files in os.walk("app/src/main/java"):

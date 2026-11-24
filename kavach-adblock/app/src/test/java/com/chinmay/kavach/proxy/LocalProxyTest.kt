@@ -111,8 +111,73 @@ class LocalProxyTest {
         assertEquals("198.51.100.2", pool.current()!!.exitIp)
     }
 
+    /** Accepts CONNECT with 200, then closes the tunnel without relaying anything. */
+    private fun stallingUpstream(): ServerSocket {
+        val server = ServerSocket(0, 8, InetAddress.getLoopbackAddress())
+        closeables += server
+        thread(isDaemon = true) {
+            while (!server.isClosed) {
+                val s = runCatching { server.accept() }.getOrNull() ?: break
+                s.use {
+                    LocalProxy.readHead(it.getInputStream())
+                    it.getOutputStream().write("HTTP/1.1 200 OK\r\n\r\n".toByteArray())
+                    it.getInputStream().read(ByteArray(64))
+                }
+            }
+        }
+        return server
+    }
+
+    private fun connectAndEcho(port: Int): String {
+        Socket(InetAddress.getLoopbackAddress(), port).use { app ->
+            app.soTimeout = 15_000
+            app.getOutputStream().write("CONNECT www.google.com:443 HTTP/1.1\r\n\r\n".toByteArray())
+            val reply = LocalProxy.readHead(app.getInputStream())!!.decodeToString()
+            assertTrue(reply, reply.startsWith("HTTP/1.1 200"))
+            app.getOutputStream().write("hello".toByteArray())
+            val echo = ByteArray(5)
+            var got = 0
+            while (got < 5) {
+                val n = app.getInputStream().read(echo, got, 5 - got)
+                if (n < 0) return echo.copyOf(got).decodeToString()
+                got += n
+            }
+            return echo.decodeToString()
+        }
+    }
+
     @Test
-    fun answers502WhenNoProxyWorks() {
+    fun replaysTheFirstBytesWhenAProxyOpensTheTunnelButNeverAnswers() {
+        val seen = mutableListOf<String>()
+        val stalling = stallingUpstream()
+        val working = fakeUpstream(seen)
+        val pool = UpstreamPool(maxFails = 1)
+        pool.replace(
+            listOf(
+                UpstreamPool.Entry(ProxyServer("127.0.0.1", stalling.localPort), 10, "198.51.100.1"),
+                UpstreamPool.Entry(ProxyServer("127.0.0.1", working.localPort), 20, "198.51.100.2"),
+            ),
+        )
+        val proxy = LocalProxy(pool).also { it.start() }
+        closeables += AutoCloseable { proxy.stop() }
+
+        assertEquals("hello", connectAndEcho(proxy.port))
+        assertEquals(1, pool.size())
+        assertEquals("198.51.100.2", pool.current()!!.exitIp)
+    }
+
+    @Test
+    fun closesTheTunnelWhenNoProxyWorks() {
+        val pool = UpstreamPool()
+        pool.replace(listOf(UpstreamPool.Entry(ProxyServer("127.0.0.1", deadPort()), 10, "198.51.100.1")))
+        val proxy = LocalProxy(pool).also { it.start() }
+        closeables += AutoCloseable { proxy.stop() }
+
+        assertEquals("", connectAndEcho(proxy.port))
+    }
+
+    @Test
+    fun answers502ForPlainHttpWhenNoProxyWorks() {
         val pool = UpstreamPool()
         pool.replace(listOf(UpstreamPool.Entry(ProxyServer("127.0.0.1", deadPort()), 10, "198.51.100.1")))
         val proxy = LocalProxy(pool).also { it.start() }
@@ -120,9 +185,28 @@ class LocalProxyTest {
 
         Socket(InetAddress.getLoopbackAddress(), proxy.port).use { app ->
             app.soTimeout = 5_000
-            app.getOutputStream().write("CONNECT example.com:443 HTTP/1.1\r\n\r\n".toByteArray())
+            app.getOutputStream().write("GET http://example.com/ HTTP/1.1\r\nHost: example.com\r\n\r\n".toByteArray())
             val reply = LocalProxy.readHead(app.getInputStream())!!.decodeToString()
             assertTrue(reply, reply.startsWith("HTTP/1.1 502"))
         }
+    }
+
+    @Test
+    fun waitsForTheWholeTlsClientHello() {
+        val record = byteArrayOf(0x16, 0x03, 0x01, 0x00, 0x06, 1, 2, 3, 4, 5, 6)
+        // Delivered in three pieces, as a slow socket might.
+        val chunks = ArrayDeque(listOf(record.copyOfRange(0, 3), record.copyOfRange(3, 7), record.copyOfRange(7, 11)))
+        val input = object : java.io.InputStream() {
+            override fun read(): Int = throw UnsupportedOperationException()
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                val c = chunks.removeFirstOrNull() ?: return -1
+                c.copyInto(b, off)
+                return c.size
+            }
+        }
+        assertEquals(record.toList(), LocalProxy.readFirstPayload(input)!!.toList())
+        assertEquals(11, LocalProxy.tlsRecordSize(record))
+        assertNull(LocalProxy.tlsRecordSize("GET".toByteArray()))
+        assertNull(LocalProxy.readFirstPayload(ByteArrayInputStream(ByteArray(0))))
     }
 }

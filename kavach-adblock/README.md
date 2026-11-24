@@ -41,9 +41,9 @@ Turn on **Proxy mode** under the main button. The first time, Kavach asks for Se
 ```
 
 1. Kavach gets the validated pool from Setu (`GET /api/pool`). A sleeping Render free instance takes up to a minute to wake.
-2. It tests up to 40 of them **from the phone** with an HTTPS request to Cloudflare's trace page, keeps up to 8 that work, and orders them by latency. TLS is verified, so a proxy that intercepts HTTPS fails the test.
+2. It tests up to 40 of them **from the phone**, keeps up to 8 that work, and orders them by latency. Each test is two HTTPS requests through the proxy: Google's `generate_204` (many free proxies relay other sites but get reset by Google, which leaves Google Search showing "No internet") and Cloudflare's trace page for the exit IP. TLS is verified, so a proxy that intercepts HTTPS fails.
 3. The VPN hands every app Kavach's own proxy on `127.0.0.1`. That proxy blocks ad hosts (with a proxy set, apps don't do their own DNS lookups, so blocking happens here) and forwards the rest to the current free proxy.
-4. If a free proxy fails, the connection is retried on the next one straight away, and a proxy that fails twice in a row is dropped. Every 60 s Kavach re-tests the current proxy and tops the pool up from Setu when fewer than 3 are left. With none working, apps go direct (still ad-blocked by DNS) and Kavach keeps retrying.
+4. If a free proxy fails, or opens the tunnel but the site never answers, Kavach replays the app's first bytes (the TLS ClientHello) on the next proxy, so the app doesn't see the failure. A proxy that fails twice in a row is dropped. The status line shows how many connections went through and how many failed. Every 60 s Kavach re-tests the current proxy and tops the pool up from Setu when fewer than 3 are left. With none working, apps go direct (still ad-blocked by DNS) and Kavach keeps retrying.
 
 **Proxy settings:**
 

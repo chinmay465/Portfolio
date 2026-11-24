@@ -69,7 +69,7 @@
     <string name="proxy_status_waiting">Starts when protection is on.</string>
     <string name="proxy_status_fetching">Getting proxies from Setu… a sleeping server takes up to a minute to wake.</string>
     <string name="proxy_status_testing">Testing proxies from this phone: %1$d of %2$d</string>
-    <string name="proxy_status_active">Via %1$s · exit IP %2$s · %3$d ms · %4$d ready</string>
+    <string name="proxy_status_active">Via %1$s · exit IP %2$s · %3$d ms · %4$d ready\nConnections: %5$d ok, %6$d failed</string>
     <string name="proxy_status_auth">Setu rejected the token. Fix it in Proxy settings. Apps go direct meanwhile.</string>
     <string name="proxy_status_unreachable">Can\'t reach Setu. Retrying in 2 min, apps go direct meanwhile.</string>
     <string name="proxy_status_none">No working proxy right now. Retrying, apps go direct meanwhile.</string>

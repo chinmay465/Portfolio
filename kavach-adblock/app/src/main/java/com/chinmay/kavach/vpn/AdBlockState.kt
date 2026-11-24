@@ -22,6 +22,15 @@ object AdBlockState {
 
     val running = MutableStateFlow(false)
     val proxy = MutableStateFlow<Proxy>(Proxy.Off)
+
+    /** App connections through proxy mode that got an answer / that failed (502 or a dead tunnel). */
+    val proxyOk = MutableStateFlow(0L)
+    val proxyFailed = MutableStateFlow(0L)
+
+    fun resetProxyCounters() {
+        proxyOk.value = 0
+        proxyFailed.value = 0
+    }
     val queries = MutableStateFlow(0L)
     val blocked = MutableStateFlow(0L)
     val recentBlocked = MutableStateFlow<List<String>>(emptyList())

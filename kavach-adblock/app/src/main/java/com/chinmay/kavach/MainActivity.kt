@@ -118,7 +118,12 @@ class MainActivity : AppCompatActivity() {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch { AdBlockState.running.collect(::renderRunning) }
                 launch {
-                    combine(AdBlockState.running, AdBlockState.proxy) { r, p -> r to p }
+                    combine(
+                        AdBlockState.running,
+                        AdBlockState.proxy,
+                        AdBlockState.proxyOk,
+                        AdBlockState.proxyFailed,
+                    ) { r, p, _, _ -> r to p }
                         .collect { (running, proxy) -> renderProxy(running, proxy) }
                 }
                 launch {
@@ -341,6 +346,8 @@ class MainActivity : AppCompatActivity() {
                     proxy.exitIp,
                     proxy.latencyMs,
                     proxy.poolSize,
+                    AdBlockState.proxyOk.value,
+                    AdBlockState.proxyFailed.value,
                 )
                 is AdBlockState.Proxy.Unavailable -> getString(
                     when (proxy.reason) {

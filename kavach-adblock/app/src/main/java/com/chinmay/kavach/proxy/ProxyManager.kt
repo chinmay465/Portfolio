@@ -38,6 +38,7 @@ class ProxyManager(
     val currentPort: Int? get() = routedPort
 
     fun start() {
+        AdBlockState.resetProxyCounters()
         pool.onChange = {
             publishActive()
             // Every proxy failed: send apps direct, then fetch a fresh set.
@@ -145,7 +146,7 @@ class ProxyManager(
         if (stopped || pool.size() == 0) return
         // 1. Is the current proxy still working from here?
         pool.current()?.let { cur ->
-            if (ProxyChecker.check(cur.proxy) == null) pool.reportFailure(cur) else pool.reportSuccess(cur)
+            if (ProxyChecker.reachesGoogle(cur.proxy)) pool.reportSuccess(cur) else pool.reportFailure(cur)
         }
         // 2. Scheduled rotation.
         val minutes = settings.rotateMinutes

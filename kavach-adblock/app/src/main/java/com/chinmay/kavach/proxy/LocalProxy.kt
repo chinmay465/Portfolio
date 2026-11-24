@@ -2,6 +2,7 @@ package com.chinmay.kavach.proxy
 
 import com.chinmay.kavach.vpn.AdBlockState
 import com.chinmay.kavach.vpn.Blocklist
+import kotlinx.coroutines.flow.update
 import java.io.BufferedInputStream
 import java.io.IOException
 import java.io.InputStream
@@ -26,9 +27,10 @@ import java.util.concurrent.atomic.AtomicInteger
  *  1. blocks it if the host is on the blocklist. With a proxy set, apps don't
  *     look domains up themselves (the proxy does), so this is where ad
  *     blocking happens for proxied traffic;
- *  2. otherwise forwards it to the current free proxy from [pool], switching
- *     to the next proxy straight away if that one fails. The app never sees
- *     the failed attempt.
+ *  2. otherwise forwards it to the current free proxy from [pool]. If that
+ *     proxy fails, or opens the tunnel but the site never answers, the app's
+ *     first bytes are replayed on the next proxy. The app never sees the
+ *     failed attempt.
  *
  * HTTPS goes through as a CONNECT tunnel, so neither Kavach nor the free
  * proxy can read it. Plain HTTP is readable by the free proxy's operator.
@@ -77,6 +79,8 @@ class LocalProxy(private val pool: UpstreamPool) {
         }
     }
 
+    private class Opened(val socket: Socket, val entry: UpstreamPool.Entry, val firstReply: ByteArray)
+
     private fun serve(client: Socket) {
         open += client
         var upstream: Socket? = null
@@ -91,15 +95,33 @@ class LocalProxy(private val pool: UpstreamPool) {
             AdBlockState.onQuery(target.host, wasBlocked = blocked)
             if (blocked) return reply(clientOut, 403, "Blocked by Kavach")
 
-            upstream = openUpstream(target, head) ?: return reply(clientOut, 502, "No working proxy")
-            open += upstream
-            if (target.connect) {
+            // What the app sends first: the HTTP request itself, or, inside a
+            // CONNECT tunnel, the TLS ClientHello. Holding on to it lets us
+            // replay it on the next proxy if this one never answers.
+            val first = if (target.connect) {
                 clientOut.write("HTTP/1.1 200 Connection established\r\n\r\n".toByteArray())
                 clientOut.flush()
+                client.soTimeout = FIRST_CLIENT_BYTES_TIMEOUT_MS
+                readFirstPayload(clientIn) ?: return // app closed a pre-opened tunnel unused
+            } else {
+                head
             }
+
+            val opened = openUpstream(target, first)
+            if (opened == null) {
+                AdBlockState.proxyFailed.update { it + 1 }
+                // After "200 Connection established" all we can do is close.
+                if (!target.connect) reply(clientOut, 502, "No working proxy")
+                return
+            }
+            upstream = opened.socket
+            open += opened.socket
+            AdBlockState.proxyOk.update { it + 1 }
+            clientOut.write(opened.firstReply)
+            clientOut.flush()
             client.soTimeout = IDLE_TIMEOUT_MS
-            upstream.soTimeout = IDLE_TIMEOUT_MS
-            relay(client, clientIn, upstream)
+            opened.socket.soTimeout = IDLE_TIMEOUT_MS
+            relay(client, clientIn, opened.socket)
         } catch (_: IOException) {
             // Client went away or a socket timed out. Hosts are deliberately not logged.
         } finally {
@@ -111,29 +133,40 @@ class LocalProxy(private val pool: UpstreamPool) {
     }
 
     /**
-     * Tries the current proxy, then the next ones. For CONNECT, success means
-     * the proxy answered 200. For plain HTTP the request head is sent as is.
+     * Tries the current proxy, then the next ones. A proxy only counts as
+     * working once the site's first bytes come back through it: free proxies
+     * often accept a CONNECT and then drop or stall the tunnel (Google resets
+     * many of them), which apps show as "No internet".
      */
-    private fun openUpstream(target: Target, head: ByteArray): Socket? {
+    private fun openUpstream(target: Target, first: ByteArray): Opened? {
         for (entry in pool.attemptOrder(MAX_ATTEMPTS)) {
             val socket = Socket()
             try {
                 socket.connect(InetSocketAddress(entry.proxy.host, entry.proxy.port), CONNECT_TIMEOUT_MS)
                 socket.soTimeout = HANDSHAKE_TIMEOUT_MS
                 socket.tcpNoDelay = true
+                val input = socket.getInputStream()
                 val out = socket.getOutputStream()
                 if (target.connect) {
                     val authority = authority(target)
                     out.write("CONNECT $authority HTTP/1.1\r\nHost: $authority\r\n\r\n".toByteArray())
                     out.flush()
-                    val response = readHead(socket.getInputStream()) ?: throw IOException("No CONNECT reply")
+                    val response = readHead(input) ?: throw IOException("No CONNECT reply")
                     if (statusCode(response.decodeToString()) != 200) throw IOException("CONNECT refused")
-                } else {
-                    out.write(head)
-                    out.flush()
                 }
+                out.write(first)
+                out.flush()
+                // Plain HTTP may still have a request body to send, so don't wait for a reply.
+                if (!target.connect) {
+                    pool.reportSuccess(entry)
+                    return Opened(socket, entry, ByteArray(0))
+                }
+                socket.soTimeout = FIRST_REPLY_TIMEOUT_MS
+                val buf = ByteArray(16_384)
+                val n = input.read(buf)
+                if (n <= 0) throw IOException("Tunnel closed without an answer")
                 pool.reportSuccess(entry)
-                return socket
+                return Opened(socket, entry, buf.copyOf(n))
             } catch (_: IOException) {
                 closeQuietly(socket)
                 pool.reportFailure(entry)
@@ -180,10 +213,13 @@ class LocalProxy(private val pool: UpstreamPool) {
         private const val BACKLOG = 128
         private const val MAX_CONNECTIONS = 256
         private const val MAX_ATTEMPTS = 3
-        private const val CONNECT_TIMEOUT_MS = 6_000
-        private const val HANDSHAKE_TIMEOUT_MS = 15_000
+        private const val CONNECT_TIMEOUT_MS = 5_000
+        private const val HANDSHAKE_TIMEOUT_MS = 10_000
+        private const val FIRST_REPLY_TIMEOUT_MS = 8_000
+        private const val FIRST_CLIENT_BYTES_TIMEOUT_MS = 60_000
         private const val IDLE_TIMEOUT_MS = 5 * 60_000
         private const val MAX_HEAD = 32 * 1024
+        private const val MAX_FIRST_PAYLOAD = 64 * 1024
 
         /** Reads an HTTP head up to and including the blank line. Null on EOF or oversize. */
         fun readHead(input: InputStream): ByteArray? {
@@ -202,6 +238,31 @@ class LocalProxy(private val pool: UpstreamPool) {
                 if (match == 4) return out.toByteArray()
             }
             return null
+        }
+
+        /**
+         * Reads the app's first payload in a tunnel. For TLS it waits for the
+         * whole first record (the ClientHello), so a replay is complete.
+         */
+        fun readFirstPayload(input: InputStream): ByteArray? {
+            val out = java.io.ByteArrayOutputStream(2_048)
+            val buf = ByteArray(16_384)
+            while (true) {
+                val n = input.read(buf)
+                if (n < 0) return if (out.size() > 0) out.toByteArray() else null
+                out.write(buf, 0, n)
+                val bytes = out.toByteArray()
+                val need = tlsRecordSize(bytes) ?: return bytes // not TLS: send what we have
+                if (bytes.size >= need || bytes.size >= MAX_FIRST_PAYLOAD) return bytes
+            }
+        }
+
+        /** Size of the first TLS record including its 5-byte header, or null if this isn't TLS. */
+        fun tlsRecordSize(bytes: ByteArray): Int? {
+            if (bytes.isEmpty() || bytes[0].toInt() != 0x16) return null
+            if (bytes.size < 5) return 5 + 1 // need the header first
+            val len = ((bytes[3].toInt() and 0xff) shl 8) or (bytes[4].toInt() and 0xff)
+            return 5 + len
         }
 
         /** Where a proxy request is going: `CONNECT host:port` or `GET http://host/...`. */
