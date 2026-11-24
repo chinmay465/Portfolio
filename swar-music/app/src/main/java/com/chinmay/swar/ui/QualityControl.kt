@@ -1,16 +1,19 @@
 package com.chinmay.swar.ui
 
 import android.app.Activity
-import android.app.AlertDialog
-import android.text.SpannableStringBuilder
-import android.text.Spanned
-import android.text.style.ForegroundColorSpan
-import android.text.style.RelativeSizeSpan
+import android.app.Dialog
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ArrayAdapter
+import android.view.Window
+import android.widget.LinearLayout
+import android.widget.RadioButton
 import android.widget.TextView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.chinmay.swar.R
 import com.chinmay.swar.web.AudioQuality
 
@@ -38,7 +41,7 @@ class QualityControl(
     var quality: AudioQuality = initial
         private set
     private var playing = Playing()
-    private var dialog: AlertDialog? = null
+    private var dialog: Dialog? = null
 
     init {
         chip.setOnClickListener { showPicker() }
@@ -85,38 +88,58 @@ class QualityControl(
         chip.contentDescription = activity.getString(R.string.quality_chip_description, chip.text)
     }
 
+    /** Bottom sheet in Swar's own layout, so it looks the same whatever the phone's dialog theme. */
     private fun showPicker() {
         if (dialog?.isShowing == true || activity.isFinishing) return
-        val options = AudioQuality.entries
-        val items = options.map { option(it) }
-        val enabled = options.map(::offered)
-        val adapter = object : ArrayAdapter<CharSequence>(activity, android.R.layout.simple_list_item_single_choice, items) {
-            override fun areAllItemsEnabled() = false
-            override fun isEnabled(position: Int) = enabled[position]
-            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View =
-                super.getView(position, convertView, parent).apply {
-                    alpha = if (enabled[position]) 1f else 0.38f
-                    (this as? TextView)?.apply {
-                        setPadding(paddingLeft, (10 * resources.displayMetrics.density).toInt(), paddingRight, (10 * resources.displayMetrics.density).toInt())
-                    }
+        val inflater = LayoutInflater.from(activity)
+        val content = inflater.inflate(R.layout.dialog_quality, null)
+        content.findViewById<TextView>(R.id.quality_now).text = nowText()
+        val list = content.findViewById<LinearLayout>(R.id.quality_options)
+        val sheet = Dialog(activity)
+        for (q in AudioQuality.entries) {
+            val row = inflater.inflate(R.layout.item_quality_option, list, false)
+            val enabled = offered(q)
+            row.findViewById<TextView>(R.id.option_title).text = optionTitle(q)
+            row.findViewById<TextView>(R.id.option_detail).text = optionDetail(q)
+            row.findViewById<RadioButton>(R.id.option_radio).isChecked = q == quality
+            row.alpha = if (enabled) 1f else 0.38f
+            row.isEnabled = enabled
+            row.contentDescription = "${optionTitle(q)}. ${optionDetail(q)}"
+            if (enabled) {
+                row.setOnClickListener {
+                    pick(q)
+                    sheet.dismiss()
                 }
-        }
-        val header = LayoutInflater.from(activity).inflate(R.layout.dialog_quality_title, null)
-        header.findViewById<TextView>(R.id.quality_now).text = nowText()
-        dialog = AlertDialog.Builder(activity)
-            .setCustomTitle(header)
-            .setSingleChoiceItems(adapter, options.indexOf(quality)) { d, which ->
-                if (!enabled[which]) return@setSingleChoiceItems
-                val picked = options[which]
-                if (picked != quality) {
-                    quality = picked
-                    render()
-                    onChange(picked)
-                }
-                d.dismiss()
             }
-            .setNegativeButton(R.string.crash_dismiss, null)
-            .show()
+            list.addView(row)
+        }
+        // Keep the sheet clear of the gesture/navigation bar.
+        ViewCompat.setOnApplyWindowInsetsListener(content) { v, insets ->
+            val bottom = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+            v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, sheetPaddingBottom + bottom)
+            insets
+        }
+        sheet.requestWindowFeature(Window.FEATURE_NO_TITLE)
+        sheet.setContentView(content)
+        sheet.setCanceledOnTouchOutside(true)
+        sheet.window?.apply {
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            setGravity(Gravity.BOTTOM)
+            setWindowAnimations(android.R.style.Animation_InputMethod) // slides up from the bottom
+            setDimAmount(0.6f)
+        }
+        sheet.show()
+        dialog = sheet
+    }
+
+    private val sheetPaddingBottom by lazy { (20 * activity.resources.displayMetrics.density).toInt() }
+
+    private fun pick(q: AudioQuality) {
+        if (q == quality) return
+        quality = q
+        render()
+        onChange(q)
     }
 
     private fun nowText(): String {
@@ -141,30 +164,22 @@ class QualityControl(
     private fun offered(q: AudioQuality): Boolean =
         q == AudioQuality.AUTO || playing.tiers.isEmpty() || (playing.tiers[q] ?: 0) > 0
 
-    private fun option(q: AudioQuality): CharSequence {
+    private fun optionTitle(q: AudioQuality): String {
         val rate = playing.tiers[q] ?: 0
-        val title = if (q != AudioQuality.AUTO && rate > 0) {
-            activity.getString(R.string.quality_option_rate, activity.getString(label(q)), rate)
-        } else {
-            activity.getString(label(q))
-        }
-        val detail = activity.getString(
-            when {
-                !offered(q) && q == AudioQuality.HIGH -> R.string.quality_high_unavailable
-                !offered(q) -> R.string.quality_unavailable
-                q == AudioQuality.AUTO -> R.string.quality_auto_detail
-                q == AudioQuality.HIGH -> R.string.quality_high_detail
-                q == AudioQuality.NORMAL -> R.string.quality_normal_detail
-                else -> R.string.quality_low_detail
-            },
-        )
-        return SpannableStringBuilder(title).append('\n').apply {
-            val start = length
-            append(detail)
-            setSpan(RelativeSizeSpan(0.82f), start, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            setSpan(ForegroundColorSpan(activity.getColor(R.color.text_secondary)), start, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        }
+        val name = activity.getString(label(q))
+        return if (q != AudioQuality.AUTO && rate > 0) activity.getString(R.string.quality_option_rate, name, rate) else name
     }
+
+    private fun optionDetail(q: AudioQuality): String = activity.getString(
+        when {
+            !offered(q) && q == AudioQuality.HIGH -> R.string.quality_high_unavailable
+            !offered(q) -> R.string.quality_unavailable
+            q == AudioQuality.AUTO -> R.string.quality_auto_detail
+            q == AudioQuality.HIGH -> R.string.quality_high_detail
+            q == AudioQuality.NORMAL -> R.string.quality_normal_detail
+            else -> R.string.quality_low_detail
+        },
+    )
 
     fun release() {
         dialog?.dismiss()
