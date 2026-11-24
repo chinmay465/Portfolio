@@ -795,15 +795,21 @@ test('notification info falls back to the player and the player bar when media-s
   q.close();
 });
 
-// ---- Gestures: swipe the player down to minimise, mini player up to open, Back minimises.
+// ---- Gestures: swipe down = the player's down arrow; swipe up on the mini player opens it; Back = arrow.
 const PLAYER = `<ytmusic-app><ytmusic-app-layout player-page-open>
   <ytmusic-player-page>
-    <button class="minimise" aria-label="Minimise player"></button>
+    <tp-yt-paper-icon-button class="chevron"><button class="inner"></button></tp-yt-paper-icon-button>
     <div class="art"></div>
     <tp-yt-paper-slider id="progress-bar"><div class="knob"></div></tp-yt-paper-slider>
+    <a class="artist-link" role="button"></a>
   </ytmusic-player-page>
   <ytmusic-player-bar><div class="content-info-wrapper"></div><button class="toggle-player-page-button"></button></ytmusic-player-bar>
 </ytmusic-app-layout></ytmusic-app>`;
+
+// jsdom has no layout: give elements a box so "is it on screen" checks pass.
+function place(el, top = 20, left = 10, size = 40) {
+  el.getBoundingClientRect = () => ({ top, left, width: size, height: size, right: left + size, bottom: top + size, x: left, y: top });
+}
 
 function touch(p, el, type, x, y) {
   const e = new p.window.Event(type, { bubbles: true, cancelable: true });
@@ -814,84 +820,114 @@ function touch(p, el, type, x, y) {
   return e;
 }
 
-function swipe(p, el, from, to, steps = 6) {
+function swipe(p, el, from, to) {
   touch(p, el, 'touchstart', from[0], from[1]);
-  let last;
-  for (let i = 1; i <= steps; i++) {
-    last = touch(p, el, 'touchmove', from[0] + ((to[0] - from[0]) * i) / steps, from[1] + ((to[1] - from[1]) * i) / steps);
-  }
-  return last;
+  touch(p, el, 'touchmove', (from[0] + to[0]) / 2, (from[1] + to[1]) / 2);
+  touch(p, el, 'touchmove', to[0], to[1]);
+  touch(p, el, 'touchend', to[0], to[1]);
 }
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
-function minimiser(p) {
+/** Wire a button so tapping it closes the player, like YouTube Music's arrow. */
+function closes(p, el, clicks, name) {
   const layout = p.document.querySelector('ytmusic-app-layout');
-  const clicks = [];
-  p.document.querySelector('.minimise').addEventListener('click', () => {
-    clicks.push('minimise');
-    layout.removeAttribute('player-page-open');
-  });
-  return clicks;
+  el.addEventListener('click', () => { clicks.push(name); layout.removeAttribute('player-page-open'); });
 }
 
-test('swiping the open player down follows the finger, then minimises it', async () => {
+test('swiping down on the open player presses the down arrow (the player bar toggle)', () => {
   const p = page(PLAYER);
-  const clicks = minimiser(p);
-  const art = p.document.querySelector('.art');
-  const pageEl = p.document.querySelector('ytmusic-player-page');
-  const move = swipe(p, art, [200, 150], [205, 450]);
-  assert.equal(move.defaultPrevented, true, 'the page does not scroll under the drag');
-  await wait(40);
-  assert.match(pageEl.style.transform, /translate3d\(0, \d+px, 0\)/);
-  touch(p, art, 'touchend', 205, 450);
-  await wait(700);
-  assert.deepEqual(clicks, ['minimise']);
-  assert.equal(pageEl.style.transform, '', 'inline styles are removed once closed');
-  assert.equal(p.messages.at(-1).type, 'player');
-  assert.equal(p.messages.at(-1).open, false);
+  const clicks = [];
+  const toggle = p.document.querySelector('.toggle-player-page-button');
+  place(toggle, 700, 330);
+  closes(p, toggle, clicks, 'toggle');
+  swipe(p, p.document.querySelector('.art'), [200, 150], [210, 420]);
+  assert.deepEqual(clicks, ['toggle']);
   p.close();
 });
 
-test('a short drag springs back; sideways swipes and the seek bar are left alone', async () => {
+test('without a known toggle, the top-left button on the player page is the arrow', () => {
+  const p = page(PLAYER.replace(' class="toggle-player-page-button"', ''));
+  const clicks = [];
+  const inner = p.document.querySelector('.inner');
+  place(p.document.querySelector('.chevron'));
+  place(inner);
+  closes(p, inner, clicks, 'chevron');
+  swipe(p, p.document.querySelector('.art'), [200, 150], [200, 400]);
+  assert.deepEqual(clicks, ['chevron'], 'the inner <button>, not its wrapper');
+  p.close();
+});
+
+test('learns the arrow from a real tap that closes the player, and uses it after', async () => {
   const p = page(PLAYER);
-  const clicks = minimiser(p);
+  const clicks = [];
+  const inner = p.document.querySelector('.inner');
+  const toggle = p.document.querySelector('.toggle-player-page-button');
+  place(inner);
+  place(toggle, 700, 330);
+  closes(p, inner, clicks, 'chevron');
+  toggle.addEventListener('click', () => clicks.push('toggle (wrong one here)'));
+
+  inner.click(); // you tap the arrow yourself
+  await wait(500);
+  assert.equal(JSON.parse(p.window.localStorage.getItem('swar.playerCloser')).cls[0], 'inner');
+
+  p.document.querySelector('ytmusic-app-layout').setAttribute('player-page-open', '');
+  swipe(p, p.document.querySelector('.art'), [200, 150], [200, 400]);
+  assert.deepEqual(clicks, ['chevron', 'chevron']);
+  p.close();
+});
+
+test('does not learn from a tap that closes the player by opening another page', async () => {
+  const p = page(PLAYER);
+  const link = p.document.querySelector('.artist-link');
+  place(link, 40);
+  link.addEventListener('click', () => {
+    p.document.querySelector('ytmusic-app-layout').removeAttribute('player-page-open');
+    p.window.history.pushState({}, '', '/channel/abc');
+  });
+  link.click();
+  await wait(500);
+  assert.equal(p.window.localStorage.getItem('swar.playerCloser'), null);
+  p.close();
+});
+
+test('short, slow, sideways and seek-bar swipes are left alone', async () => {
+  const p = page(PLAYER);
+  const clicks = [];
+  const toggle = p.document.querySelector('.toggle-player-page-button');
+  place(toggle, 700, 330);
+  closes(p, toggle, clicks, 'toggle');
   const art = p.document.querySelector('.art');
-  const pageEl = p.document.querySelector('ytmusic-player-page');
-
-  swipe(p, art, [200, 150], [200, 180]); // a small drag: not far enough
-  touch(p, art, 'touchend', 200, 180);
-  await wait(320);
-  assert.equal(pageEl.style.transform, '');
-
-  const side = swipe(p, art, [100, 300], [320, 330]); // next-song swipe on the art
-  assert.equal(side.defaultPrevented, false);
-  touch(p, art, 'touchend', 320, 330);
-
-  const knob = p.document.querySelector('.knob');
-  const seek = swipe(p, knob, [100, 500], [110, 700]);
-  assert.equal(seek.defaultPrevented, false);
-  touch(p, knob, 'touchend', 110, 700);
-  await wait(400);
+  swipe(p, art, [200, 150], [200, 190]); // short
+  swipe(p, art, [100, 300], [330, 360]); // sideways: next song on the art
+  swipe(p, p.document.querySelector('.knob'), [100, 500], [110, 700]); // seeking
+  touch(p, art, 'touchstart', 200, 150);
+  await wait(1100);
+  touch(p, art, 'touchend', 200, 450); // a slow drag, not a swipe
   assert.deepEqual(clicks, []);
   p.close();
 });
 
-test('Back minimises the open player first', () => {
+test('Back presses the arrow while the player is open', () => {
   const p = page(PLAYER);
-  const clicks = minimiser(p);
+  const clicks = [];
+  const toggle = p.document.querySelector('.toggle-player-page-button');
+  place(toggle, 700, 330);
+  closes(p, toggle, clicks, 'toggle');
   assert.equal(p.window.__swar.cmd('collapse'), true);
-  assert.deepEqual(clicks, ['minimise']);
   assert.equal(p.window.__swar.cmd('collapse'), false, 'already minimised: Back does its usual thing');
-  assert.deepEqual(clicks, ['minimise']);
+  assert.deepEqual(clicks, ['toggle']);
   p.close();
 });
 
 test('tells the app when the player opens and closes', async () => {
   const p = page(PLAYER);
-  minimiser(p);
+  const toggle = p.document.querySelector('.toggle-player-page-button');
+  place(toggle, 700, 330);
+  closes(p, toggle, [], 'toggle');
   p.document.body.click();
-  await wait(450);
+  await wait(500);
   assert.deepEqual(plain(p.messages.filter((m) => m.type === 'player')), [{ type: 'player', open: true }]);
   assert.equal(p.document.documentElement.classList.contains('swar-player-open'), true);
   p.window.__swar.collapsePlayer();
@@ -906,11 +942,9 @@ test('swiping the mini player up opens the player', () => {
   let opened = 0;
   p.document.querySelector('.toggle-player-page-button').addEventListener('click', () => { opened += 1; });
   const info = p.document.querySelector('.content-info-wrapper');
-  swipe(p, info, [150, 700], [155, 690]); // a tap-sized wobble does nothing
-  touch(p, info, 'touchend', 155, 690);
+  swipe(p, info, [150, 700], [155, 690]); // a wobble
   assert.equal(opened, 0);
   swipe(p, info, [150, 700], [160, 560]);
-  touch(p, info, 'touchend', 160, 560);
   assert.equal(opened, 1);
   p.close();
 });

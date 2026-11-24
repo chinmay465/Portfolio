@@ -911,7 +911,6 @@
   }
 
   let onScreen = true;
-  let playerDragging = false; // the player is being swiped away: no chip over it
   const NOTHING = { id: '', codec: '', kbps: 0, measured: false, best: 0, tiers: { low: 0, normal: 0, high: 0 } };
   let nowPlaying = NOTHING;
   let lastAudio = '';
@@ -941,7 +940,7 @@
     }
     const message = {
       type: 'audio',
-      open: onScreen && !playerDragging && playerPageOpen(),
+      open: onScreen && playerPageOpen(),
       quality: audioQuality,
       codec: nowPlaying.codec,
       kbps: nowPlaying.kbps,
@@ -1046,67 +1045,95 @@
   window.__swar.report = report;
 
   // ---------------------------------------------------------------- 7. gestures
-  // Swipe the now-playing page down to minimise it (it follows the finger and
-  // slides away), swipe the mini player up to open it, and Back minimises the
-  // player before it leaves the page. The page's own minimise button does the
-  // actual work, so YouTube Music's state stays consistent.
+  // Swipe down on the now-playing page = tap its down arrow. Swipe up on the
+  // mini player = tap it open. Back = the down arrow too. No custom animation:
+  // YouTube Music's own button does the work, exactly as if it were tapped.
+  //
+  // Which button is "the arrow" is learnt from you: when a tap on the player
+  // page closes it, that button is remembered (on this phone only) and used
+  // from then on. Until then, known names and positions are tried.
   const BUTTONS = 'button, tp-yt-paper-icon-button, yt-icon-button, [role="button"]';
+  const CLOSER_KEY = 'swar.playerCloser';
   const COLLAPSE_SELECTORS = [
+    'ytmusic-player-bar .toggle-player-page-button',
     'ytmusic-player-page .player-minimize-button',
     'ytmusic-player-page #minimize-button',
     'ytmusic-player-page [aria-label*="minimi" i]',
     'ytmusic-player-page [aria-label*="collapse" i]',
-    'ytmusic-player-page [aria-label*="close player" i]',
+    '[aria-label*="close player" i]',
   ];
-  // In order of preference (a selector list would pick whichever comes first on the page).
   const OPEN_SELECTORS = ['ytmusic-player-bar .toggle-player-page-button', 'ytmusic-player-bar .content-info-wrapper', 'ytmusic-player-bar .middle-controls'];
-  const firstOf = (selectors) => {
+  // Touches here are for the control, never a swipe.
+  const NO_SWIPE = 'tp-yt-paper-slider, #progress-bar, input, textarea, [role="slider"], .volume-slider';
+  const SWIPE_MIN_PX = 70;
+  const SWIPE_MAX_MS = 1000;
+  const nowMs = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
+
+  const playerOpen = () => playerPageOpen();
+  const OPEN_MARKS = ['player-page-open', 'player-page-open_'];
+  const appLayout = () => document.querySelector('ytmusic-app-layout');
+
+  const shown = (el) => {
+    if (!el || !el.isConnected) return false;
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  };
+  const firstOf = (selectors, needShown) => {
     for (const sel of selectors) {
-      const el = document.querySelector(sel);
-      if (el) return el;
+      for (const el of document.querySelectorAll(sel)) if (!needShown || shown(el)) return el;
     }
     return null;
   };
-  // Touches here are for the control, never a swipe.
-  const NO_SWIPE = 'tp-yt-paper-slider, #progress-bar, input, textarea, [role="slider"], .volume-slider, .play-pause-button, #play-pause-button';
-  const SLOP_PX = 10;
-  const nowMs = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
-  const reducedMotion = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
-  const playerPage = () => document.querySelector('ytmusic-player-page');
-  const appLayout = () => document.querySelector('ytmusic-app-layout');
+  // ---- The learnt arrow: a short description (tag, id, classes, label), never page content.
+  const describe = (el) => ({
+    tag: el.tagName.toLowerCase(),
+    id: el.id || '',
+    cls: [...el.classList].filter((c) => !/^(style-|iron-|focused|pressed|active)/.test(c)).slice(0, 4),
+    label: el.getAttribute('aria-label') || '',
+  });
+  const css = (v) => (window.CSS && window.CSS.escape ? window.CSS.escape(v) : String(v).replace(/[^\w-]/g, '\\$&'));
+  function selectorFor(d) {
+    let sel = d.tag;
+    if (d.id) sel += `#${css(d.id)}`;
+    for (const c of d.cls || []) sel += `.${css(c)}`;
+    if (d.label) sel += `[aria-label="${String(d.label).replace(/["\\]/g, '\\$&')}"]`;
+    return sel;
+  }
+  let learnt = null;
+  try { learnt = JSON.parse(localStorage.getItem(CLOSER_KEY) || 'null'); } catch (_) { learnt = null; }
 
-  const playerOpen = () => playerPageOpen();
-  /** The open mark YouTube Music puts on the layout, if this version uses one. */
-  const OPEN_MARKS = ['player-page-open', 'player-page-open_'];
-  const markedOpen = (el) => !!el && OPEN_MARKS.some((a) => el.hasAttribute(a));
+  function learntButton() {
+    if (!learnt || !learnt.tag) return null;
+    try {
+      for (const el of document.querySelectorAll(selectorFor(learnt))) if (shown(el)) return el;
+    } catch (_) {}
+    return null;
+  }
 
-  /** The player's minimise control: named button, else the top-left button on the page. */
+  /** The player's down arrow: learnt, else known names, else the top-left button on the page. */
   function collapseButton() {
-    const named = firstOf(COLLAPSE_SELECTORS);
-    if (named) return named;
-    const page = playerPage();
-    if (page) {
-      let best = null;
-      let bestRect = null;
-      const maxLeft = (window.innerWidth || 0) * 0.34;
-      for (const el of page.querySelectorAll(BUTTONS)) {
-        const r = el.getBoundingClientRect();
-        if (!r.width || !r.height || r.top > 140 || r.left > maxLeft) continue;
-        // Ties go to the later (inner) element: the real <button> inside a wrapper.
-        if (!bestRect || r.top < bestRect.top - 4 || (Math.abs(r.top - bestRect.top) <= 4 && r.left <= bestRect.left + 1)) {
-          best = el;
-          bestRect = r;
-        }
+    const known = learntButton() || firstOf(COLLAPSE_SELECTORS, true);
+    if (known) return known;
+    const page = document.querySelector('ytmusic-player-page');
+    if (!page) return null;
+    let best = null;
+    let bestRect = null;
+    const maxLeft = (window.innerWidth || 0) * 0.34;
+    for (const el of page.querySelectorAll(BUTTONS)) {
+      const r = el.getBoundingClientRect();
+      if (!r.width || !r.height || r.top > 140 || r.left > maxLeft) continue;
+      // Ties go to the later (inner) element: the real <button> inside a wrapper.
+      if (!bestRect || r.top < bestRect.top - 4 || (Math.abs(r.top - bestRect.top) <= 4 && r.left <= bestRect.left + 1)) {
+        best = el;
+        bestRect = r;
       }
-      if (best) return best;
     }
-    return document.querySelector('ytmusic-player-bar .toggle-player-page-button');
+    return best;
   }
 
   let lastOpen = null;
   function syncPlayerState() {
-    if (drag.state === 'drag' || drag.state === 'settling') return;
     const open = playerOpen();
     if (open === lastOpen) return;
     lastOpen = open;
@@ -1114,16 +1141,38 @@
     post({ type: 'player', open });
   }
 
+  let pressingArrow = false; // our own click: don't learn from it
   function collapsePlayer() {
     if (!playerOpen()) return false;
     const button = collapseButton();
     if (!button) return false;
-    button.click();
+    pressingArrow = true;
+    try { button.click(); } finally { pressingArrow = false; }
     setTimeout(syncPlayerState, 400);
     return true;
   }
 
-  const drag = { state: 'idle', mini: false, x: 0, y: 0, dy: 0, v: 0, lastY: 0, lastT: 0, page: null, button: null, raf: 0 };
+  // A real tap that closes the player page without going anywhere: that was
+  // the arrow. Remember it. (Tapping the artist also closes the player, but
+  // opens their page; and the arrow sits in the top bar or the player bar.)
+  document.addEventListener('click', (e) => {
+    const wasOpen = !pressingArrow && playerOpen();
+    let button = wasOpen && e.target && e.target.closest ? e.target.closest(BUTTONS) : null;
+    if (button && !button.closest('ytmusic-player-bar') && button.getBoundingClientRect().top > 160) button = null;
+    const path = location.pathname + location.search;
+    setTimeout(() => {
+      syncPlayerState();
+      if (!button || playerOpen() || location.pathname + location.search !== path) return;
+      const d = describe(button);
+      if (learnt && selectorFor(learnt) === selectorFor(d)) return;
+      learnt = d;
+      try { localStorage.setItem(CLOSER_KEY, JSON.stringify(d)); } catch (_) {}
+    }, 450);
+  }, { capture: true, passive: true });
+
+  // ---- Swipes. All listeners are passive and on the document's capture phase,
+  // so YouTube's own handlers can't swallow them and scrolling never waits.
+  const touch = { on: '', x: 0, y: 0, lastX: 0, lastY: 0, t: 0 };
 
   function scrolledWithin(el, stop) {
     for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
@@ -1133,161 +1182,51 @@
     return false;
   }
 
-  function onTouchStart(e) {
-    if (drag.state === 'settling') return;
-    drag.state = 'idle';
-    drag.mini = false;
+  document.addEventListener('touchstart', (e) => {
+    touch.on = '';
     const t = e.touches && e.touches.length === 1 ? e.touches[0] : null;
     const target = e.target && e.target.nodeType === 1 ? e.target : null;
     if (!t || !target || target.closest(NO_SWIPE)) return;
-    bindPage();
     if (playerOpen()) {
-      const page = playerPage();
-      // Inside a scrolled list (queue, lyrics) the swipe scrolls the list instead.
-      if (!page || !page.contains(target) || scrolledWithin(target, page)) return;
-      drag.page = page;
+      // Inside a scrolled list (queue, lyrics) a swipe down scrolls the list.
+      const page = document.querySelector('ytmusic-player-page');
+      if (page && page.contains(target) && scrolledWithin(target, page)) return;
+      if (target.closest('ytmusic-nav-bar, ytmusic-pivot-bar-renderer')) return;
+      touch.on = 'player';
     } else if (target.closest('ytmusic-player-bar')) {
-      drag.mini = true;
+      touch.on = 'mini';
     } else {
       return;
     }
-    drag.state = 'pending';
-    drag.x = t.clientX;
-    drag.y = t.clientY;
-    drag.lastY = t.clientY;
-    drag.lastT = nowMs();
-    drag.dy = 0;
-    drag.v = 0;
-  }
+    touch.x = touch.lastX = t.clientX;
+    touch.y = touch.lastY = t.clientY;
+    touch.t = nowMs();
+  }, { capture: true, passive: true });
 
-  // Registered on the player page only (not passive, so it can stop the page
-  // from scrolling while it follows the finger). Elsewhere scrolling stays on
-  // the fast path that never waits for the page's scripts.
-  function onTouchMove(e) {
-    if (drag.mini || (drag.state !== 'pending' && drag.state !== 'drag')) return;
+  document.addEventListener('touchmove', (e) => {
+    if (!touch.on) return;
     const t = e.touches && e.touches[0];
-    if (!t) return;
-    const dx = t.clientX - drag.x;
-    const dy = t.clientY - drag.y;
-    if (drag.state === 'pending') {
-      if (Math.abs(dx) < SLOP_PX && Math.abs(dy) < SLOP_PX) return;
-      // Down and mostly vertical; sideways swipes (next song on the art) are YouTube's.
-      if (!(dy > 0 && dy > Math.abs(dx) * 1.2)) { drag.state = 'idle'; return; }
-      drag.state = 'drag';
-      playerDragging = true;
-      reportAudio(false); // hide the quality chip while the page moves
-      drag.button = collapseButton(); // before the page moves: it's found by position
-      drag.page.style.transition = 'none';
-      drag.page.style.willChange = 'transform, opacity';
-    }
-    if (e.cancelable) e.preventDefault();
-    const now = nowMs();
-    const dt = now - drag.lastT;
-    if (dt > 0) drag.v = 0.8 * ((t.clientY - drag.lastY) / dt) + 0.2 * drag.v;
-    drag.lastY = t.clientY;
-    drag.lastT = now;
-    drag.dy = Math.max(0, dy - SLOP_PX);
-    if (!drag.raf) drag.raf = rafLater(paintDrag);
-  }
+    if (t) { touch.lastX = t.clientX; touch.lastY = t.clientY; }
+  }, { capture: true, passive: true });
 
-  function paintDrag() {
-    drag.raf = 0;
-    if (drag.state !== 'drag' || !drag.page) return;
-    const h = window.innerHeight || 800;
-    drag.page.style.transform = `translate3d(0, ${drag.dy}px, 0)`;
-    drag.page.style.opacity = String(1 - Math.min(0.35, (drag.dy / h) * 0.5));
-  }
-
-  function onTouchEnd(e) {
-    if (drag.mini) {
-      const t = e.changedTouches && e.changedTouches[0];
-      if (drag.state === 'pending' && t) {
-        const dx = t.clientX - drag.x;
-        const dy = t.clientY - drag.y;
-        if (dy < -40 && -dy > Math.abs(dx) * 1.2) {
-          const open = firstOf(OPEN_SELECTORS);
-          if (open) { open.click(); setTimeout(syncPlayerState, 400); }
-        }
-      }
-      drag.mini = false;
-      drag.state = 'idle';
-      return;
-    }
-    if (drag.state !== 'drag') {
-      if (drag.state === 'pending') drag.state = 'idle';
-      return;
-    }
-    const h = window.innerHeight || 800;
-    const fling = drag.v > 0.5 && drag.dy > 24;
-    const farEnough = drag.dy > Math.max(96, h * 0.16);
-    if ((farEnough || fling) && drag.button) slideAway();
-    else springBack();
-  }
-
-  function onTouchCancel() {
-    if (drag.state === 'drag') springBack();
-    else if (drag.state === 'pending') drag.state = 'idle';
-    drag.mini = false;
-  }
-
-  function settle(transform, opacity, ms, done) {
-    drag.state = 'settling';
-    const page = drag.page;
-    const s = page.style;
-    s.transition = `transform ${ms}ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity ${ms}ms ease`;
-    s.transform = transform;
-    s.opacity = opacity;
-    setTimeout(() => done(page), ms + 20);
-  }
-
-  function release(page) {
-    const s = page.style;
-    s.transition = 'none';
-    s.transform = '';
-    s.opacity = '';
-    s.willChange = '';
-    rafLater(() => { s.transition = ''; });
-    drag.page = null;
-    drag.button = null;
-    drag.state = 'idle';
-    playerDragging = false;
-    syncPlayerState();
-    reportAudio(false);
-  }
-
-  function springBack() {
-    if (!drag.page) { drag.state = 'idle'; return; }
-    settle('translate3d(0, 0, 0)', '1', reducedMotion() ? 0 : 240, release);
-  }
-
-  function slideAway() {
-    const h = window.innerHeight || 800;
-    const ms = reducedMotion() ? 0 : Math.round(Math.max(120, Math.min(240, (h - drag.dy) / Math.max(drag.v, 1.6))));
-    const button = drag.button;
-    const layout = appLayout();
-    const marked = markedOpen(layout);
-    settle(`translate3d(0, ${h}px, 0)`, '0.6', ms, (page) => {
-      button.click();
-      // Keep it off screen until YouTube Music has closed it, so it never
-      // flashes back: until the open mark goes, or a moment if there is none.
-      const started = Date.now();
-      (function waitClosed() {
-        const waited = Date.now() - started;
-        const closed = marked ? !markedOpen(layout) : waited >= 350;
-        if (closed || waited >= 700) release(page);
-        else setTimeout(waitClosed, 50);
-      })();
-    });
-  }
-
-  const boundPages = new WeakSet();
-  function bindPage() {
-    const page = playerPage();
-    if (page && !boundPages.has(page)) {
-      boundPages.add(page);
-      page.addEventListener('touchmove', onTouchMove, { passive: false });
+  function endSwipe(e) {
+    const on = touch.on;
+    touch.on = '';
+    if (!on) return;
+    const t = e.changedTouches && e.changedTouches[0];
+    const x = t ? t.clientX : touch.lastX;
+    const y = t ? t.clientY : touch.lastY;
+    const dx = x - touch.x;
+    const dy = y - touch.y;
+    if (nowMs() - touch.t > SWIPE_MAX_MS || Math.abs(dy) < SWIPE_MIN_PX || Math.abs(dy) < Math.abs(dx) * 1.5) return;
+    if (on === 'player' && dy > 0) collapsePlayer();
+    else if (on === 'mini' && dy < 0) {
+      const open = firstOf(OPEN_SELECTORS, false);
+      if (open) { open.click(); setTimeout(syncPlayerState, 400); }
     }
   }
+  document.addEventListener('touchend', endSwipe, { capture: true, passive: true });
+  document.addEventListener('touchcancel', endSwipe, { capture: true, passive: true });
 
   let observedLayout = null;
   function watchLayout() {
@@ -1296,18 +1235,11 @@
     observedLayout = layout;
     new MutationObserver(syncPlayerState).observe(layout, { attributes: true, attributeFilter: OPEN_MARKS });
   }
-
-  document.addEventListener('touchstart', onTouchStart, { capture: true, passive: true });
-  document.addEventListener('touchend', onTouchEnd, { capture: true, passive: true });
-  document.addEventListener('touchcancel', onTouchCancel, { capture: true, passive: true });
-  // Taps on the arrow or the mini player: pick up the new state promptly.
-  document.addEventListener('click', () => setTimeout(syncPlayerState, 400), { capture: true, passive: true });
-  Object.assign(window.__swar, { collapsePlayer, playerOpen });
+  Object.assign(window.__swar, { collapsePlayer, playerOpen, collapseButton });
 
   // Off screen there's nothing to swipe: skip the layout-reading check.
   const onTick = () => {
     if (!onScreen) return;
-    bindPage();
     watchLayout();
     syncPlayerState();
   };
