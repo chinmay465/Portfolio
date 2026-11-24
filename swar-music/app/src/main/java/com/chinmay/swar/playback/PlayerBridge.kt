@@ -23,6 +23,15 @@ object PlayerBridge {
         _state.value = state
     }
 
+    private val _audio = MutableStateFlow("")
+
+    /** What's playing, for the notification: "Opus · 128 kbps", or "" when unknown. */
+    val audio: StateFlow<String> = _audio.asStateFlow()
+
+    fun publishAudio(label: String) {
+        _audio.value = label
+    }
+
     fun send(command: PlayerCommand) {
         commandSink?.invoke(command)
     }

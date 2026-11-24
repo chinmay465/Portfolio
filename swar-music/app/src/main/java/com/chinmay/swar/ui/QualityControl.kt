@@ -24,7 +24,7 @@ class QualityControl(
     private val onChange: (AudioQuality) -> Unit,
 ) {
     /** What's playing, from the page: codec and bitrate, and the best on offer for this song. */
-    data class Playing(val codec: String = "", val kbps: Int = 0, val best: Int = 0)
+    data class Playing(val codec: String = "", val kbps: Int = 0, val best: Int = 0, val measured: Boolean = false)
 
     var quality: AudioQuality = initial
         private set
@@ -58,9 +58,21 @@ class QualityControl(
         chip.animate().alpha(1f).setDuration(200).start()
     }
 
+    /** "Opus · 128 kbps", "~128 kbps" when measured without a known codec, or "" when unknown. */
+    fun label(p: Playing): String {
+        if (p.kbps <= 0) return ""
+        val rate = activity.getString(if (p.measured) R.string.quality_rate_measured else R.string.quality_rate, p.kbps)
+        return if (p.codec.isBlank()) rate else "${p.codec} · $rate"
+    }
+
     private fun render() {
         val name = activity.getString(label(quality))
-        chip.text = if (playing.kbps > 0) activity.getString(R.string.quality_chip, name, playing.kbps) else name
+        val rate = if (playing.kbps > 0) {
+            activity.getString(if (playing.measured) R.string.quality_rate_measured else R.string.quality_rate, playing.kbps)
+        } else {
+            activity.getString(R.string.quality_rate_unknown)
+        }
+        chip.text = activity.getString(R.string.quality_chip, name, rate)
         chip.contentDescription = activity.getString(R.string.quality_chip_description, chip.text)
     }
 
@@ -88,13 +100,19 @@ class QualityControl(
     private fun nowText(): String {
         val applies = activity.getString(R.string.quality_applies)
         if (playing.kbps <= 0) return applies
-        val now = activity.getString(R.string.quality_now, playing.codec, playing.kbps)
-        val best = if (playing.best > playing.kbps) {
+        val now = activity.getString(
+            if (playing.measured) R.string.quality_now_measured else R.string.quality_now,
+            playing.codec.ifBlank { activity.getString(R.string.quality_codec_unknown) },
+            playing.kbps,
+        )
+        val best = if (playing.best <= 0) {
+            ""
+        } else if (playing.best > playing.kbps) {
             activity.getString(R.string.quality_best, playing.best)
         } else {
             activity.getString(R.string.quality_is_best)
         }
-        return "$now $best\n$applies"
+        return "$now $best".trim() + "\n" + applies
     }
 
     private fun option(q: AudioQuality): CharSequence {

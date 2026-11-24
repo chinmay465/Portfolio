@@ -418,6 +418,7 @@
     if (switching.muted && v) v.muted = false;
     switching = null;
     post({ type: 'switch', phase });
+    reportAudio();
   }
 
   const avToggle = () => document.querySelector('#av-id ytmusic-av-toggle, ytmusic-av-toggle');
@@ -688,7 +689,14 @@
 
   function cmd(name, arg) {
     switch (name) {
-      case 'background': preferSong(); break;
+      case 'background':
+        onScreen = false;
+        preferSong();
+        break;
+      case 'foreground':
+        onScreen = true;
+        reportAudio();
+        return;
       case 'play': play(); break;
       case 'pause': pause(); break;
       case 'next':
@@ -717,8 +725,66 @@
   window.__swar.cmd = cmd;
 
   // ---------------------------------------------------------------- 6. audio report
-  // What's actually playing (the player's own audio format id), so the app can
-  // show it next to the Audio quality selector on the player page.
+  // What's actually playing, for the app's quality chip and notification.
+  // Bitrate comes from the format the player picked (its own audio format id);
+  // if the player doesn't say, it's measured from the audio it downloads.
+  // Follows the track that's playing: re-checked on every track change and
+  // player event, blanked while a video switches to its song. Cheap by design:
+  // the format lookup repeats every 2 s on screen and 4 s in the background,
+  // and the player-page check (it reads layout) only runs while on screen.
+
+  // ---- Measured: bytes appended to the audio buffer per second of audio added.
+  const measured = { id: '', bytes: 0, seconds: 0, codec: '' };
+  const bufferedSeconds = (sb) => {
+    let total = 0;
+    const r = sb.buffered;
+    for (let i = 0; i < r.length; i++) total += r.end(i) - r.start(i);
+    return total;
+  };
+  if (typeof MediaSource !== 'undefined' && MediaSource.prototype.addSourceBuffer &&
+      typeof SourceBuffer !== 'undefined' && SourceBuffer.prototype.appendBuffer) {
+    const audioBuffers = new WeakMap(); // SourceBuffer -> codec name
+    const nativeAdd = MediaSource.prototype.addSourceBuffer;
+    MediaSource.prototype.addSourceBuffer = function addSourceBuffer(type) {
+      const sb = nativeAdd.call(this, type);
+      try { if (/^audio\//i.test(String(type))) audioBuffers.set(sb, codecOf(String(type))); } catch (_) {}
+      return sb;
+    };
+    const nativeAppend = SourceBuffer.prototype.appendBuffer;
+    SourceBuffer.prototype.appendBuffer = function appendBuffer(data) {
+      let codec = '';
+      let before = 0;
+      let size = 0;
+      try {
+        codec = audioBuffers.get(this) || '';
+        if (codec) { size = (data && data.byteLength) || 0; before = bufferedSeconds(this); }
+      } catch (_) { codec = ''; }
+      const out = nativeAppend.call(this, data); // the player's own call, unchanged
+      if (codec && size) {
+        this.addEventListener('updateend', () => {
+          try {
+            const added = bufferedSeconds(this) - before;
+            if (added > 0.5 && added < 120) { // skip init segments and overlapping re-appends
+              const pv = playerVideo();
+              const id = (pv && pv.id) || '';
+              if (measured.id !== id) Object.assign(measured, { id, bytes: 0, seconds: 0 });
+              measured.bytes += size;
+              measured.seconds += added;
+              measured.codec = codec;
+            }
+          } catch (_) {}
+        }, { once: true });
+      }
+      return out;
+    };
+  }
+
+  /** Bytes are counted against the track playing when they arrived. */
+  function measuredKbps(id) {
+    if (measured.id !== id || measured.seconds < 8) return 0;
+    return Math.round((measured.bytes * 8) / measured.seconds / 1000);
+  }
+
   function currentAudioItag() {
     const p = playerEl();
     try {
@@ -736,6 +802,20 @@
     return '';
   }
 
+  /** Formats for this track; from the player itself if the response slipped past the hooks. */
+  function audioFormats(id) {
+    if (!audioInfo.has(id)) {
+      try {
+        const p = playerEl();
+        const r = p && typeof p.getPlayerResponse === 'function' ? p.getPlayerResponse() : null;
+        const formats = r && r.streamingData && r.streamingData.adaptiveFormats;
+        const audio = Array.isArray(formats) ? formats.filter(isAudioFormat) : [];
+        if (audio.length) rememberAudio(id, audio);
+      } catch (_) {}
+    }
+    return audioInfo.get(id) || null;
+  }
+
   /** Is the full-screen player page (cover art, controls) open? */
   function playerPageOpen() {
     if (document.querySelector('ytmusic-app-layout[player-page-open], ytmusic-app-layout[player-page-open_], ytmusic-player-page[player-page-open]')) return true;
@@ -746,19 +826,40 @@
     return r.height > h * 0.5 && r.top < h * 0.25 && r.bottom > 0;
   }
 
+  let onScreen = true;
+  let nowPlaying = { id: '', codec: '', kbps: 0, measured: false, best: 0 };
   let lastAudio = '';
-  function reportAudio() {
+
+  /** refresh: look up the playing format again (otherwise only on a track change). */
+  function reportAudio(refresh = true) {
     const pv = playerVideo();
-    const info = pv && audioInfo.get(pv.id);
-    const itag = info ? currentAudioItag() : '';
-    const now = info && itag ? info.formats[itag] : null;
+    const id = (pv && pv.id) || '';
+    // Mid-switch from a video to its song, the video's audio is muted and on
+    // its way out: show nothing rather than its bitrate.
+    if (switching) {
+      nowPlaying = { id: '', codec: '', kbps: 0, measured: false, best: 0 };
+    } else if (refresh || id !== nowPlaying.id) {
+      const info = id ? audioFormats(id) : null;
+      const itag = info ? currentAudioItag() : '';
+      const known = info && itag ? info.formats[itag] : null;
+      const live = id ? measuredKbps(id) : 0;
+      let next;
+      if (known && known.kbps) next = { id, codec: known.codec, kbps: known.kbps, measured: false, best: info.best };
+      else if (live) next = { id, codec: measured.codec, kbps: live, measured: true, best: info ? info.best : 0 };
+      else next = { id, codec: '', kbps: 0, measured: false, best: info ? info.best : 0 };
+      // A measured figure drifts a little as more audio arrives; only pass on real changes.
+      const steady = next.measured && nowPlaying.measured && nowPlaying.id === id &&
+        Math.abs(next.kbps - nowPlaying.kbps) < nowPlaying.kbps * 0.05;
+      if (!steady) nowPlaying = next;
+    }
     const message = {
       type: 'audio',
-      open: playerPageOpen(),
+      open: onScreen && playerPageOpen(),
       quality: audioQuality,
-      codec: now ? now.codec : '',
-      kbps: now ? now.kbps : 0,
-      best: info ? info.best : 0,
+      codec: nowPlaying.codec,
+      kbps: nowPlaying.kbps,
+      measured: nowPlaying.measured,
+      best: nowPlaying.best,
     };
     const json = JSON.stringify(message);
     if (json === lastAudio) return;
@@ -766,7 +867,13 @@
     post(message);
   }
   window.__swar.reportAudio = reportAudio;
-  setInterval(reportAudio, 400);
+
+  let audioTicks = 0;
+  setInterval(() => {
+    audioTicks += 1;
+    if (!onScreen && audioTicks % 10) return; // background: every 4 s
+    reportAudio(audioTicks % 5 === 0); // format lookup every 2 s; page-open check every 0.4 s on screen
+  }, 400);
 
   function largestArtwork(artwork) {
     let best = '';
@@ -815,7 +922,7 @@
   }
   window.__swar.report = report;
 
-  const onMediaEvent = () => { guard(); preferSong(); report(); };
+  const onMediaEvent = () => { guard(); preferSong(); report(); reportAudio(false); };
   for (const type of ['play', 'playing', 'pause', 'ended', 'loadedmetadata', 'seeked', 'durationchange']) {
     document.addEventListener(type, onMediaEvent, true);
   }

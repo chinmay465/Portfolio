@@ -146,6 +146,11 @@ class MainActivity : AppCompatActivity() {
         linkFrom(intent)?.let { webView.loadUrl(it) }
     }
 
+    override fun onStart() {
+        super.onStart()
+        webView.evaluateJavascript(PlayerCommand.EnterForeground.js, null)
+    }
+
     // No onPause/onStop override that pauses the WebView: WebView.onPause()
     // is what would stop playback in the background.
     override fun onStop() {
@@ -174,6 +179,7 @@ class MainActivity : AppCompatActivity() {
         if (isFinishing) {
             PlaybackService.stop(this)
             PlayerBridge.publish(PlayerState())
+            PlayerBridge.publishAudio("")
         }
         (webView.parent as? ViewGroup)?.removeView(webView)
         webView.destroy()
@@ -320,7 +326,9 @@ class MainActivity : AppCompatActivity() {
                     codec = o.optString("codec"),
                     kbps = o.optInt("kbps"),
                     best = o.optInt("best"),
+                    measured = o.optBoolean("measured"),
                 )
+                PlayerBridge.publishAudio(qualityControl.label(playing))
                 qualityControl.update(o.optBoolean("open") && shell.pageVisible && !mainFrameFailed, playing)
                 return
             }

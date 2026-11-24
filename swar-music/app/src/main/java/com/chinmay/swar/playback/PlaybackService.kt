@@ -83,6 +83,8 @@ class PlaybackService : Service() {
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK else 0
         ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification(initial), type)
         scope.launch { PlayerBridge.state.collect { render(it) } }
+        // Redrawn only when the label changes, about once per song.
+        scope.launch { PlayerBridge.audio.collect { last?.let(::postNotification) } }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -214,6 +216,7 @@ class PlaybackService : Service() {
             .setSmallIcon(R.drawable.ic_stat_swar)
             .setContentTitle(state.title.ifBlank { getString(R.string.app_name) })
             .setContentText(state.artist.ifBlank { getString(R.string.notification_idle) })
+            .setSubText(PlayerBridge.audio.value.ifBlank { null })
             .setLargeIcon(artwork)
             .setContentIntent(openAppIntent())
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)

@@ -27,6 +27,11 @@ sealed interface PlayerCommand {
         override val js = call("background")
     }
 
+    /** Back on screen: the quality chip needs the player-page check again. */
+    data object EnterForeground : PlayerCommand {
+        override val js = call("foreground")
+    }
+
     data class SeekTo(val positionMs: Long) : PlayerCommand {
         override val js = call("seek", (positionMs.coerceAtLeast(0) / 1000.0).toString())
     }

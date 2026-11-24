@@ -6,10 +6,11 @@ import { JSDOM } from 'jsdom';
 
 // Objects made inside the page have the page's prototypes; compare as plain data.
 const plain = (x) => JSON.parse(JSON.stringify(x));
+const lastState = (p) => p.messages.filter((m) => m.type === 'state').at(-1);
 
 const SCRIPT = readFileSync(new URL('../app/src/main/assets/swar.js', import.meta.url), 'utf8');
 
-function page(html = '', { quality } = {}) {
+function page(html = '', { quality, before } = {}) {
   const dom = new JSDOM(`<!doctype html><html><head></head><body>${html}</body></html>`, {
     url: 'https://music.youtube.com/',
     runScripts: 'outside-only',
@@ -23,6 +24,7 @@ function page(html = '', { quality } = {}) {
   const messages = [];
   window.SwarBridge = { postMessage: (m) => messages.push(JSON.parse(m)) };
   if (quality) window.__swarAudioQuality = quality; // what the app puts in front of the script
+  if (before) before(window);
   window.eval(SCRIPT);
   return { window, document: window.document, messages, close: () => window.close() };
 }
@@ -135,7 +137,7 @@ test('a leftover ad is muted, skipped to the end and unmuted afterwards', () => 
   assert.equal(v.muted, true);
   assert.ok(v.currentTime > 29.8);
   assert.equal(skipped, true);
-  assert.equal(p.messages.at(-1).ad, true);
+  assert.equal(lastState(p).ad, true);
 
   p.document.getElementById('movie_player').classList.remove('ad-showing');
   v.dispatchEvent(new p.window.Event('playing'));
@@ -165,7 +167,7 @@ test('reports the current track to the app', () => {
     ],
   };
   v.dispatchEvent(new p.window.Event('play'));
-  assert.deepEqual(p.messages.at(-1), {
+  assert.deepEqual(lastState(p), {
     type: 'state', playing: true, title: 'Song', artist: 'Artist', album: 'Album',
     artwork: 'https://lh3.googleusercontent.com/a=w544', duration: 245400, position: 61200, ad: false,
   });
@@ -610,7 +612,7 @@ test('reports the playing audio format and the best on offer, and whether the pl
 
   p.window.__swar.reportAudio();
   let last = p.messages.filter((m) => m.type === 'audio').pop();
-  assert.deepEqual(plain(last), { type: 'audio', open: false, quality: 'low', codec: 'Opus', kbps: 52, best: 131 });
+  assert.deepEqual(plain(last), { type: 'audio', open: false, quality: 'low', codec: 'Opus', kbps: 52, measured: false, best: 131 });
 
   p.document.querySelector('ytmusic-app-layout').setAttribute('player-page-open', '');
   mp.getVideoStats = () => ({});
@@ -620,5 +622,107 @@ test('reports the playing audio format and the best on offer, and whether the pl
   assert.equal(last.open, true);
   assert.equal(last.codec, 'AAC');
   assert.equal(last.kbps, 129);
+  p.close();
+});
+
+// Minimal Media Source Extensions: buffered grows by `seconds` per append.
+function fakeMse(window) {
+  class SourceBuffer extends window.EventTarget {
+    constructor() { super(); this.end = 0; }
+    get buffered() { const end = this.end; return { length: end ? 1 : 0, start: () => 0, end: () => end }; }
+    appendBuffer(data) {
+      this.end += data.seconds || 0;
+      setTimeout(() => this.dispatchEvent(new window.Event('updateend')), 0);
+    }
+  }
+  class MediaSource { addSourceBuffer() { return new SourceBuffer(); } }
+  window.SourceBuffer = SourceBuffer;
+  window.MediaSource = MediaSource;
+}
+const chunk = (bytes, seconds) => Object.assign(new ArrayBuffer(bytes), { seconds });
+const playerFor = (p, id, extra = {}) => {
+  const mp = p.document.createElement('div');
+  mp.id = 'movie_player';
+  mp.getPlayerResponse = () => ({ videoDetails: { videoId: id, musicVideoType: 'MUSIC_VIDEO_TYPE_ATV' } });
+  Object.assign(mp, extra);
+  p.document.body.appendChild(mp);
+  return mp;
+};
+
+test('Auto mode: bitrate is measured from the audio when the player does not name its format', async () => {
+  const p = page('', { before: fakeMse });
+  playerFor(p, 'song1'); // no getVideoStats, no stats for nerds, response never seen
+  const ms = new p.window.MediaSource();
+  const audio = ms.addSourceBuffer('audio/webm; codecs="opus"');
+  const video = ms.addSourceBuffer('video/webm; codecs="vp9"');
+  audio.appendBuffer(chunk(900, 0)); // init segment: no time added, ignored
+  await new Promise((r) => setTimeout(r, 5));
+  for (let i = 0; i < 3; i++) { // 128 kbps; one append at a time, as MSE requires
+    audio.appendBuffer(chunk(160000, 10));
+    await new Promise((r) => setTimeout(r, 5));
+  }
+  video.appendBuffer(chunk(5000000, 10)); // video never counts
+  await new Promise((r) => setTimeout(r, 20));
+  p.window.__swar.reportAudio();
+  const last = p.messages.filter((m) => m.type === 'audio').pop();
+  assert.equal(last.quality, 'auto');
+  assert.equal(last.codec, 'Opus');
+  assert.equal(last.kbps, 128);
+  assert.equal(last.measured, true);
+  p.close();
+});
+
+test('bitrate from the player\'s own response when the response slipped past the hooks', () => {
+  const p = page();
+  const full = playerResponse('song2');
+  playerFor(p, 'song2', { getPlayerResponse: () => full, getVideoStats: () => ({ afmt: '251' }) });
+  p.window.__swar.reportAudio();
+  const last = p.messages.filter((m) => m.type === 'audio').pop();
+  assert.deepEqual([last.codec, last.kbps, last.measured, last.best], ['Opus', 131, false, 131]);
+  p.close();
+});
+
+test('in the background: no player-page check, and only every few seconds', async () => {
+  const p = page('<ytmusic-app-layout player-page-open></ytmusic-app-layout>');
+  let checks = 0;
+  const qs = p.document.querySelector.bind(p.document);
+  p.document.querySelector = (sel) => { if (String(sel).includes('player-page-open')) checks += 1; return qs(sel); };
+  p.window.__swar.cmd('background');
+  checks = 0;
+  await new Promise((r) => setTimeout(r, 1300));
+  assert.equal(checks, 0, 'layout-reading check skipped off screen');
+  p.window.__swar.cmd('foreground');
+  const last = p.messages.filter((m) => m.type === 'audio').pop();
+  assert.equal(last.open, true);
+  p.close();
+});
+
+test('bitrate follows the playing track through the video-to-song switch', async () => {
+  const p = page(AV_TOGGLE);
+  p.window.JSON.parse(JSON.stringify(playerResponse('vid1')));
+  const songResp = playerResponse('song1');
+  songResp.streamingData.adaptiveFormats.find((f) => f.itag === 251).averageBitrate = 141000;
+  p.window.JSON.parse(JSON.stringify(songResp));
+
+  let current = { id: 'vid1', type: 'MUSIC_VIDEO_TYPE_OMV', afmt: '140' };
+  const mp = playerFor(p, 'vid1', {
+    getPlayerResponse: () => ({ videoDetails: { videoId: current.id, musicVideoType: current.type } }),
+    getVideoStats: () => ({ afmt: current.afmt }),
+  });
+  const v = fakeVideo(p.document, { paused: false, duration: 200, videoWidth: 1280, videoHeight: 720, readyState: 4 });
+  mp.appendChild(v);
+  const audioMsgs = () => p.messages.filter((m) => m.type === 'audio');
+
+  p.window.__swar.reportAudio();
+  assert.equal(audioMsgs().pop().kbps, 129, 'the video\'s audio while it plays');
+
+  v.dispatchEvent(new p.window.Event('playing')); // Swar starts switching to the song
+  assert.equal(audioMsgs().pop().kbps, 0, 'nothing shown mid-switch');
+
+  current = { id: 'song1', type: 'MUSIC_VIDEO_TYPE_ATV', afmt: '251' }; // song stream in
+  v.videoWidth = 0; v.videoHeight = 0;
+  v.dispatchEvent(new p.window.Event('playing'));
+  const last = audioMsgs().pop();
+  assert.deepEqual([last.codec, last.kbps], ['Opus', 141], 'the song\'s own bitrate');
   p.close();
 });
