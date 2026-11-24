@@ -15,8 +15,10 @@ export interface Project {
   live?: string
   /** Where to get the Android APK (built by CI). */
   download?: string
-  /** Source on GitHub. */
+  /** Source on GitHub. Absent for apps kept in a private repository. */
   code?: string
+  /** An interactive demo on the project page, for apps without a public build. */
+  demo?: boolean
   accent: string
 }
 
@@ -67,17 +69,16 @@ export const projects: Project[] = [
     name: 'Swar',
     glyph: 'स्वर',
     meaning: 'a musical note',
-    tagline: 'YouTube Music that keeps playing with the screen off, and plays no ads.',
+    tagline: 'A YouTube Music player of its own: native screens, its own playback engine, no ads.',
     points: [
-      'Wraps music.youtube.com in a WebView, so your own account, library and recommendations come along',
-      'A script injected before the page loads keeps the player "visible" and strips ad slots from the API data, so no ad is ever scheduled',
-      'A media foreground service mirrors the player into a MediaSession: notification, lock screen, headset and Bluetooth buttons',
-      'Pauses when headphones come out, and blocks Google telemetry; the page script and the APK are privacy-checked in CI',
+      'Native Home, Search, Library, album, artist and playlist screens in Jetpack Compose, fed by YouTube Music\'s own web API',
+      'Plays audio streams directly with Media3 ExoPlayer: background and screen-off playback, lock screen, headset and Bluetooth controls',
+      'Sign in once and your Home, liked songs and playlists come along; music videos always play as their song version',
+      'A player that follows your finger (swipe down to the mini player, up to open), with Up next, likes and an audio quality picker',
     ],
-    stack: ['Kotlin', 'Android WebView', 'MediaSession', 'JavaScript', 'jsdom', 'GitHub Actions'],
+    stack: ['Kotlin', 'Jetpack Compose', 'Media3 ExoPlayer', 'NewPipe Extractor', 'OkHttp', 'GitHub Actions'],
     kind: 'Android app',
-    download: `${repo}/actions/workflows/ci.yml?query=branch%3Amain`,
-    code: `${repo}/tree/main/swar-music`,
+    demo: true,
     accent: '#5b8cff',
   },
   {

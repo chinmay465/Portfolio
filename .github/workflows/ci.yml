@@ -161,38 +161,6 @@ jobs:
           name: kavach-debug-apk
           path: kavach-adblock/app/build/outputs/apk/debug/app-debug.apk
 
-  swar:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: swar-music
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: swar-music/js-tests/package-lock.json
-      - name: Page script tests
-        working-directory: swar-music/js-tests
-        run: |
-          npm ci
-          npm test
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-      - uses: gradle/actions/setup-gradle@v4
-      - run: chmod +x gradlew
-      - run: ./gradlew testDebugUnitTest assembleDebug
-      - name: Privacy check (permissions, exported components, tracker SDKs, endpoints, page script)
-        run: bash scripts/privacy-check.sh
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: swar-debug-apk
-          path: swar-music/app/build/outputs/apk/debug/app-debug.apk
-
   rail-backend:
     runs-on: ubuntu-latest
     defaults:
