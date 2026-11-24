@@ -114,12 +114,13 @@ class LocalProxy(private val pool: UpstreamPool) {
             if (firstByte < 0) return
             clientIn.reset()
             val socks = firstByte == SOCKS_VERSION
+            debug(if (socks) "accepted socks" else "accepted http")
 
             val head: ByteArray?
             val target: Target
             if (socks) {
                 head = null
-                target = readSocksRequest(clientIn, clientOut) ?: return
+                target = readSocksRequest(clientIn, clientOut) ?: return debug("SOCKS request refused")
             } else {
                 head = readHead(clientIn) ?: return
                 target = parseTarget(head.decodeToString()) ?: return reply(clientOut, 400, "Bad Request")
@@ -128,6 +129,7 @@ class LocalProxy(private val pool: UpstreamPool) {
             val blocked = Blocklist.isBlocked(target.host)
             AdBlockState.onQuery(target.host, wasBlocked = blocked)
             if (blocked) {
+                debug("blocked")
                 return if (socks) socksReply(clientOut, SOCKS_NOT_ALLOWED) else reply(clientOut, 403, "Blocked by Kavach")
             }
 
@@ -152,6 +154,7 @@ class LocalProxy(private val pool: UpstreamPool) {
             val opened = openUpstream(target, first)
             if (opened == null) {
                 AdBlockState.proxyFailed.update { it + 1 }
+                debug("every proxy failed (${if (socks) "socks" else "http"}, port ${target.port})")
                 // After "200 Connection established" all we can do is close.
                 if (!target.connect) reply(clientOut, 502, "No working proxy")
                 return
@@ -159,13 +162,15 @@ class LocalProxy(private val pool: UpstreamPool) {
             upstream = opened.socket
             open += opened.socket
             AdBlockState.proxyOk.update { it + 1 }
+            debug("forwarded (port ${target.port}, first ${first.size} bytes)")
             clientOut.write(opened.firstReply)
             clientOut.flush()
             client.soTimeout = IDLE_TIMEOUT_MS
             opened.socket.soTimeout = IDLE_TIMEOUT_MS
             relay(client, clientIn, opened.socket)
-        } catch (_: IOException) {
+        } catch (e: IOException) {
             // Client went away or a socket timed out. Hosts are deliberately not logged.
+            debug("connection ended: ${e.javaClass.simpleName}")
         } finally {
             upstream?.let { open -= it; closeQuietly(it) }
             open -= client
@@ -246,6 +251,15 @@ class LocalProxy(private val pool: UpstreamPool) {
         }
     }
 
+    /** Stage-level debug log. Never includes host names or addresses. */
+    private fun debug(msg: String) {
+        try {
+            android.util.Log.d(TAG, msg)
+        } catch (_: RuntimeException) {
+            // JVM unit tests: android.util.Log is a stub.
+        }
+    }
+
     private fun reply(out: OutputStream, code: Int, reason: String) {
         try {
             out.write("HTTP/1.1 $code $reason\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".toByteArray())
@@ -256,6 +270,7 @@ class LocalProxy(private val pool: UpstreamPool) {
 
     companion object {
         const val PREFERRED_PORT = 28_283
+        private const val TAG = "KavachLocal"
         private const val BACKLOG = 128
         private const val MAX_CONNECTIONS = 768
         private const val SOCKS_VERSION = 5

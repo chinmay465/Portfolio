@@ -28,6 +28,9 @@ class ProxySettings(ctx: Context) {
         get() = prefs.getString(KEY_CUSTOM, null).orEmpty()
         set(value) = prefs.edit().putString(KEY_CUSTOM, value.trim()).apply()
 
+    /** Debug aid, no UI: the tunnel engine writes a log to private storage. */
+    val engineLog: Boolean get() = prefs.getBoolean(KEY_ENGINE_LOG, false)
+
     /** 0 = switch only when the current proxy fails. */
     var rotateMinutes: Int
         get() = prefs.getInt(KEY_ROTATE, 0)
@@ -46,6 +49,7 @@ class ProxySettings(ctx: Context) {
         private const val KEY_ROTATE = "rotate_minutes"
         private const val KEY_BYPASS = "bypass_apps"
         private const val KEY_CUSTOM = "custom_proxies"
+        private const val KEY_ENGINE_LOG = "engine_log"
 
         /** The bundled tunnel engine is built for Android 10 and newer. */
         val supported: Boolean get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q

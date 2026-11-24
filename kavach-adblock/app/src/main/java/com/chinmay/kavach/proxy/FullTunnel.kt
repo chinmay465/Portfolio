@@ -38,7 +38,7 @@ object FullTunnel {
 
     @Volatile private var running = false
 
-    fun config(socksPort: Int): String = """
+    fun config(socksPort: Int, logFile: String? = null): String = """
         tunnel:
           mtu: $MTU
           ipv4: $ADDRESS_V4
@@ -57,17 +57,24 @@ object FullTunnel {
           connect-timeout: 30000
           tcp-read-write-timeout: 300000
           udp-read-write-timeout: 30000
-          log-level: error
-    """.trimIndent() + "\n"
+          log-level: ${if (logFile != null) "debug" else "error"}
+    """.trimIndent() + "\n" + (if (logFile != null) "  log-file: $logFile\n" else "")
 
     /** Starts the engine on [fd]. The caller keeps the fd open until [stop]. */
     @Synchronized
     fun start(ctx: Context, fd: Int, socksPort: Int): Boolean {
         if (running) stop()
         return try {
+            // Engine log only when asked for (tests); it stays in private storage.
+            val log = File(ctx.noBackupFilesDir, "tunnel.log")
+                .takeIf { ProxySettings(ctx).engineLog }?.absolutePath
             val file = File(ctx.noBackupFilesDir, "tunnel.yml")
-            file.writeText(config(socksPort))
-            running = TunnelNative.TProxyStartService(file.absolutePath, fd)
+            file.writeText(config(socksPort, log))
+            if (!TunnelNative.TProxyStartService(file.absolutePath, fd)) return false
+            // A bad config makes the engine thread exit at once.
+            Thread.sleep(300)
+            running = TunnelNative.TProxyIsRunning()
+            if (!running) Log.e(TAG, "Tunnel engine exited right after starting")
             running
         } catch (e: Throwable) {
             // UnsatisfiedLinkError if the native library is missing for this ABI.
