@@ -40,8 +40,14 @@ describe('format', () => {
 })
 
 describe('projects', () => {
-  it('links every project to its folder, and every web app to its live URL', () => {
+  it('links every public project to its folder, and every web app to its live URL', () => {
     for (const p of projects) {
+      if (p.demo) {
+        // Private repository: no source or APK link, an interactive demo instead.
+        expect(p.code).toBeUndefined()
+        expect(p.download).toBeUndefined()
+        continue
+      }
       expect(p.code).toContain('github.com/chinmay465/Portfolio/tree/main/')
       if (p.kind === 'Android app') {
         expect(p.live).toBeUndefined()
@@ -50,6 +56,11 @@ describe('projects', () => {
         expect(p.live).toMatch(/^https:\/\/[a-z0-9-]+\.onrender\.com$/)
       }
     }
+  })
+  it('keeps Swar private: a demo, no repository link', () => {
+    const swar = projects.find((p) => p.id === 'swar')
+    expect(swar?.demo).toBe(true)
+    expect(JSON.stringify(swar)).not.toContain('github.com')
   })
   it('only pings projects that have a live URL', () => {
     expect(webProjects.map((p) => p.id)).toEqual(['rail', 'ekatra', 'ank', 'shodh', 'setu'])

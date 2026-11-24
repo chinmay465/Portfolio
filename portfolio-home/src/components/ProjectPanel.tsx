@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import { Link } from 'react-router'
 import type { Project } from '../data/projects'
 import { healthLabel, type Health } from '../hooks/usePings'
 import { useInView, useMagnetic, useRevealed } from '../hooks/motion'
@@ -64,15 +65,21 @@ export default function ProjectPanel({ project: p, health, reduced }: Props) {
           ))}
         </ul>
         <div className="panel-actions">
-          <a
-            ref={cta}
-            className="btn btn-primary"
-            href={p.live ?? p.download}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {p.live ? `Open ${p.name}` : 'Get the APK'}
-          </a>
+          {p.live || p.download ? (
+            <a
+              ref={cta}
+              className="btn btn-primary"
+              href={p.live ?? p.download}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {p.live ? `Open ${p.name}` : 'Get the APK'}
+            </a>
+          ) : (
+            <Link ref={cta} className="btn btn-primary" to={`/projects/${p.id}#demo`} viewTransition>
+              Try the demo
+            </Link>
+          )}
           {p.code && (
             <a className="btn btn-ghost" href={p.code} target="_blank" rel="noopener noreferrer">
               View the code
