@@ -22,4 +22,17 @@
     <string name="switch_title">Couldn\'t switch to the song</string>
     <string name="switch_message">This video is playing as video. Copy the details and send them to the developer so the switch can be fixed for your phone. They only describe the page layout.</string>
     <string name="switch_copied">Details copied</string>
+    <string name="quality_title">Audio quality</string>
+    <string name="quality_auto">Auto</string>
+    <string name="quality_high">High</string>
+    <string name="quality_low">Low</string>
+    <string name="quality_auto_detail">YouTube Music adjusts to your connection</string>
+    <string name="quality_high_detail">Highest bitrate on offer for each song, even on a slow connection</string>
+    <string name="quality_low_detail">Lowest bitrate, saves data</string>
+    <string name="quality_chip">%1$s · %2$d kbps</string>
+    <string name="quality_chip_description">Audio quality: %1$s</string>
+    <string name="quality_now">Playing %1$s at %2$d kbps.</string>
+    <string name="quality_best">Best on offer for this song: %1$d kbps.</string>
+    <string name="quality_is_best">That\'s the best on offer for this song.</string>
+    <string name="quality_applies">Changes apply from the next song.</string>
 </resources>

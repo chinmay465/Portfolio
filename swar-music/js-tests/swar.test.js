@@ -9,7 +9,7 @@ const plain = (x) => JSON.parse(JSON.stringify(x));
 
 const SCRIPT = readFileSync(new URL('../app/src/main/assets/swar.js', import.meta.url), 'utf8');
 
-function page(html = '') {
+function page(html = '', { quality } = {}) {
   const dom = new JSDOM(`<!doctype html><html><head></head><body>${html}</body></html>`, {
     url: 'https://music.youtube.com/',
     runScripts: 'outside-only',
@@ -22,6 +22,7 @@ function page(html = '') {
   Object.defineProperty(window.navigator, 'mediaSession', { value: new window.MediaSession(), configurable: true });
   const messages = [];
   window.SwarBridge = { postMessage: (m) => messages.push(JSON.parse(m)) };
+  if (quality) window.__swarAudioQuality = quality; // what the app puts in front of the script
   window.eval(SCRIPT);
   return { window, document: window.document, messages, close: () => window.close() };
 }
@@ -530,5 +531,94 @@ test('running the script twice is harmless', () => {
   const parse = p.window.JSON.parse;
   p.window.eval(SCRIPT);
   assert.equal(p.window.JSON.parse, parse);
+  p.close();
+});
+
+// ---------------------------------------------------------------- audio quality
+const playerResponse = (id = 'song1') => ({
+  videoDetails: { videoId: id, musicVideoType: 'MUSIC_VIDEO_TYPE_ATV' },
+  streamingData: {
+    adaptiveFormats: [
+      { itag: 248, mimeType: 'video/webm; codecs="vp9"', bitrate: 2500000 },
+      { itag: 249, mimeType: 'audio/webm; codecs="opus"', bitrate: 60000, averageBitrate: 52000 },
+      { itag: 250, mimeType: 'audio/webm; codecs="opus"', bitrate: 80000, averageBitrate: 68000 },
+      { itag: 251, mimeType: 'audio/webm; codecs="opus"', bitrate: 150000, averageBitrate: 131000 },
+      { itag: 139, mimeType: 'audio/mp4; codecs="mp4a.40.5"', bitrate: 50000, averageBitrate: 48000 },
+      { itag: 140, mimeType: 'audio/mp4; codecs="mp4a.40.2"', bitrate: 130000, averageBitrate: 129000 },
+    ],
+  },
+});
+const itags = (r) => r.streamingData.adaptiveFormats.map((f) => f.itag);
+
+test('audio quality Auto leaves every format to YouTube', () => {
+  const p = page();
+  const out = p.window.JSON.parse(JSON.stringify(playerResponse()));
+  assert.deepEqual(plain(itags(out)), [248, 249, 250, 251, 139, 140]);
+  assert.equal(p.window.__swar.getAudioQuality(), 'auto');
+  p.close();
+});
+
+test('audio quality High keeps only the best audio of each kind; video untouched', () => {
+  const p = page('', { quality: 'high' });
+  const out = p.window.JSON.parse(JSON.stringify(playerResponse()));
+  assert.deepEqual(plain(itags(out)), [248, 251, 140]);
+  p.close();
+});
+
+test('audio quality Low keeps only the lowest audio of each kind', () => {
+  const p = page('', { quality: 'low' });
+  const out = p.window.JSON.parse(JSON.stringify(playerResponse()));
+  assert.deepEqual(plain(itags(out)), [248, 249, 139]);
+  p.close();
+});
+
+test('High works on fetched and embedded player responses, and keeps language tracks apart', async () => {
+  const p = page('', { quality: 'high' });
+  const res = new p.window.Response(JSON.stringify({ playerResponse: playerResponse('a') }));
+  Object.defineProperty(res, 'url', { value: 'https://music.youtube.com/youtubei/v1/next?prettyPrint=false' });
+  assert.deepEqual(plain(itags((await res.json()).playerResponse)), [248, 251, 140]);
+
+  const embedded = playerResponse('b');
+  embedded.streamingData.adaptiveFormats.push(
+    { itag: 251, mimeType: 'audio/webm; codecs="opus"', bitrate: 140000, audioTrack: { id: 'hi.4' } },
+    { itag: 250, mimeType: 'audio/webm; codecs="opus"', bitrate: 70000, audioTrack: { id: 'hi.4' } },
+  );
+  p.window.ytInitialPlayerResponse = embedded;
+  const kept = p.window.ytInitialPlayerResponse.streamingData.adaptiveFormats;
+  assert.deepEqual(plain(kept.filter((f) => f.audioTrack).map((f) => f.itag)), [251]);
+  p.close();
+});
+
+test('a quality change from the app applies to the next player response', () => {
+  const p = page();
+  p.window.__swar.cmd('quality', 'high');
+  assert.equal(p.window.__swar.getAudioQuality(), 'high');
+  assert.deepEqual(plain(itags(p.window.JSON.parse(JSON.stringify(playerResponse())))), [248, 251, 140]);
+  p.window.__swar.cmd('quality', 'nonsense');
+  assert.equal(p.window.__swar.getAudioQuality(), 'high', 'unknown values are ignored');
+  p.close();
+});
+
+test('reports the playing audio format and the best on offer, and whether the player page is open', () => {
+  const p = page('<ytmusic-app-layout></ytmusic-app-layout>', { quality: 'low' });
+  p.window.JSON.parse(JSON.stringify(playerResponse('song1')));
+  const mp = p.document.createElement('div');
+  mp.id = 'movie_player';
+  mp.getPlayerResponse = () => ({ videoDetails: { videoId: 'song1', musicVideoType: 'MUSIC_VIDEO_TYPE_ATV' } });
+  mp.getVideoStats = () => ({ afmt: '249' });
+  p.document.body.appendChild(mp);
+
+  p.window.__swar.reportAudio();
+  let last = p.messages.filter((m) => m.type === 'audio').pop();
+  assert.deepEqual(plain(last), { type: 'audio', open: false, quality: 'low', codec: 'Opus', kbps: 52, best: 131 });
+
+  p.document.querySelector('ytmusic-app-layout').setAttribute('player-page-open', '');
+  mp.getVideoStats = () => ({});
+  mp.getStatsForNerds = () => ({ codecs: 'vp09.00.40.08 (248) / mp4a.40.2 (140)' });
+  p.window.__swar.reportAudio();
+  last = p.messages.filter((m) => m.type === 'audio').pop();
+  assert.equal(last.open, true);
+  assert.equal(last.codec, 'AAC');
+  assert.equal(last.kbps, 129);
   p.close();
 });

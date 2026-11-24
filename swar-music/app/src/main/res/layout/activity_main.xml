@@ -11,6 +11,28 @@
         android:layout_height="match_parent"
         android:background="@color/page_bg" />
 
+    <!-- Audio quality, on YouTube Music's full-screen player only -->
+    <TextView
+        android:id="@+id/quality_chip"
+        android:layout_width="wrap_content"
+        android:layout_height="32dp"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="64dp"
+        android:layout_marginEnd="12dp"
+        android:background="@drawable/bg_quality_chip"
+        android:clickable="true"
+        android:drawableStart="@drawable/ic_quality"
+        android:drawablePadding="6dp"
+        android:elevation="4dp"
+        android:focusable="true"
+        android:fontFamily="sans-serif-medium"
+        android:gravity="center_vertical"
+        android:paddingStart="10dp"
+        android:paddingEnd="12dp"
+        android:textColor="@color/text_primary"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
     <!-- Shown until YouTube Music has drawn its UI -->
     <LinearLayout
         android:id="@+id/loading"

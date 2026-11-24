@@ -19,6 +19,9 @@
  *  5. Makes the page feel like an app: no tap flashes, no text selection on
  *     long-press, no rubber-band overscroll, and a "ready" signal so the app
  *     can drop its loading screen once the UI has drawn.
+ *  6. Audio quality: Auto leaves YouTube's adaptive choice alone; High and Low
+ *     narrow the audio formats the player can pick from. Reports the format
+ *     that's playing, for the app's selector on the player page.
  */
 (() => {
   'use strict';
@@ -81,11 +84,82 @@
   }
   window.__swar.prune = prune;
 
+  // ---------------------------------------------------------------- 2b. audio quality
+  // The app's Audio quality setting (set by the app just before this script).
+  //  auto: leave YouTube's choice alone (it adapts to the connection).
+  //  high: the player only sees the highest-bitrate audio of each kind, so it
+  //        can't drop to a lower one.
+  //  low:  only the lowest-bitrate audio, to save data.
+  // Video formats are never touched. Applies to player responses as they load,
+  // so a change takes effect from the next song.
+  const QUALITIES = ['auto', 'high', 'low'];
+  let audioQuality = QUALITIES.includes(window.__swarAudioQuality) ? window.__swarAudioQuality : 'auto';
+  const audioInfo = new Map(); // video id -> { best: kbps, formats: { itag: { codec, kbps } } }
+
+  const kbpsOf = (f) => Math.round((f.averageBitrate || f.bitrate || 0) / 1000);
+  const isAudioFormat = (f) => isObject(f) && typeof f.mimeType === 'string' && f.mimeType.startsWith('audio/');
+  const codecOf = (mime) => (/opus/i.test(mime) ? 'Opus' : /mp4a/i.test(mime) ? 'AAC' : /[ae]c-3/i.test(mime) ? 'Dolby' : 'Audio');
+
+  function rememberAudio(id, audio) {
+    const prev = audioInfo.get(id) || { best: 0, formats: {} };
+    for (const f of audio) prev.formats[String(f.itag)] = { codec: codecOf(f.mimeType), kbps: kbpsOf(f) };
+    prev.best = Math.max(prev.best, ...audio.map(kbpsOf));
+    audioInfo.delete(id);
+    audioInfo.set(id, prev);
+    if (audioInfo.size > 60) audioInfo.delete(audioInfo.keys().next().value);
+  }
+
+  function shapeAudio(response, quality = audioQuality) {
+    const sd = response.streamingData;
+    const formats = sd && sd.adaptiveFormats;
+    if (!Array.isArray(formats)) return;
+    const audio = formats.filter(isAudioFormat);
+    if (!audio.length) return;
+    const id = (response.videoDetails && response.videoDetails.videoId) || '';
+    if (id) rememberAudio(id, audio);
+    if (quality !== 'high' && quality !== 'low') return;
+    // One pick per container, language track and loudness variant, so the
+    // player still has a codec it can decode and the right language.
+    const groups = new Map();
+    for (const f of audio) {
+      const key = [f.mimeType.split(';')[0], (f.audioTrack && f.audioTrack.id) || '', f.isDrc ? 'drc' : ''].join('|');
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(f);
+    }
+    const keep = new Set();
+    for (const list of groups.values()) {
+      const rates = list.map(kbpsOf);
+      const target = quality === 'high' ? Math.max(...rates) : Math.min(...rates);
+      for (const f of list) if (kbpsOf(f) === target) keep.add(f);
+    }
+    sd.adaptiveFormats = formats.filter((f) => !isAudioFormat(f) || keep.has(f));
+  }
+
+  /** Player responses sit at the top of a response or a couple of levels down. */
+  function shapeAll(root) {
+    const queue = [[root, 0]];
+    while (queue.length) {
+      const [node, depth] = queue.shift();
+      if (node.streamingData) shapeAudio(node);
+      if (depth >= 2) continue;
+      for (const v of Array.isArray(node) ? node : Object.values(node)) if (isObject(v)) queue.push([v, depth + 1]);
+    }
+  }
+  Object.assign(window.__swar, {
+    shapeAudio,
+    audioInfo,
+    getAudioQuality: () => audioQuality,
+    setAudioQuality: (q) => { if (QUALITIES.includes(q)) audioQuality = q; },
+  });
+
   const nativeParse = JSON.parse;
   JSON.parse = function parse(text, reviver) {
     const out = nativeParse.call(this, text, reviver);
     try {
-      if (isObject(out) && typeof text === 'string' && AD_MARKER.test(text)) prune(out);
+      if (isObject(out) && typeof text === 'string') {
+        if (AD_MARKER.test(text)) prune(out);
+        if (text.includes('"adaptiveFormats"')) shapeAll(out);
+      }
     } catch (_) {}
     return out;
   };
@@ -95,7 +169,12 @@
     Response.prototype.json = function json() {
       const url = this.url || '';
       return nativeJson.call(this).then((out) => {
-        try { if (isObject(out) && url.includes('/youtubei/')) prune(out); } catch (_) {}
+        try {
+          if (isObject(out) && url.includes('/youtubei/')) {
+            prune(out);
+            shapeAll(out);
+          }
+        } catch (_) {}
         return out;
       });
     };
@@ -109,7 +188,12 @@
         configurable: true,
         get: () => value,
         set: (v) => {
-          try { if (isObject(v)) prune(v); } catch (_) {}
+          try {
+            if (isObject(v)) {
+              prune(v);
+              shapeAll(v);
+            }
+          } catch (_) {}
           value = v;
         },
       });
@@ -622,11 +706,67 @@
         }
         break;
       }
+      case 'quality':
+        window.__swar.setAudioQuality(arg);
+        reportAudio();
+        return;
       default: return;
     }
     setTimeout(report, 300);
   }
   window.__swar.cmd = cmd;
+
+  // ---------------------------------------------------------------- 6. audio report
+  // What's actually playing (the player's own audio format id), so the app can
+  // show it next to the Audio quality selector on the player page.
+  function currentAudioItag() {
+    const p = playerEl();
+    try {
+      const s = p && typeof p.getVideoStats === 'function' ? p.getVideoStats() : null;
+      if (s && s.afmt) return String(s.afmt);
+    } catch (_) {}
+    try {
+      // Stats for nerds: "vp09.00.40.08 (248) / opus (251)"
+      const n = p && typeof p.getStatsForNerds === 'function' ? p.getStatsForNerds() : null;
+      for (const part of String((n && n.codecs) || '').split('/')) {
+        const m = /(opus|mp4a|[ae]c-3)[^(]*\((\d+)\)/i.exec(part);
+        if (m) return m[2];
+      }
+    } catch (_) {}
+    return '';
+  }
+
+  /** Is the full-screen player page (cover art, controls) open? */
+  function playerPageOpen() {
+    if (document.querySelector('ytmusic-app-layout[player-page-open], ytmusic-app-layout[player-page-open_], ytmusic-player-page[player-page-open]')) return true;
+    const pageEl = document.querySelector('ytmusic-player-page');
+    if (!pageEl || !pageEl.getClientRects().length) return false;
+    const r = pageEl.getBoundingClientRect();
+    const h = window.innerHeight || 1;
+    return r.height > h * 0.5 && r.top < h * 0.25 && r.bottom > 0;
+  }
+
+  let lastAudio = '';
+  function reportAudio() {
+    const pv = playerVideo();
+    const info = pv && audioInfo.get(pv.id);
+    const itag = info ? currentAudioItag() : '';
+    const now = info && itag ? info.formats[itag] : null;
+    const message = {
+      type: 'audio',
+      open: playerPageOpen(),
+      quality: audioQuality,
+      codec: now ? now.codec : '',
+      kbps: now ? now.kbps : 0,
+      best: info ? info.best : 0,
+    };
+    const json = JSON.stringify(message);
+    if (json === lastAudio) return;
+    lastAudio = json;
+    post(message);
+  }
+  window.__swar.reportAudio = reportAudio;
+  setInterval(reportAudio, 400);
 
   function largestArtwork(artwork) {
     let best = '';

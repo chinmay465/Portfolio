@@ -22,6 +22,12 @@ Swar wraps [music.youtube.com](https://music.youtube.com) in an Android app. Mus
   1. *Data:* `JSON.parse`, `Response.json()` and the embedded `ytInitialPlayerResponse` are wrapped so `adPlacements`, `playerAds`, `adSlots` and ad renderers are removed before the player reads them. With no ad scheduled, nothing plays. This is the same approach uBlock Origin uses.
   2. *Network:* `AdFilter` returns an empty response for ad servers (DoubleClick, AdSense, IMA SDK), YouTube's ad endpoints (`/pagead/`, `/api/stats/ads`, `/ptracking`, …) and telemetry (see Privacy). Service-worker requests go through the same filter.
   3. *Fallback:* if an ad still starts, it's muted, jumped to its end, and Skip is clicked. Premium upsell banners are hidden with CSS. The "Are you still there?" dialog is dismissed automatically.
+- **Audio quality.** On YouTube Music's full-screen player, a small chip shows the setting and what's playing (for example *Auto · 128 kbps*). Tap it to pick:
+  - **Auto** (default): YouTube Music's own adaptive choice, which follows your connection and your account's audio quality setting.
+  - **High:** the player only gets the highest-bitrate audio YouTube offers for that song, so it never drops lower on a slow connection.
+  - **Low:** only the lowest-bitrate audio, to save data.
+
+  Swar narrows the audio formats in the player response before the player reads it (one per codec and language track); video formats are untouched. The picker shows the codec and bitrate that's actually playing, and the best on offer for that song. Changes apply from the next song. What's on offer depends on the account: free accounts top out around 128 kbps (Opus or AAC); 256 kbps is a YouTube Premium perk that Swar can't unlock.
 - **Controls.** The page reports title, artist, album art, position and play state over a `WebMessageListener` bridge (origin-locked to `https://music.youtube.com`). `PlaybackService` mirrors that into a `MediaSession`. Commands go back as JavaScript, and the page's own media-session handlers are called first so the queue logic stays YouTube's.
 - **Audio focus.** WebView takes audio focus for the song itself, so Android pauses or ducks it for calls and other music apps. Swar doesn't request focus on top of that: a second request from the same app takes focus away from WebView and pauses the song. Swar does pause when headphones are unplugged.
 - **Links.** Sign-in stays inside the app. `intent://` "open in the YouTube Music app" links are blocked. Other sites open in your browser. Shared `music.youtube.com` links can be opened with Swar.
@@ -72,7 +78,7 @@ Requirements: Android Studio (Ladybug or newer) or JDK 17 + Android SDK 35.
 
 ```bash
 ./gradlew assembleDebug        # APK → app/build/outputs/apk/debug/app-debug.apk
-./gradlew testDebugUnitTest    # AdFilter, NavPolicy, UserAgent, command tests
+./gradlew testDebugUnitTest    # AdFilter, NavPolicy, UserAgent, AudioQuality, command tests
 cd js-tests && npm ci && npm test   # swar.js in a simulated YouTube Music page (jsdom)
 ```
 
@@ -82,9 +88,10 @@ cd js-tests && npm ci && npm test   # swar.js in a simulated YouTube Music page 
 
 | File | Role |
 |---|---|
-| `assets/swar.js` | Page script: visibility override, ad-data pruning, ad fallback, state bridge, commands |
+| `assets/swar.js` | Page script: visibility override, ad-data pruning, audio quality, ad fallback, state bridge, commands |
 | `MainActivity.kt` | WebView setup, request filtering, link policy, page → app messages |
 | `ui/Shell.kt`, `ui/EqualizerView.kt` | Loading and offline screens, progress line, animated equalizer |
+| `ui/QualityControl.kt`, `web/AudioQuality.kt` | Audio quality chip and picker on the player page; the saved setting |
 | `CrashLog.kt` | Saves a crash report on the phone and shows it on next launch |
 | `playback/PlaybackService.kt` | Foreground service, notification, MediaSession, wake lock, headphone unplug |
 | `playback/PlayerBridge.kt` | Shared state flow and command channel between the activity and the service |

@@ -1,5 +1,7 @@
 package com.chinmay.swar.playback
 
+import com.chinmay.swar.web.AudioQuality
+
 /** Commands from the notification, lock screen or headset, run as JavaScript in the page. */
 sealed interface PlayerCommand {
     val js: String
@@ -27,6 +29,10 @@ sealed interface PlayerCommand {
 
     data class SeekTo(val positionMs: Long) : PlayerCommand {
         override val js = call("seek", (positionMs.coerceAtLeast(0) / 1000.0).toString())
+    }
+
+    data class SetAudioQuality(val quality: AudioQuality) : PlayerCommand {
+        override val js = call("quality", "'${quality.key}'")
     }
 }
 

@@ -35,6 +35,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.webkit.ScriptHandler
 import androidx.webkit.ServiceWorkerClientCompat
 import androidx.webkit.ServiceWorkerControllerCompat
 import androidx.webkit.WebViewCompat
@@ -43,8 +44,10 @@ import com.chinmay.swar.playback.PlaybackService
 import com.chinmay.swar.playback.PlayerBridge
 import com.chinmay.swar.playback.PlayerCommand
 import com.chinmay.swar.playback.PlayerState
+import com.chinmay.swar.ui.QualityControl
 import com.chinmay.swar.ui.Shell
 import com.chinmay.swar.web.AdFilter
+import com.chinmay.swar.web.AudioQuality
 import com.chinmay.swar.web.NavPolicy
 import com.chinmay.swar.web.UserAgent
 import org.json.JSONException
@@ -55,6 +58,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private lateinit var shell: Shell
+    private lateinit var qualityControl: QualityControl
     private val handler = Handler(Looper.getMainLooper())
     private var mainFrameFailed = false
     /** The page reloaded onto the song mid-switch; hide the card once it plays. */
@@ -76,6 +80,9 @@ class MainActivity : AppCompatActivity() {
     }
     private val pageScript by lazy { assets.open("swar.js").bufferedReader().use { it.readText() } }
     private var documentStartScript = false
+    private var startScript: ScriptHandler? = null
+    /** Page script with the Audio quality setting in front of it. */
+    private val qualifiedScript get() = qualityControl.quality.scriptPrefix + pageScript
 
     private val commandSink: (PlayerCommand) -> Unit = { command ->
         webView.post { webView.evaluateJavascript(command.js, null) }
@@ -100,6 +107,12 @@ class MainActivity : AppCompatActivity() {
             switching = findViewById(R.id.switching),
             progress = findViewById<ProgressBar>(R.id.progress),
             onRetry = ::retry,
+        )
+        qualityControl = QualityControl(
+            activity = this,
+            chip = findViewById(R.id.quality_chip),
+            initial = AudioQuality.load(this),
+            onChange = ::onAudioQualityChanged,
         )
         // Never leave someone staring at the loading screen.
         handler.postDelayed(revealFallback, MAX_LOADING_MS)
@@ -154,6 +167,7 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
         shell.release()
+        qualityControl.release()
         runCatching { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(networkCallback) }
         if (PlayerBridge.commandSink === commandSink) PlayerBridge.commandSink = null
         if (PlayerBridge.closeListener === closeListener) PlayerBridge.closeListener = null
@@ -196,9 +210,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         documentStartScript = WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
-        if (documentStartScript) {
-            WebViewCompat.addDocumentStartJavaScript(webView, pageScript, setOf(ORIGIN))
-        }
+        if (documentStartScript) registerPageScript()
 
         if (WebViewFeature.isFeatureSupported(WebViewFeature.SERVICE_WORKER_BASIC_USAGE) &&
             WebViewFeature.isFeatureSupported(WebViewFeature.SERVICE_WORKER_SHOULD_INTERCEPT_REQUEST)
@@ -236,7 +248,7 @@ class MainActivity : AppCompatActivity() {
             switchSurvivedReload = shell.switchingVisible
             // Older WebView without document-start scripts: inject as early as we can.
             if (!documentStartScript && url != null && url.startsWith(ORIGIN)) {
-                view.evaluateJavascript(pageScript, null)
+                view.evaluateJavascript(qualifiedScript, null)
             }
         }
 
@@ -256,6 +268,7 @@ class MainActivity : AppCompatActivity() {
             if (!request.isForMainFrame) return
             mainFrameFailed = true
             handler.removeCallbacks(revealFallback)
+            qualityControl.hide()
             shell.showOffline()
         }
 
@@ -302,6 +315,15 @@ class MainActivity : AppCompatActivity() {
                 }
                 return
             }
+            "audio" -> {
+                val playing = QualityControl.Playing(
+                    codec = o.optString("codec"),
+                    kbps = o.optInt("kbps"),
+                    best = o.optInt("best"),
+                )
+                qualityControl.update(o.optBoolean("open") && shell.pageVisible && !mainFrameFailed, playing)
+                return
+            }
             "diag" -> {
                 SwitchReport.show(this, o.toString(2))
                 return
@@ -327,7 +349,20 @@ class MainActivity : AppCompatActivity() {
         if (state.playing) PlaybackService.ensureRunning(this)
     }
 
+    /** Saved for next launch, baked into the page script for new page loads, and sent to the current page. */
+    private fun onAudioQualityChanged(quality: AudioQuality) {
+        AudioQuality.save(this, quality)
+        if (documentStartScript) registerPageScript()
+        commandSink(PlayerCommand.SetAudioQuality(quality))
+    }
+
+    private fun registerPageScript() {
+        startScript?.remove()
+        startScript = WebViewCompat.addDocumentStartJavaScript(webView, qualifiedScript, setOf(ORIGIN))
+    }
+
     private fun retry() {
+        qualityControl.hide()
         shell.showLoading()
         handler.removeCallbacks(revealFallback)
         handler.postDelayed(revealFallback, MAX_LOADING_MS)

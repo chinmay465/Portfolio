@@ -1,5 +1,6 @@
 package com.chinmay.swar.playback
 
+import com.chinmay.swar.web.AudioQuality
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -14,6 +15,10 @@ class PlayerCommandTest {
         assertEquals("window.__swar&&window.__swar.cmd&&window.__swar.cmd('seek',83.5);", PlayerCommand.SeekTo(83_500).js)
         assertEquals("window.__swar&&window.__swar.cmd&&window.__swar.cmd('seek',0.0);", PlayerCommand.SeekTo(-5).js)
         assertEquals("window.__swar&&window.__swar.cmd&&window.__swar.cmd('background',null);", PlayerCommand.EnterBackground.js)
+        assertEquals(
+            "window.__swar&&window.__swar.cmd&&window.__swar.cmd('quality','low');",
+            PlayerCommand.SetAudioQuality(AudioQuality.LOW).js,
+        )
     }
 
     @Test
