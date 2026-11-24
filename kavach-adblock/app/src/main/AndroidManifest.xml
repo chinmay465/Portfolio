@@ -6,6 +6,14 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Lists launcher apps for "Apps that skip the proxy" (no QUERY_ALL_PACKAGES). -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -62,7 +70,8 @@
         </activity>
 
         <!-- Local VPN. Only DNS traffic is routed into it; everything else
-             goes straight to the network. -->
+             goes straight to the network, or to Kavach's loopback proxy in
+             proxy mode. -->
         <service
             android:name=".vpn.AdBlockVpnService"
             android:exported="false"

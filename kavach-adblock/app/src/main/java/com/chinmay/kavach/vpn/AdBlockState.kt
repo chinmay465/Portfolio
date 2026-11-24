@@ -10,7 +10,18 @@ import kotlinx.coroutines.flow.update
 object AdBlockState {
     data class Lookup(val domain: String, val blocked: Boolean)
 
+    /** Where proxy mode stands. Addresses here are the free proxies', never the user's lookups. */
+    sealed interface Proxy {
+        data object Off : Proxy
+        /** [total] = 0 while the pool is still being fetched from Setu. */
+        data class Connecting(val tested: Int, val total: Int) : Proxy
+        data class Active(val address: String, val exitIp: String, val latencyMs: Int, val poolSize: Int) : Proxy
+        data class Unavailable(val reason: Reason) : Proxy
+        enum class Reason { AUTH, SETU_UNREACHABLE, NONE_WORKING }
+    }
+
     val running = MutableStateFlow(false)
+    val proxy = MutableStateFlow<Proxy>(Proxy.Off)
     val queries = MutableStateFlow(0L)
     val blocked = MutableStateFlow(0L)
     val recentBlocked = MutableStateFlow<List<String>>(emptyList())

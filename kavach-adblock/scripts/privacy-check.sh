@@ -99,6 +99,9 @@ allowed_urls = {
     "https://1.1.1.1/dns-query",
     "https://1.0.0.1/dns-query",
     "https://dns.quad9.net/dns-query",
+    # Proxy mode (off by default): Setu's pool, and the on-phone proxy test.
+    "https://setu-proxy-hub.onrender.com",
+    "https://1.1.1.1/cdn-cgi/trace",
 }
 src_urls = set()
 for d, _, files in os.walk("app/src/main/java"):
@@ -112,11 +115,20 @@ if any("http://" in u for u in src_urls):
     errors.append("Plaintext http:// endpoint in source")
 
 # Listening sockets would let other apps on the device or network connect in.
+# One exception: proxy mode's LocalProxy, which must bind to loopback only.
 for d, _, files in os.walk("app/src/main/java"):
     for f in files:
         text = open(os.path.join(d, f)).read()
-        if re.search(r"\b(ServerSocket|LocalServerSocket|DatagramSocket\s*\(\s*\d)", text):
-            errors.append(f"Listening socket in {f}")
+        if not re.search(r"\b(ServerSocket|LocalServerSocket|DatagramSocket\s*\(\s*\d)", text):
+            continue
+        if f == "LocalProxy.kt":
+            binds = re.findall(r"ServerSocket\(([^)]*)\)", text)
+            if binds and all("InetAddress.getLoopbackAddress(" in b for b in binds) and "LocalServerSocket" not in text:
+                report.append("listeners=LocalProxy(loopback)")
+                continue
+            errors.append("LocalProxy must bind its ServerSocket to InetAddress.getLoopbackAddress() only")
+            continue
+        errors.append(f"Listening socket in {f}")
 
 print("::notice title=Kavach privacy check::" + " | ".join(report))
 for e in errors:
