@@ -16,6 +16,7 @@ import {
   songById,
   time,
   type DemoSong,
+  type DlGroup,
   type Mood,
 } from './swarData'
 
@@ -31,6 +32,7 @@ type Page =
   | { kind: 'liked' }
   | { kind: 'history' }
   | { kind: 'downloads' }
+  | { kind: 'dlgroup'; key: string }
   | { kind: 'shelf'; shelf: 'Playlists' | 'Albums' | 'Artists' }
 
 const QUALITY: Record<Quality, { detail: string; label: string }> = {
@@ -128,6 +130,8 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
   const [downloads, setDownloads] = useState<Record<string, number>>({ s6: 100 })
   /** An album's or playlist's download being asked about (cancel or remove). */
   const [asking, setAsking] = useState<{ ids: string[]; what: string } | null>(null)
+  /** Albums and playlists downloaded as a whole: kept together in Downloads. */
+  const [groups, setGroups] = useState<Record<string, DlGroup>>({})
 
   const [expand, setExpand] = useState(0)
   const [dragging, setDragging] = useState(false)
@@ -242,7 +246,8 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
   }
   // ------------------------------------------------------------- downloads
 
-  const downloadAll = (ids: string[]) => {
+  const downloadAll = (ids: string[], group?: DlGroup) => {
+    if (group) setGroups((g) => ({ ...g, [group.key]: group }))
     const fresh = ids.filter((id) => downloads[id] === undefined)
     if (!fresh.length) return
     setDownloads((d) => ({ ...d, ...Object.fromEntries(fresh.map((id) => [id, reduced ? 100 : 0])) }))
@@ -269,8 +274,9 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
     return () => clearInterval(t)
   }, [pending.length, visible])
 
-  /** Album or playlist download: Download, then done/total with cancel, then a tick. */
-  const pageDownload = (ids: string[], what: string) => {
+  /** Album or playlist download, an icon: download, a progress ring with a cross, a tick. */
+  const pageDownload = (ids: string[], group: DlGroup) => {
+    const what = group.isAlbum ? 'album' : 'playlist'
     const done = ids.filter(isDownloaded).length
     const left = ids.filter((id) => downloads[id] !== undefined && downloads[id] < 100).length
     if (left > 0) {
@@ -278,28 +284,32 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
       return (
         <button
           type="button"
-          className="sd-ghost sd-dl-pill"
+          className="sd-iconbtn sd-round"
           onClick={() => setAsking({ ids, what })}
-          aria-label={`Downloading ${done} of ${ids.length}, ${left} left. Cancel`}
+          aria-label={`Downloading ${done} of ${ids.length}. Cancel`}
         >
-          <i className="sd-ring small" style={{ '--p': `${progress}%` } as React.CSSProperties} />
-          <span>
-            {done}/{ids.length}
-            <small>{left} left · Cancel</small>
+          <i className="sd-ring" style={{ '--p': `${progress}%` } as React.CSSProperties} />
+          <span className="sd-ring-x">
+            <Icon name="close" size={11} />
           </span>
         </button>
       )
     }
     if (done === ids.length) {
       return (
-        <button type="button" className="sd-ghost lit" onClick={() => setAsking({ ids, what })} aria-label="Downloaded">
-          <Icon name="done" size={16} /> Downloaded
+        <button type="button" className="sd-iconbtn sd-round lit" onClick={() => setAsking({ ids, what })} aria-label="Downloaded. Remove">
+          <Icon name="done" size={18} />
         </button>
       )
     }
     return (
-      <button type="button" className="sd-ghost" onClick={() => downloadAll(ids)} aria-label="Download all">
-        <Icon name="download" size={16} /> {done > 0 ? `${ids.length - done} more` : 'Download'}
+      <button
+        type="button"
+        className="sd-iconbtn sd-round lit"
+        onClick={() => downloadAll(ids, { ...group, ids })}
+        aria-label={done > 0 ? `Download the other ${ids.length - done}` : 'Download all'}
+      >
+        <Icon name="download" size={18} />
       </button>
     )
   }
@@ -602,7 +612,14 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
     sub: string,
     hue: number,
     ids: string[],
-    opts: { numbered?: boolean; round?: boolean; empty?: string; download?: boolean },
+    opts: {
+      numbered?: boolean
+      round?: boolean
+      empty?: string
+      download?: DlGroup
+      /** What plays: these songs, then (for a downloaded album) the rest. */
+      queue?: (shuffled: boolean) => string[]
+    },
   ) => (
     <>
       <div className={`sd-pagehead${opts.round ? ' artist' : ''}`}>
@@ -611,45 +628,80 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
         <p>{sub}</p>
         {ids.length > 0 && (
           <div className="sd-actions">
-            <button type="button" className="sd-primary" onClick={() => playList(ids)}>
+            <button type="button" className="sd-primary" onClick={() => (opts.queue ? playList(opts.queue(false)) : playList(ids))}>
               <Icon name="play" size={16} /> Play
             </button>
-            <button type="button" className="sd-ghost" onClick={() => playList(ids, 0, true)}>
+            <button type="button" className="sd-ghost" onClick={() => (opts.queue ? playList(opts.queue(true)) : playList(ids, 0, true))}>
               <Icon name="shuffle" size={16} /> Shuffle
             </button>
-            {opts.download && pageDownload(ids, opts.numbered ? 'album' : 'playlist')}
+            {opts.download && pageDownload(ids, opts.download)}
           </div>
         )}
       </div>
       {ids.length === 0 && opts.empty && <p className="sd-empty">{opts.empty}</p>}
-      {ids.map((id, i) => songRow(songById(id), { list: ids, i, numbered: opts.numbered }))}
+      {ids.map((id, i) => songRow(songById(id), { list: opts.queue ? opts.queue(false) : ids, i, numbered: opts.numbered }))}
     </>
   )
 
   let pageView: ReactNode = null
   if (page?.kind === 'album') {
     const a = ALBUMS.find((x) => x.id === page.id) ?? ALBUMS[0]
-    pageView = songPage(a.title, `Album • ${a.artist} • ${a.year} • ${a.songs.length} songs`, a.hue, a.songs, { numbered: true, download: true })
+    pageView = songPage(a.title, `Album • ${a.artist} • ${a.year} • ${a.songs.length} songs`, a.hue, a.songs, {
+      numbered: true,
+      download: { key: a.id, title: a.title, hue: a.hue, isAlbum: true, ids: a.songs },
+    })
   } else if (page?.kind === 'artist') {
     const r = ARTISTS.find((x) => x.id === page.id) ?? ARTISTS[0]
     const ids = SONGS.filter((x) => x.artist === r.name).map((x) => x.id)
     pageView = songPage(r.name, 'Artist • Top songs', r.hue, ids, { round: true })
   } else if (page?.kind === 'mix') {
     const m = MIXES.find((x) => x.id === page.id) ?? MIXES[0]
-    pageView = songPage(m.title, m.subtitle, m.hue, m.songs, { download: true })
+    pageView = songPage(m.title, m.subtitle, m.hue, m.songs, {
+      download: { key: m.id, title: m.title, hue: m.hue, isAlbum: false, ids: m.songs },
+    })
   } else if (page?.kind === 'liked') {
     pageView = songPage('Liked songs', `${liked.size} songs`, 330, [...liked], { empty: 'Tap ♡ in the player to like a song.' })
   } else if (page?.kind === 'history') {
     pageView = songPage('History', 'Played in this demo', 210, history, {})
   } else if (page?.kind === 'downloads') {
     const done = Object.keys(downloads).filter(isDownloaded)
+    const shown = Object.values(groups).filter((g) => g.ids.some((id) => downloads[id] !== undefined))
+    const grouped = new Set(shown.flatMap((g) => g.ids))
+    const singles = done.filter((id) => !grouped.has(id))
+    const loose = pending.filter((id) => !grouped.has(id))
     pageView = (
       <>
-        {songPage('Downloads', `${done.length} songs · play offline`, 190, done, {
-          empty: pending.length ? '' : 'Long-press a song or open an album and tap Download.',
+        {songPage('Downloads', `${done.length} songs · play offline`, 190, [], {
+          empty: done.length || pending.length ? '' : 'Long-press a song or open an album and tap the download button.',
         })}
-        {pending.length > 0 && <p className="sd-strap">In progress</p>}
-        {pending.map((id) => {
+        {done.length > 0 && (
+          <div className="sd-actions">
+            <button type="button" className="sd-primary" onClick={() => playList(done)}>
+              <Icon name="play" size={16} /> Play
+            </button>
+            <button type="button" className="sd-ghost" onClick={() => playList(done, 0, true)}>
+              <Icon name="shuffle" size={16} /> Shuffle
+            </button>
+          </div>
+        )}
+        {shown.length > 0 && <p className="sd-strap">Albums & playlists</p>}
+        {shown.map((g) => {
+          const have = g.ids.filter(isDownloaded).length
+          const left = g.ids.length - have
+          return (
+            <button key={g.key} type="button" className="sd-row-main sd-listitem" onClick={() => open({ kind: 'dlgroup', key: g.key })}>
+              <Art hue={g.hue} />
+              <span className="sd-row-text">
+                <span className="sd-row-title">{g.title}</span>
+                <span className="sd-row-sub">
+                  {g.isAlbum ? 'Album' : 'Playlist'} • {have} songs{left > 0 ? ` • ${left} downloading` : ''}
+                </span>
+              </span>
+            </button>
+          )
+        })}
+        {loose.length > 0 && <p className="sd-strap">In progress</p>}
+        {loose.map((id) => {
           const x = songById(id)
           return (
             <div key={id} className="sd-row">
@@ -667,8 +719,26 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
             </div>
           )
         })}
+        {singles.length > 0 && <p className="sd-strap">Songs</p>}
+        {singles.map((id, i) => songRow(songById(id), { list: singles, i }))}
       </>
     )
+  } else if (page?.kind === 'dlgroup') {
+    const g = groups[page.key]
+    const ids = g ? g.ids.filter(isDownloaded) : []
+    // The album or playlist, then the rest of the downloads, shuffled.
+    const queue = (shuffled: boolean) => {
+      const rest = Object.keys(downloads).filter((id) => isDownloaded(id) && !ids.includes(id))
+      const mix = (l: string[]) => [...l].sort(() => Math.random() - 0.5)
+      return [...(shuffled ? mix(ids) : ids), ...mix(rest)]
+    }
+    pageView = g
+      ? songPage(g.title, `${g.isAlbum ? 'Album' : 'Playlist'} • ${ids.length} songs • downloaded`, g.hue, ids, {
+          numbered: g.isAlbum,
+          empty: 'Not downloaded any more.',
+          queue,
+        })
+      : null
   } else if (page?.kind === 'shelf') {
     const items =
       page.shelf === 'Playlists'

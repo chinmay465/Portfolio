@@ -35,6 +35,15 @@ export interface DemoMix {
   songs: string[]
 }
 
+/** An album or playlist downloaded as a whole, kept together in Downloads. */
+export interface DlGroup {
+  key: string
+  title: string
+  hue: number
+  isAlbum: boolean
+  ids: string[]
+}
+
 export type Mood = 'Relax' | 'Focus' | 'Workout' | 'Romance'
 export const MOODS: Mood[] = ['Relax', 'Focus', 'Workout', 'Romance']
 

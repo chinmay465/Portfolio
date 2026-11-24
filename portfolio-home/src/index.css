@@ -5013,3 +5013,13 @@ body.menu-open {
 .sd-dialog button.quiet {
   color: var(--sd-dim);
 }
+.sd-round {
+  position: relative;
+}
+.sd-ring-x {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--sd-ink);
+}
