@@ -65,9 +65,15 @@ class LocalProxy(private val pool: UpstreamPool) {
 
     val port: Int get() = server.localPort
 
+    @Volatile private var acceptThread: Thread? = null
+
     fun start() {
-        Thread(::acceptLoop, "kavach-proxy").start()
+        acceptThread = Thread(::acceptLoop, "kavach-proxy").also { it.start() }
     }
+
+    /** Debug aid: listener state, without any connection details. */
+    fun debugState(): String =
+        "bound=${server.isBound} closed=${server.isClosed} acceptThread=${acceptThread?.state} active=${active.get()}"
 
     fun stop() {
         debug("stop() called", Throwable("stop trace"))

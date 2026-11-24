@@ -138,6 +138,18 @@ class ProxyManager(
             if (settings.engineLog) {
                 // Debug aid for the emulator test: the path Kavach's Test button checks.
                 Log.i(TAG, "Self-test: ${ProxyChecker.selfTest(proxy.port)}")
+                val port = proxy.port
+                Thread {
+                    repeat(10) { i ->
+                        val ok = runCatching {
+                            java.net.Socket().use {
+                                it.connect(java.net.InetSocketAddress(java.net.InetAddress.getLoopbackAddress(), port), 1_000)
+                            }
+                        }
+                        Log.i(TAG, "Listener probe $i: ${ok.exceptionOrNull()?.message ?: "ok"} ${local?.debugState()}")
+                        Thread.sleep(2_000)
+                    }
+                }.start()
             }
         }
         publishActive()
