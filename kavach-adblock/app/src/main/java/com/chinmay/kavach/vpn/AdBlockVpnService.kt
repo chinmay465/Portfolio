@@ -57,7 +57,7 @@ class AdBlockVpnService : VpnService() {
                 // Setting, Setu URL or token changed: start over with fresh proxies.
                 proxy?.stop()
                 proxy = null
-                establish(proxyPort = null)
+                establish(socksPort = null)
                 applyProxySetting()
                 return START_NOT_STICKY
             }
@@ -85,7 +85,7 @@ class AdBlockVpnService : VpnService() {
             // e.g. ForegroundServiceStartNotAllowedException on a background restart.
             Log.w(TAG, "Could not enter foreground", e)
         }
-        if (!establish(proxyPort = null)) {
+        if (!establish(socksPort = null)) {
             // VPN permission was revoked or never granted.
             stopVpn()
             return
@@ -199,7 +199,7 @@ class AdBlockVpnService : VpnService() {
         } else if (!want && proxy != null) {
             proxy?.stop()
             proxy = null
-            establish(proxyPort = null)
+            establish(socksPort = null)
         }
     }
 
