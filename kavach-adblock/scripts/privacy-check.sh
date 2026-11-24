@@ -134,14 +134,15 @@ for d, _, files in os.walk("app/src/main/java"):
         if not re.search(r"\b(ServerSocket|LocalServerSocket|DatagramSocket\s*\(\s*\d)", text):
             continue
         if f == "LocalProxy.kt":
-            # Every bind() must name the loopback address, and no ServerSocket may bind in its constructor.
+            # Every bind() must use LOOPBACK_V4 (127.0.0.1), and no ServerSocket may bind in its constructor.
             ctor_args = [a.strip() for a in re.findall(r"ServerSocket\(([^)]*)\)", text)]
             binds = re.findall(r"\bbind\(([^\n]*)", text)
-            if (binds and all("InetAddress.getLoopbackAddress()" in b for b in binds)
+            loopback_v4 = re.search(r"LOOPBACK_V4: InetAddress = InetAddress\.getByAddress\(byteArrayOf\(127, 0, 0, 1\)\)", text)
+            if (binds and loopback_v4 and all("LOOPBACK_V4" in b for b in binds)
                     and all(a == "" for a in ctor_args) and "LocalServerSocket" not in text):
                 report.append("listeners=LocalProxy(loopback)")
                 continue
-            errors.append("LocalProxy must bind its ServerSocket to InetAddress.getLoopbackAddress() only")
+            errors.append("LocalProxy must bind its ServerSocket to 127.0.0.1 (LOOPBACK_V4) only")
             continue
         errors.append(f"Listening socket in {f}")
 

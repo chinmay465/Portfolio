@@ -58,12 +58,12 @@ object ProxyChecker {
     fun selfTest(localPort: Int, timeoutMs: Int = 25_000): SelfTest {
         try {
             java.net.Socket().use {
-                it.connect(InetSocketAddress(java.net.InetAddress.getLoopbackAddress(), localPort), 2_000)
+                it.connect(InetSocketAddress(LocalProxy.LOOPBACK_V4, localPort), 2_000)
             }
         } catch (_: IOException) {
             return SelfTest.NotListening
         }
-        val route = Proxy(Proxy.Type.HTTP, InetSocketAddress(java.net.InetAddress.getLoopbackAddress(), localPort))
+        val route = Proxy(Proxy.Type.HTTP, InetSocketAddress(LocalProxy.LOOPBACK_V4, localPort))
         val started = System.nanoTime()
         val ok = request(route, GOOGLE_URL, timeoutMs) { code, _ -> code == HttpURLConnection.HTTP_NO_CONTENT } != null
         return if (ok) SelfTest.Ok(((System.nanoTime() - started) / 1_000_000).toInt()) else SelfTest.Upstream

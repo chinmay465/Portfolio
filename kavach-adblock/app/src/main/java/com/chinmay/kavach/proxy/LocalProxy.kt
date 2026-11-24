@@ -43,16 +43,17 @@ class LocalProxy(private val pool: UpstreamPool) {
     data class Target(val host: String, val port: Int, val connect: Boolean)
 
     /**
-     * A fixed port, so a restart of proxy mode hands apps the same address:
-     * an app still holding the previous proxy setting keeps working. Falls
-     * back to any free port if another app already uses it.
+     * 127.0.0.1 on a fixed port, so a restart of proxy mode reuses the same
+     * address. (Not getLoopbackAddress(): on Android that's ::1, which the
+     * tunnel engine's 127.0.0.1 never reaches.) Falls back to any free port
+     * if another app already uses it.
      */
     private val server: ServerSocket = ServerSocket().apply {
         reuseAddress = true
         try {
-            bind(InetSocketAddress(InetAddress.getLoopbackAddress(), PREFERRED_PORT), BACKLOG)
+            bind(InetSocketAddress(LOOPBACK_V4, PREFERRED_PORT), BACKLOG)
         } catch (_: IOException) {
-            bind(InetSocketAddress(InetAddress.getLoopbackAddress(), 0), BACKLOG)
+            bind(InetSocketAddress(LOOPBACK_V4, 0), BACKLOG)
         }
     }
     // Two threads per connection with every app's traffic here, so keep stacks small.
@@ -65,18 +66,11 @@ class LocalProxy(private val pool: UpstreamPool) {
 
     val port: Int get() = server.localPort
 
-    @Volatile private var acceptThread: Thread? = null
-
     fun start() {
-        acceptThread = Thread(::acceptLoop, "kavach-proxy").also { it.start() }
+        Thread(::acceptLoop, "kavach-proxy").start()
     }
 
-    /** Debug aid: listener state, without any connection details. */
-    fun debugState(): String =
-        "bound=${server.isBound} closed=${server.isClosed} acceptThread=${acceptThread?.state} active=${active.get()}"
-
     fun stop() {
-        debug("stop() called", Throwable("stop trace"))
         stopped = true
         closeQuietly(server)
         open.toList().forEach(::closeQuietly)
@@ -88,7 +82,7 @@ class LocalProxy(private val pool: UpstreamPool) {
             val client = try {
                 server.accept()
             } catch (e: IOException) {
-                debug("accept loop ended (stopped=$stopped, closed=${server.isClosed})", e)
+                if (!stopped) debug("accept loop ended", e)
                 break
             }
             AdBlockState.proxyReceived.update { it + 1 }
@@ -278,6 +272,9 @@ class LocalProxy(private val pool: UpstreamPool) {
 
     companion object {
         const val PREFERRED_PORT = 28_283
+
+        /** 127.0.0.1, built from bytes so there's no lookup. */
+        val LOOPBACK_V4: InetAddress = InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1))
         private const val TAG = "KavachLocal"
         private const val BACKLOG = 128
         private const val MAX_CONNECTIONS = 768

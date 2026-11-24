@@ -21,13 +21,6 @@ if [ "$(git -C "$WORK/jni" rev-parse HEAD 2>/dev/null)" != "$HEV_COMMIT" ]; then
   [ "$(git -C "$WORK/jni" rev-parse HEAD)" = "$HEV_COMMIT" ] || { echo "::error::hev $HEV_TAG is not $HEV_COMMIT"; exit 1; }
 fi
 
-# Diagnostics: include errno when the engine can't reach Kavach's SOCKS server.
-C=$WORK/jni/src/core/src/hev-socks5-client.c
-grep -q "connect errno" "$C" || {
-  sed -i 's|LOG_I ("%p socks5 client connect", self);|LOG_I ("%p socks5 client connect errno %d", self, errno);|' "$C"
-  sed -i '1i #include <errno.h>' "$C"
-}
-
 # Register the JNI methods on com.chinmay.kavach.proxy.TunnelNative.
 cat > "$WORK/jni/Application.mk" <<MK
 APP_OPTIM := release
