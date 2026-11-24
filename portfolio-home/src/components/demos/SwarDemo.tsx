@@ -126,6 +126,8 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
   const [round, setRound] = useState(0)
   /** Download progress per song, 0 to 100. */
   const [downloads, setDownloads] = useState<Record<string, number>>({ s6: 100 })
+  /** An album's or playlist's download being asked about (cancel or remove). */
+  const [asking, setAsking] = useState<{ ids: string[]; what: string } | null>(null)
 
   const [expand, setExpand] = useState(0)
   const [dragging, setDragging] = useState(false)
@@ -185,6 +187,12 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
   const skipNext = () => {
     if (current && pos < 20) setSkips((k) => ({ ...k, [current.id]: (k[current.id] ?? 0) + 1 }))
     next()
+  }
+
+  /** The mini player's previous: always the song before (or the start of the first). */
+  const prevSong = () => {
+    if (index === 0) setPos(0)
+    else goTo(index - 1)
   }
 
   const prev = () => {
@@ -261,6 +269,41 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
     return () => clearInterval(t)
   }, [pending.length, visible])
 
+  /** Album or playlist download: Download, then done/total with cancel, then a tick. */
+  const pageDownload = (ids: string[], what: string) => {
+    const done = ids.filter(isDownloaded).length
+    const left = ids.filter((id) => downloads[id] !== undefined && downloads[id] < 100).length
+    if (left > 0) {
+      const progress = ids.reduce((sum, id) => sum + (downloads[id] ?? 0), 0) / ids.length
+      return (
+        <button
+          type="button"
+          className="sd-ghost sd-dl-pill"
+          onClick={() => setAsking({ ids, what })}
+          aria-label={`Downloading ${done} of ${ids.length}, ${left} left. Cancel`}
+        >
+          <i className="sd-ring small" style={{ '--p': `${progress}%` } as React.CSSProperties} />
+          <span>
+            {done}/{ids.length}
+            <small>{left} left · Cancel</small>
+          </span>
+        </button>
+      )
+    }
+    if (done === ids.length) {
+      return (
+        <button type="button" className="sd-ghost lit" onClick={() => setAsking({ ids, what })} aria-label="Downloaded">
+          <Icon name="done" size={16} /> Downloaded
+        </button>
+      )
+    }
+    return (
+      <button type="button" className="sd-ghost" onClick={() => downloadAll(ids)} aria-label="Download all">
+        <Icon name="download" size={16} /> {done > 0 ? `${ids.length - done} more` : 'Download'}
+      </button>
+    )
+  }
+
   const toggleLike = (id: string) =>
     setLiked((l) => {
       const n = new Set(l)
@@ -283,7 +326,19 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
 
   // ----------------------------------------------------- the player gesture
 
-  const drag = useRef<{ y0: number; from: number; last: number; t: number; v: number; moved: boolean } | null>(null)
+  const drag = useRef<{
+    x0: number
+    y0: number
+    from: number
+    last: number
+    t: number
+    v: number
+    moved: boolean
+    /** Sideways on the mini player: next or previous song. */
+    sideways: boolean
+    dx: number
+  } | null>(null)
+  const [swipe, setSwipe] = useState(0)
   const justDragged = useRef(false)
 
   // The drag is followed on the whole document, so it keeps going when the
@@ -292,17 +347,25 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
     if ((e.target as HTMLElement).closest('input, [data-nodrag]')) return
     const screen = root.current?.querySelector<HTMLElement>('.sd-screen')
     if (!screen) return
-    drag.current = { y0: e.clientY, from: expand, last: e.clientY, t: performance.now(), v: 0, moved: false }
+    const onMini = expand === 0 && !!(e.target as HTMLElement).closest('.sd-mini')
+    drag.current = { x0: e.clientX, y0: e.clientY, from: expand, last: e.clientY, t: performance.now(), v: 0, moved: false, sideways: false, dx: 0 }
     const move = (ev: PointerEvent) => {
       const d = drag.current
       if (!d) return
       const dy = ev.clientY - d.y0
+      const dx = ev.clientX - d.x0
       if (!d.moved) {
-        if (Math.abs(dy) < 6) return
+        if (Math.abs(dy) < 6 && Math.abs(dx) < 6) return
         d.moved = true
-        setDragging(true)
+        d.sideways = onMini && Math.abs(dx) > Math.abs(dy)
+        if (!d.sideways) setDragging(true)
       }
       ev.preventDefault()
+      if (d.sideways) {
+        d.dx = dx
+        setSwipe(dx)
+        return
+      }
       const now = performance.now()
       if (now > d.t) d.v = (ev.clientY - d.last) / (now - d.t)
       d.last = ev.clientY
@@ -318,6 +381,12 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
       if (!d?.moved) return
       justDragged.current = true
       setTimeout(() => (justDragged.current = false), 0)
+      if (d.sideways) {
+        setSwipe(0)
+        if (d.dx < -60) skipNext()
+        else if (d.dx > 60) prevSong()
+        return
+      }
       setDragging(false)
       setExpand((x) => (d.v < -0.4 ? 1 : d.v > 0.4 ? 0 : x > 0.5 ? 1 : 0))
     }
@@ -548,16 +617,7 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
             <button type="button" className="sd-ghost" onClick={() => playList(ids, 0, true)}>
               <Icon name="shuffle" size={16} /> Shuffle
             </button>
-            {opts.download && (
-              <button
-                type="button"
-                className={`sd-iconbtn sd-round${ids.every(isDownloaded) ? ' lit' : ''}`}
-                onClick={() => downloadAll(ids)}
-                aria-label={ids.every(isDownloaded) ? 'Downloaded' : 'Download all'}
-              >
-                <Icon name={ids.every(isDownloaded) ? 'done' : 'download'} size={18} />
-              </button>
-            )}
+            {opts.download && pageDownload(ids, opts.numbered ? 'album' : 'playlist')}
           </div>
         )}
       </div>
@@ -642,7 +702,8 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
       aria-label="Swar, interactive demo with made-up music"
       onKeyDown={(e) => {
         if (e.key === 'Escape') {
-          if (menu || sheet) closeAll()
+          if (asking) setAsking(null)
+          else if (menu || sheet) closeAll()
           else if (expand > 0) setExpand(0)
         }
       }}
@@ -679,11 +740,19 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
                 if (e.key === 'Enter' && e.target === e.currentTarget) setExpand(1)
               }}
             >
-              <Art hue={current.hue} />
-              <span className="sd-row-text">
-                <span className="sd-row-title">{current.title}</span>
-                <span className="sd-row-sub">{current.artist}</span>
+              <span
+                className="sd-mini-song"
+                style={{ transform: `translateX(${swipe}px)`, opacity: 1 - Math.min(0.7, Math.abs(swipe) / 260), transition: swipe ? 'none' : undefined }}
+              >
+                <Art hue={current.hue} />
+                <span className="sd-row-text">
+                  <span className="sd-row-title">{current.title}</span>
+                  <span className="sd-row-sub">{current.artist}</span>
+                </span>
               </span>
+              <button type="button" className="sd-iconbtn" onClick={prevSong} aria-label="Previous">
+                <Icon name="prev" />
+              </button>
               <button type="button" className="sd-play small" onClick={() => setPlaying((p) => !p)} aria-label={playing ? 'Pause' : 'Play'}>
                 <Icon name={playing ? 'pause' : 'play'} size={18} />
               </button>
@@ -941,6 +1010,52 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
               ))}
             </div>
           )}
+
+          {asking && (() => {
+            const ids = asking.ids
+            const done = ids.filter(isDownloaded)
+            const left = ids.filter((id) => downloads[id] !== undefined && downloads[id] < 100)
+            const close = () => setAsking(null)
+            const removeAll = (list: string[]) => list.forEach(removeDownload)
+            const choices: [string, () => void][] =
+              left.length === 0
+                ? [[`Remove ${done.length} songs`, () => removeAll(done)], ['Keep', () => {}]]
+                : done.length > 0
+                  ? [
+                      [`Keep the ${done.length} downloaded, cancel the rest`, () => removeAll(left)],
+                      [`Delete all ${done.length + left.length}`, () => removeAll([...done, ...left])],
+                      ['Keep downloading', () => {}],
+                    ]
+                  : [['Cancel downloads', () => removeAll(left)], ['Keep downloading', () => {}]]
+            return (
+              <>
+                <button type="button" className="sd-scrim" onClick={close} aria-label="Close" />
+                <div className="sd-dialog" data-nodrag role="dialog" aria-label={left.length ? 'Stop downloading?' : 'Remove downloads?'}>
+                  <h4>{left.length ? 'Stop downloading?' : 'Remove downloads?'}</h4>
+                  <p>
+                    {left.length === 0
+                      ? `All ${done.length} songs of this ${asking.what} are downloaded. Remove them?`
+                      : done.length > 0
+                        ? `${done.length} of these ${ids.length} songs are already downloaded and ${left.length} are still to come. Delete the downloaded ones as well, or keep them and cancel only the new ones?`
+                        : `${left.length} songs from this ${asking.what} are still downloading.`}
+                  </p>
+                  {choices.map(([label, go], i) => (
+                    <button
+                      key={label}
+                      type="button"
+                      className={i === choices.length - 1 ? 'quiet' : ''}
+                      onClick={() => {
+                        close()
+                        go()
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )
+          })()}
 
           {toast && (
             <div className="sd-toast" role="status">

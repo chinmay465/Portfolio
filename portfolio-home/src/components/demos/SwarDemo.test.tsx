@@ -124,4 +124,27 @@ describe('Swar demo', () => {
     fireEvent.click(mini()!)
     expect(screen.getByText('Downloaded · plays offline')).toBeTruthy()
   })
+
+  it('cancels the rest of an album download but keeps what finished', () => {
+    vi.useFakeTimers()
+    render(<SwarDemo reduced={false} />)
+    act(() => scrollIntoView())
+    fireEvent.click(screen.getByRole('button', { name: /^Salt & Sand/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Download all' }))
+    act(() => vi.advanceTimersByTime(1600))
+    fireEvent.click(screen.getByRole('button', { name: 'Downloading 1 of 3, 2 left. Cancel' }))
+    const dialog = screen.getByRole('dialog', { name: 'Stop downloading?' })
+    expect(dialog.textContent).toContain('1 of these 3 songs are already downloaded')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Keep the 1 downloaded, cancel the rest' }))
+    expect(screen.getByRole('button', { name: 'Download all' }).textContent).toContain('2 more')
+  })
+
+  it('goes back a song from the mini player', () => {
+    render(<SwarDemo reduced />)
+    fireEvent.click(screen.getAllByRole('button', { name: 'Play Monsoon Drive by Indie Pune' })[0])
+    fireEvent.click(within(demo()).getAllByRole('button', { name: 'Next' })[0])
+    expect(mini()?.getAttribute('aria-label')).not.toBe('Open the player: Monsoon Drive')
+    fireEvent.click(within(demo()).getAllByRole('button', { name: 'Previous' })[0])
+    expect(mini()?.getAttribute('aria-label')).toBe('Open the player: Monsoon Drive')
+  })
 })
