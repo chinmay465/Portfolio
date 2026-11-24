@@ -69,7 +69,13 @@
     <string name="proxy_status_waiting">Starts when protection is on.</string>
     <string name="proxy_status_fetching">Getting proxies from Setu… a sleeping server takes up to a minute to wake.</string>
     <string name="proxy_status_testing">Testing proxies from this phone: %1$d of %2$d</string>
-    <string name="proxy_status_active">Via %1$s · exit IP %2$s · %3$d ms · %4$d ready\nConnections: %5$d ok, %6$d failed</string>
+    <string name="proxy_status_active">Via %1$s · exit IP %2$s · %3$d ms · %4$d ready\nApp connections: %5$d in, %6$d ok, %7$d failed · Kavach proxy 127.0.0.1:%8$d</string>
+    <string name="proxy_test">Test</string>
+    <string name="proxy_test_running">Testing Google through Kavach\'s proxy…</string>
+    <string name="proxy_test_ok">Works: Google answered through the proxy in %1$d ms. If an app still says no internet, it isn\'t using the proxy: force-stop it and open it again.</string>
+    <string name="proxy_test_not_listening">Kavach\'s proxy isn\'t running. Turn proxy mode off and on again.</string>
+    <string name="proxy_test_upstream">Kavach\'s proxy is running, but the free proxies couldn\'t reach Google. Tap Switch proxy and test again.</string>
+    <string name="proxy_test_unavailable">Proxy mode isn\'t connected yet.</string>
     <string name="proxy_status_auth">Setu rejected the token. Fix it in Proxy settings. Apps go direct meanwhile.</string>
     <string name="proxy_status_unreachable">Can\'t reach Setu. Retrying in 2 min, apps go direct meanwhile.</string>
     <string name="proxy_status_none">No working proxy right now. Retrying, apps go direct meanwhile.</string>

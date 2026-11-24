@@ -39,7 +39,19 @@ class LocalProxy(private val pool: UpstreamPool) {
 
     data class Target(val host: String, val port: Int, val connect: Boolean)
 
-    private val server = ServerSocket(0, BACKLOG, InetAddress.getLoopbackAddress())
+    /**
+     * A fixed port, so a restart of proxy mode hands apps the same address:
+     * an app still holding the previous proxy setting keeps working. Falls
+     * back to any free port if another app already uses it.
+     */
+    private val server: ServerSocket = ServerSocket().apply {
+        reuseAddress = true
+        try {
+            bind(InetSocketAddress(InetAddress.getLoopbackAddress(), PREFERRED_PORT), BACKLOG)
+        } catch (_: IOException) {
+            bind(InetSocketAddress(InetAddress.getLoopbackAddress(), 0), BACKLOG)
+        }
+    }
     private val workers: ExecutorService = Executors.newCachedThreadPool()
     private val open = Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap<Socket, Boolean>())
     private val active = AtomicInteger()
@@ -65,6 +77,7 @@ class LocalProxy(private val pool: UpstreamPool) {
             } catch (_: IOException) {
                 break
             }
+            AdBlockState.proxyReceived.update { it + 1 }
             if (active.incrementAndGet() > MAX_CONNECTIONS) {
                 active.decrementAndGet()
                 closeQuietly(client)
@@ -210,12 +223,14 @@ class LocalProxy(private val pool: UpstreamPool) {
     }
 
     companion object {
+        const val PREFERRED_PORT = 28_283
         private const val BACKLOG = 128
         private const val MAX_CONNECTIONS = 256
         private const val MAX_ATTEMPTS = 3
-        private const val CONNECT_TIMEOUT_MS = 5_000
-        private const val HANDSHAKE_TIMEOUT_MS = 10_000
-        private const val FIRST_REPLY_TIMEOUT_MS = 8_000
+        // Kept short: apps give up on a page after ~15-30 s, and up to three proxies are tried.
+        private const val CONNECT_TIMEOUT_MS = 4_000
+        private const val HANDSHAKE_TIMEOUT_MS = 6_000
+        private const val FIRST_REPLY_TIMEOUT_MS = 5_000
         private const val FIRST_CLIENT_BYTES_TIMEOUT_MS = 60_000
         private const val IDLE_TIMEOUT_MS = 5 * 60_000
         private const val MAX_HEAD = 32 * 1024

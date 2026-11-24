@@ -18,6 +18,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.chinmay.kavach.databinding.ActivityMainBinding
+import com.chinmay.kavach.proxy.ProxyChecker
 import com.chinmay.kavach.proxy.ProxySettings
 import com.chinmay.kavach.proxy.SetuClient
 import com.chinmay.kavach.vpn.AdBlockState
@@ -98,6 +99,7 @@ class MainActivity : AppCompatActivity() {
         }
         binding.proxyNext.setOnClickListener { AdBlockVpnService.nextProxy(this) }
         binding.proxySettings.setOnClickListener { showProxySettings() }
+        binding.proxyTest.setOnClickListener { testProxy() }
 
         observeState()
 
@@ -121,9 +123,10 @@ class MainActivity : AppCompatActivity() {
                     combine(
                         AdBlockState.running,
                         AdBlockState.proxy,
+                        AdBlockState.proxyReceived,
                         AdBlockState.proxyOk,
                         AdBlockState.proxyFailed,
-                    ) { r, p, _, _ -> r to p }
+                    ) { r, p, _, _, _ -> r to p }
                         .collect { (running, proxy) -> renderProxy(running, proxy) }
                 }
                 launch {
@@ -328,6 +331,7 @@ class MainActivity : AppCompatActivity() {
     private fun renderProxy(running: Boolean, proxy: AdBlockState.Proxy) {
         val enabled = proxySettings.enabled
         binding.proxyNext.isEnabled = running && proxy is AdBlockState.Proxy.Active
+        binding.proxyTest.isEnabled = running && proxy is AdBlockState.Proxy.Active
         binding.proxyStatus.text = when {
             !ProxySettings.supported -> getString(R.string.proxy_status_unsupported)
             !enabled -> getString(R.string.proxy_status_off)
@@ -346,8 +350,10 @@ class MainActivity : AppCompatActivity() {
                     proxy.exitIp,
                     proxy.latencyMs,
                     proxy.poolSize,
+                    AdBlockState.proxyReceived.value,
                     AdBlockState.proxyOk.value,
                     AdBlockState.proxyFailed.value,
+                    proxy.localPort,
                 )
                 is AdBlockState.Proxy.Unavailable -> getString(
                     when (proxy.reason) {
@@ -357,6 +363,31 @@ class MainActivity : AppCompatActivity() {
                     },
                 )
             }
+        }
+    }
+
+    /** Checks the whole path apps use: Kavach's loopback proxy → free proxy → Google. */
+    private fun testProxy() {
+        val active = AdBlockState.proxy.value as? AdBlockState.Proxy.Active
+        if (active == null) {
+            Toast.makeText(this, R.string.proxy_test_unavailable, Toast.LENGTH_SHORT).show()
+            return
+        }
+        binding.proxyTest.isEnabled = false
+        Toast.makeText(this, R.string.proxy_test_running, Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) { ProxyChecker.selfTest(active.localPort) }
+            binding.proxyTest.isEnabled = AdBlockState.proxy.value is AdBlockState.Proxy.Active
+            val message = when (result) {
+                is ProxyChecker.SelfTest.Ok -> getString(R.string.proxy_test_ok, result.latencyMs)
+                ProxyChecker.SelfTest.NotListening -> getString(R.string.proxy_test_not_listening)
+                ProxyChecker.SelfTest.Upstream -> getString(R.string.proxy_test_upstream)
+            }
+            MaterialAlertDialogBuilder(this@MainActivity)
+                .setTitle(R.string.proxy_test)
+                .setMessage(message)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
         }
     }
 

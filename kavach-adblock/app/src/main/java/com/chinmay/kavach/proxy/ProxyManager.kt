@@ -139,7 +139,8 @@ class ProxyManager(
     private fun publishActive() {
         if (stopped) return
         val cur = pool.current() ?: return
-        AdBlockState.proxy.value = Proxy.Active(cur.address, cur.exitIp, cur.latencyMs, pool.size())
+        val port = local?.port ?: return
+        AdBlockState.proxy.value = Proxy.Active(cur.address, cur.exitIp, cur.latencyMs, pool.size(), port)
     }
 
     private fun tick() {

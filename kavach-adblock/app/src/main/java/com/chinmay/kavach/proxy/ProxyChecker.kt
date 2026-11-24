@@ -43,6 +43,32 @@ object ProxyChecker {
         return request(route, GOOGLE_URL, timeoutMs) { code, _ -> code == HttpURLConnection.HTTP_NO_CONTENT } != null
     }
 
+    sealed interface SelfTest {
+        data class Ok(val latencyMs: Int) : SelfTest
+        /** Nothing is listening on Kavach's own proxy port. */
+        data object NotListening : SelfTest
+        /** Kavach's proxy answered, but no free proxy got the page. */
+        data object Upstream : SelfTest
+    }
+
+    /**
+     * Runs the same path apps use: Google through Kavach's loopback proxy on
+     * [localPort], which forwards to the current free proxy.
+     */
+    fun selfTest(localPort: Int, timeoutMs: Int = 25_000): SelfTest {
+        try {
+            java.net.Socket().use {
+                it.connect(InetSocketAddress(java.net.InetAddress.getLoopbackAddress(), localPort), 2_000)
+            }
+        } catch (_: IOException) {
+            return SelfTest.NotListening
+        }
+        val route = Proxy(Proxy.Type.HTTP, InetSocketAddress(java.net.InetAddress.getLoopbackAddress(), localPort))
+        val started = System.nanoTime()
+        val ok = request(route, GOOGLE_URL, timeoutMs) { code, _ -> code == HttpURLConnection.HTTP_NO_CONTENT } != null
+        return if (ok) SelfTest.Ok(((System.nanoTime() - started) / 1_000_000).toInt()) else SelfTest.Upstream
+    }
+
     private fun <T : Any> request(route: Proxy, url: String, timeoutMs: Int, read: (Int, String) -> T?): T? =
         try {
             val conn = URI(url).toURL().openConnection(route) as HttpURLConnection
