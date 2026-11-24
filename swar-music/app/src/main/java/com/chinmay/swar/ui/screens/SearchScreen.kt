@@ -120,7 +120,7 @@ fun SearchScreen(bottomPadding: PaddingValues) {
                 Box(
                     Modifier.clip(shape)
                         .then(if (selected) Modifier.background(Swar.AccentHorizontal, shape) else Modifier.background(Swar.GlassLight, shape).border(1.dp, Swar.Hairline, shape))
-                        .clickable { model.setFilter(f) }
+                        .clickable { model.chooseFilter(f) }
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                 ) { Text(f.label, style = MaterialTheme.typography.labelLarge) }
             }

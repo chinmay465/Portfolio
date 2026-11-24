@@ -160,7 +160,7 @@ class SearchModel(context: Context) : ViewModel() {
         }
     }
 
-    fun setFilter(f: SearchFilter) {
+    fun chooseFilter(f: SearchFilter) {
         if (submitted.isNotEmpty()) submit(submitted, f) else filter = f
     }
 
