@@ -162,8 +162,17 @@ class PlaybackService : Service() {
             .putString(MediaMetadataCompat.METADATA_KEY_TITLE, state.title)
             .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, state.artist)
             .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, state.album)
+            // Display keys too: some lock screens, launchers and car displays read only these.
+            .putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_TITLE, state.title)
+            .putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_SUBTITLE, state.artist)
             .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, state.durationMs)
-            .apply { artwork?.let { putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, it) } }
+            .apply {
+                artwork?.let {
+                    putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, it)
+                    putBitmap(MediaMetadataCompat.METADATA_KEY_ART, it)
+                    putBitmap(MediaMetadataCompat.METADATA_KEY_DISPLAY_ICON, it)
+                }
+            }
             .build()
 
     private fun buildPlaybackState(state: PlayerState): PlaybackStateCompat {

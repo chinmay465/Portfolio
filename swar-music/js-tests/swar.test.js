@@ -764,3 +764,31 @@ test('reports which tiers this song offers, so missing ones can be shown disable
   assert.deepEqual(plain(last.tiers), { low: 68, normal: 131, high: 0 }, 'no 256 kbps on offer: High disabled');
   p.close();
 });
+
+test('notification info falls back to the player and the player bar when media-session metadata is missing', () => {
+  const p = page(`<ytmusic-player-bar>
+      <img class="image" src="https://lh3.googleusercontent.com/abc=w60-h60-l90-rj">
+      <yt-formatted-string class="title" title="Kesariya">Kesariya</yt-formatted-string>
+      <span class="byline">Arijit Singh • Brahmastra • 2022</span>
+    </ytmusic-player-bar>`);
+  const v = fakeVideo(p.document, { paused: false, duration: 268, currentTime: 5 });
+  p.document.body.appendChild(v);
+  v.dispatchEvent(new p.window.Event('playing'));
+  const s = lastState(p);
+  assert.equal(s.title, 'Kesariya');
+  assert.equal(s.artist, 'Arijit Singh');
+  assert.equal(s.artwork, 'https://lh3.googleusercontent.com/abc=w544-h544-l90-rj', 'full-size cover');
+  p.close();
+
+  const q = page(); // no bar either: the player's own track details
+  playerFor(q, 'x', {
+    getPlayerResponse: () => ({ videoDetails: {
+      videoId: 'x', musicVideoType: 'MUSIC_VIDEO_TYPE_ATV', title: 'Tum Hi Ho', author: 'Arijit Singh',
+      thumbnail: { thumbnails: [{ url: 'https://i.ytimg.com/vi/x/default.jpg' }, { url: 'https://i.ytimg.com/vi/x/sddefault.jpg?sqp=1' }] },
+    } }),
+  });
+  q.window.__swar.report();
+  const t = lastState(q);
+  assert.deepEqual([t.title, t.artist, t.artwork], ['Tum Hi Ho', 'Arijit Singh', 'https://i.ytimg.com/vi/x/sddefault.jpg']);
+  q.close();
+});

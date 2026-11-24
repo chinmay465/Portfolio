@@ -922,16 +922,51 @@
   })();
 
   let lastSent = '';
+  /** Bigger cover: YouTube Music's image URLs carry their size, e.g. "=w60-h60-l90-rj". */
+  const fullSize = (src) => String(src || '').replace(/=w\d+-h\d+/, '=w544-h544');
+
+  /**
+   * Title, artist, album and cover for the notification and lock screen.
+   * The page's media-session metadata first; when YouTube Music hasn't set it
+   * (it doesn't always in a WebView), the player's own track details and then
+   * the player bar on the page.
+   */
+  function trackInfo() {
+    const md = navigator.mediaSession && navigator.mediaSession.metadata;
+    let title = (md && md.title) || '';
+    let artist = (md && md.artist) || '';
+    const album = (md && md.album) || '';
+    let artwork = md ? largestArtwork(md.artwork) : '';
+    if (!title || !artist || !artwork) {
+      const bar = document.querySelector('ytmusic-player-bar');
+      const text = (sel) => {
+        const el = bar && bar.querySelector(sel);
+        return el ? String(el.getAttribute('title') || el.textContent || '').replace(/\s+/g, ' ').trim() : '';
+      };
+      const d = playerVideoDetails();
+      // Byline: "Artist • Album • 2019" or "Artist • 1.2M views"
+      const byline = text('.byline').split(/\s+•\s+/)[0] || '';
+      title = title || text('.title') || (d && d.title) || '';
+      artist = artist || byline || (d && d.author) || '';
+      if (!artwork) {
+        const img = bar && bar.querySelector('img.image, .thumbnail img, img');
+        const src = img ? String(img.currentSrc || img.src || '') : '';
+        artwork = src.startsWith('https:') ? src : coverArt();
+      }
+    }
+    return { title, artist, album, artwork: fullSize(artwork) };
+  }
+
   function report() {
     const v = video();
-    const md = navigator.mediaSession && navigator.mediaSession.metadata;
+    const track = trackInfo();
     const state = {
       type: 'state',
       playing: !!(v && !v.paused && !v.ended),
-      title: (md && md.title) || '',
-      artist: (md && md.artist) || '',
-      album: (md && md.album) || '',
-      artwork: md ? largestArtwork(md.artwork) : '',
+      title: track.title,
+      artist: track.artist,
+      album: track.album,
+      artwork: track.artwork,
       duration: v && Number.isFinite(v.duration) ? Math.round(v.duration * 1000) : 0,
       position: v && Number.isFinite(v.currentTime) ? Math.round(v.currentTime * 1000) : 0,
       ad: adShowing(),
