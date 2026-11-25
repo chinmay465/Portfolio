@@ -45,8 +45,9 @@ export default function ProjectDetail() {
             <ul>
               <li>Tap a song to start its radio, or open an album and press Play.</li>
               <li>Swipe the mini player up to open the player, and the player down to close it.</li>
-              <li>Search, like a song, then find it in Library → Liked songs.</li>
-              <li>Open Up next or the audio quality chip; long-press menus live behind ⋮.</li>
+              <li>Play Paper Boats and flip the Song | Video switch at the top of the player.</li>
+              <li>Library shows your listening pulse and On repeat; save a song to a playlist from its ⋮ menu.</li>
+              <li>The gear in Library opens Settings: song or video, audio quality and cache size.</li>
             </ul>
             <small>Nothing plays out loud: playback is simulated.</small>
           </div>
