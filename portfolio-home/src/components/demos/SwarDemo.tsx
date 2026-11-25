@@ -116,9 +116,21 @@ function Icon({ name, size = 20, filled }: { name: IconName; size?: number; fill
   )
 }
 
-function Art({ hue, round, children, className = '' }: { hue: number; round?: boolean; children?: ReactNode; className?: string }) {
+function Art({
+  hue,
+  round,
+  children,
+  className = '',
+  style,
+}: {
+  hue: number
+  round?: boolean
+  children?: ReactNode
+  className?: string
+  style?: React.CSSProperties
+}) {
   return (
-    <span className={`sd-art${round ? ' round' : ''} ${className}`} style={{ background: art(hue) }} aria-hidden="true">
+    <span className={`sd-art${round ? ' round' : ''} ${className}`} style={{ background: art(hue), ...style }} aria-hidden="true">
       {children}
     </span>
   )
@@ -429,7 +441,7 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
     t: number
     v: number
     moved: boolean
-    /** Sideways on the mini player: next or previous song. */
+    /** Sideways on the mini player or the full player's cover: next or previous song. */
     sideways: boolean
     dx: number
   } | null>(null)
@@ -442,7 +454,10 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
     if ((e.target as HTMLElement).closest('input, [data-nodrag]')) return
     const screen = root.current?.querySelector<HTMLElement>('.sd-screen')
     if (!screen) return
-    const onMini = expand === 0 && !!(e.target as HTMLElement).closest('.sd-mini')
+    const target = e.target as HTMLElement
+    const onMini = expand === 0 && !!target.closest('.sd-mini')
+    const onCover = expand === 1 && !!target.closest('.sd-art.cover')
+    const canSwipe = onMini || onCover
     drag.current = { x0: e.clientX, y0: e.clientY, from: expand, last: e.clientY, t: performance.now(), v: 0, moved: false, sideways: false, dx: 0 }
     const move = (ev: PointerEvent) => {
       const d = drag.current
@@ -452,7 +467,7 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
       if (!d.moved) {
         if (Math.abs(dy) < 6 && Math.abs(dx) < 6) return
         d.moved = true
-        d.sideways = onMini && Math.abs(dx) > Math.abs(dy)
+        d.sideways = canSwipe && Math.abs(dx) > Math.abs(dy)
         if (!d.sideways) setDragging(true)
       }
       ev.preventDefault()
@@ -1401,7 +1416,11 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
                   <Icon name="more" />
                 </button>
               </div>
-              <Art hue={current.hue} className="cover" />
+              <Art
+                hue={current.hue}
+                className="cover"
+                style={{ transform: `translateX(${expand === 1 ? swipe : 0}px)`, opacity: expand === 1 ? 1 - Math.min(0.7, Math.abs(swipe) / 260) : 1, transition: swipe ? 'none' : 'transform 0.2s, opacity 0.2s' }}
+              />
               <div className="sd-player-meta">
                 <span>
                   <strong>{current.title}</strong>
