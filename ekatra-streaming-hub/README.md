@@ -20,6 +20,7 @@ Netflix and Prime streams are DRM-protected and only play in their own apps and 
   - *Demo* (default, works offline): about 55 originals and exclusives across the five services
   - *Live from TMDB*: paste a free [TMDB API key](https://www.themoviedb.org/settings/api) in settings. The app then pulls the most popular subscription titles in India for each of your services, searches all of TMDB, and shows real posters, ratings and streaming availability. TMDB's streaming data comes from JustWatch. The key is stored in your browser and only sent to `api.themoviedb.org`
 - Library views (watchlist, liked, history), search on `/`, light and dark themes, a mobile bottom-sheet layout, and reduced-motion support
+- **Keyboard-friendly dialogs:** the title sheet, settings and onboarding keep Tab inside, close on Escape and hand focus back to whatever opened them
 
 ## How the recommendations work
 
@@ -35,7 +36,7 @@ With no signals yet, the feed falls back to popularity on your services.
 
 ## Stack
 
-React 19, TypeScript, Vite, Vitest and oxlint. There's no UI library: the styles are hand-written CSS built on design tokens, with Space Grotesk and Inter self-hosted through Fontsource. Thumbnails for the demo catalog are generated typographic artwork, so the app ships no third-party images.
+React 19, TypeScript, Vite, Vitest with React Testing Library, and oxlint. There's no UI library: the styles are hand-written CSS built on design tokens, with Space Grotesk and Inter self-hosted through Fontsource. Thumbnails for the demo catalog are generated typographic artwork, so the app ships no third-party images.
 
 ```
 src/
@@ -46,7 +47,7 @@ src/
   lib/tmdb.ts              live catalog, search, providers for India (+ tests)
   lib/links.ts             hand-off links to each service (+ tests)
   lib/signals.ts           like/dislike/watchlist/watched rules (+ tests)
-  components/              cards, thumbnails, title sheet, onboarding, settings
+  components/              cards, thumbnails, modal, title sheet, onboarding, settings (+ modal tests)
   App.tsx
 ```
 
