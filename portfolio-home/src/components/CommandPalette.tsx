@@ -48,7 +48,10 @@ export default function CommandPalette({ open, onClose }: Props) {
   const results = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return items
-    return items.filter((i) => `${i.title} ${i.hint}`.toLowerCase().includes(q))
+    const hits = items.filter((i) => `${i.title} ${i.hint}`.toLowerCase().includes(q))
+    // A title typed in full comes first ("ekatra" opens Ekatra, not Ekatra for Android).
+    const exact = hits.filter((i) => i.title.toLowerCase() === q)
+    return exact.length ? [...exact, ...hits.filter((i) => !exact.includes(i))] : hits
   }, [query])
 
   useEffect(() => {
