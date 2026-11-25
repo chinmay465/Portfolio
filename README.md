@@ -12,6 +12,7 @@ Side projects by Chinmay Upare, one folder per project. Each web project is a st
 | **Setu** | Free-proxy hub: pulls public proxy lists, validates and rotates them, and exposes them as a search/browse UI, a fetch API for scrapers (Shodh uses it) and a local VPN-like tunnel. | [setu-proxy-hub.onrender.com](https://setu-proxy-hub.onrender.com) | [`setu-proxy-hub/`](./setu-proxy-hub) |
 | **Kavach** | Android ad blocker for every app: a local VPN catches DNS lookups and blocks about 76k ad and tracker domains, with no root and no remote server. Kotlin, not a web app. | APK from the CI run (`kavach-debug-apk`) | [`kavach-adblock/`](./kavach-adblock) |
 | **Swar** | A YouTube Music player of its own for Android: native Home, Search, Library and player screens, its own playback engine (Media3 ExoPlayer), background play and no ads. Kotlin + Jetpack Compose, not a web app. | [Interactive demo](https://chinmay-upare.onrender.com/projects/swar#demo) on the portfolio site | Private repository |
+| **Ekatra for Android** | Every streaming app in one: a native Home, Search and My List across Netflix, Prime Video, JioHotstar, SonyLIV and ZEE5, with each title opening in its own app or on the service's site in an in-app tab. Kotlin + Jetpack Compose, not a web app. | [Interactive demo](https://chinmay-upare.onrender.com/projects/ekatra-app#demo) on the portfolio site | Private repository |
 
 ## Deploy
 

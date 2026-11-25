@@ -10,6 +10,7 @@ import SwarVisual from './SwarVisual'
 
 export const VISUALS: Record<ProjectId, ComponentType<{ active: boolean }>> = {
   ekatra: EkatraVisual,
+  'ekatra-app': EkatraVisual,
   ank: AnkVisual,
   shodh: ShodhVisual,
   setu: SetuVisual,

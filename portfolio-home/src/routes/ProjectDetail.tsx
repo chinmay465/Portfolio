@@ -8,6 +8,7 @@ import ProjectPanel from '../components/ProjectPanel'
 import NotFound from './NotFound'
 
 const SwarDemo = lazy(() => import('../components/demos/SwarDemo'))
+const EkatraDemo = lazy(() => import('../components/demos/EkatraDemo'))
 
 export default function ProjectDetail() {
   const { id } = useParams()
@@ -53,6 +54,28 @@ export default function ProjectDetail() {
           </div>
           <Suspense fallback={<div className="sd-phone" aria-hidden="true" />}>
             <SwarDemo reduced={reduced} />
+          </Suspense>
+        </section>
+      )}
+      {p.id === 'ekatra-app' && (
+        <section id="demo" className="sec sec-tight demo" aria-labelledby="demo-title">
+          <div className="demo-copy">
+            <h2 id="demo-title">Try it</h2>
+            <p>
+              Ekatra's screens, working, on a made-up catalogue across the five services. The app lives in a private
+              repository, so this is the way to see it.
+            </p>
+            <ul>
+              <li>Open a pick and press Watch in app to see the hand-off: exact title page, then search, then the app.</li>
+              <li>Press Watch in Ekatra to play it on the service's own site in a tab.</li>
+              <li>SonyLIV and ZEE5 aren't installed on this phone, so their titles open on the website.</li>
+              <li>Like or save a few titles and watch For you and Continue watching change on Home.</li>
+              <li>Apps shows every service as a tile; tick the ones you subscribe to.</li>
+            </ul>
+            <small>Nothing streams: the apps and playback are simulated.</small>
+          </div>
+          <Suspense fallback={<div className="ed-phone" aria-hidden="true" />}>
+            <EkatraDemo reduced={reduced} />
           </Suspense>
         </section>
       )}

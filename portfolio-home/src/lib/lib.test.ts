@@ -57,10 +57,12 @@ describe('projects', () => {
       }
     }
   })
-  it('keeps Swar private: a demo, no repository link', () => {
-    const swar = projects.find((p) => p.id === 'swar')
-    expect(swar?.demo).toBe(true)
-    expect(JSON.stringify(swar)).not.toContain('github.com')
+  it('keeps Swar and Ekatra for Android private: a demo, no repository link', () => {
+    for (const id of ['swar', 'ekatra-app']) {
+      const p = projects.find((x) => x.id === id)
+      expect(p?.demo).toBe(true)
+      expect(JSON.stringify(p)).not.toContain('github.com')
+    }
   })
   it('only pings projects that have a live URL', () => {
     expect(webProjects.map((p) => p.id)).toEqual(['rail', 'ekatra', 'ank', 'shodh', 'setu'])
