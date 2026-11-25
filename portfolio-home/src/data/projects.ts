@@ -1,4 +1,4 @@
-export type ProjectId = 'rail' | 'kavach' | 'swar' | 'ekatra' | 'ank' | 'shodh' | 'setu'
+export type ProjectId = 'rail' | 'kavach' | 'swar' | 'ekatra-app' | 'ekatra' | 'ank' | 'shodh' | 'setu'
 
 export interface Project {
   id: ProjectId
@@ -82,6 +82,24 @@ export const projects: Project[] = [
     kind: 'Android app',
     demo: true,
     accent: '#5b8cff',
+  },
+  {
+    id: 'ekatra-app',
+    name: 'Ekatra for Android',
+    glyph: 'एकत्र',
+    meaning: 'together',
+    tagline: 'Every streaming app in one: Netflix, Prime Video, JioHotstar, SonyLIV and ZEE5 behind one native home.',
+    points: [
+      'One Home, Search and My List across five services in Jetpack Compose, with a For you feed learned on the phone',
+      'Watch in app opens the exact title in the service\'s own app, from JustWatch links, then falls back to its search or front door',
+      'Watch in Ekatra plays the service\'s own website in a tab per service, signed in once, with Widevine granted only to that service',
+      'Live TMDB catalogue with your own key, or a demo catalogue of originals that works offline',
+      'No analytics or ad SDKs, one permission, and a privacy check on every APK in CI',
+    ],
+    stack: ['Kotlin', 'Jetpack Compose', 'WebView + Widevine', 'TMDB API', 'OkHttp', 'GitHub Actions'],
+    kind: 'Android app',
+    demo: true,
+    accent: '#ff3d7f',
   },
   {
     id: 'ekatra',
