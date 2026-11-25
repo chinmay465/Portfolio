@@ -139,7 +139,7 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
   const [pages, setPages] = useState<Page[]>([])
   const [mood, setMood] = useState<Mood | null>(null)
   const [query, setQuery] = useState('')
-  const [filter, setFilter] = useState<Filter>('All')
+  const [filter, setFilter] = useState<Filter>('Songs')
 
   const [queue, setQueue] = useState<string[]>([])
   const [index, setIndex] = useState(0)
@@ -612,7 +612,11 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
         <Icon name="search" />
         <input
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            // A new search always starts on Songs, as in the app.
+            if (!query.trim() && e.target.value.trim()) setFilter('Songs')
+            setQuery(e.target.value)
+          }}
           placeholder="Songs, artists, albums…"
           aria-label="Search the demo catalogue"
         />
@@ -626,7 +630,10 @@ export default function SwarDemo({ reduced }: { reduced: boolean }) {
         <>
           <p className="sd-strap">Recent searches</p>
           {['lo-fi', 'coastal', 'synth'].map((r) => (
-            <button key={r} type="button" className="sd-recent" onClick={() => setQuery(r)}>
+            <button key={r} type="button" className="sd-recent" onClick={() => {
+                setFilter('Songs')
+                setQuery(r)
+              }}>
               <Icon name="history" size={16} />
               {r}
             </button>
