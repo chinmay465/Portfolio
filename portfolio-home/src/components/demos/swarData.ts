@@ -9,6 +9,10 @@ export interface DemoSong {
   /** Hue of the generated cover art. */
   hue: number
   mood: Mood
+  /** Song and music-video audio bitrates, for songs that have a music video too. */
+  video?: { song: number; video: number }
+  /** Removed, private or blocked on YouTube Music: Swar hides it everywhere. */
+  unavailable?: boolean
 }
 
 export interface DemoAlbum {
@@ -35,6 +39,14 @@ export interface DemoMix {
   songs: string[]
 }
 
+/** A playlist of your own: songs can be added and taken out. */
+export interface OwnPlaylist {
+  id: string
+  title: string
+  hue: number
+  songs: string[]
+}
+
 /** An album or playlist downloaded as a whole, kept together in Downloads. */
 export interface DlGroup {
   key: string
@@ -47,19 +59,19 @@ export interface DlGroup {
 export type Mood = 'Relax' | 'Focus' | 'Workout' | 'Romance'
 export const MOODS: Mood[] = ['Relax', 'Focus', 'Workout', 'Romance']
 
-const s = (id: string, title: string, artist: string, album: string, secs: number, hue: number, mood: Mood): DemoSong => ({
-  id, title, artist, album, secs, hue, mood,
+const s = (id: string, title: string, artist: string, album: string, secs: number, hue: number, mood: Mood, extra: Partial<DemoSong> = {}): DemoSong => ({
+  id, title, artist, album, secs, hue, mood, ...extra,
 })
 
-export const SONGS: DemoSong[] = [
-  s('s1', 'Monsoon Drive', 'Indie Pune', 'Western Ghats', 214, 196, 'Relax'),
+const ALL_SONGS: DemoSong[] = [
+  s('s1', 'Monsoon Drive', 'Indie Pune', 'Western Ghats', 214, 196, 'Relax', { video: { song: 128, video: 141 } }),
   s('s2', 'Late Train Home', 'Lo-fi Mumbai', 'Platform 7', 187, 262, 'Focus'),
   s('s3', 'Konkan Coast', 'Coastal Folk', 'Salt & Sand', 241, 172, 'Relax'),
-  s('s4', 'Night Shift', 'Synth Bengaluru', 'Outer Ring Road', 205, 290, 'Workout'),
+  s('s4', 'Night Shift', 'Synth Bengaluru', 'Outer Ring Road', 205, 290, 'Workout', { video: { song: 131, video: 128 } }),
   s('s5', 'Morning Raga', 'Sitar Trio', 'First Light', 263, 38, 'Focus'),
   s('s6', 'Chai at Dawn', 'Lo-fi Mumbai', 'Platform 7', 172, 24, 'Relax'),
   s('s7', 'Sahyadri Run', 'Synth Bengaluru', 'Outer Ring Road', 198, 330, 'Workout'),
-  s('s8', 'Paper Boats', 'Indie Pune', 'Western Ghats', 226, 210, 'Romance'),
+  s('s8', 'Paper Boats', 'Indie Pune', 'Western Ghats', 226, 210, 'Romance', { video: { song: 128, video: 160 } }),
   s('s9', 'Tide Tables', 'Coastal Folk', 'Salt & Sand', 233, 150, 'Romance'),
   s('s10', 'Local at 9:12', 'Lo-fi Mumbai', 'Platform 7', 181, 280, 'Focus'),
   s('s11', 'Neon Silk Board', 'Synth Bengaluru', 'Outer Ring Road', 219, 316, 'Workout'),
@@ -68,7 +80,13 @@ export const SONGS: DemoSong[] = [
   s('s14', 'Fishing Nets', 'Coastal Folk', 'Salt & Sand', 208, 164, 'Relax'),
   s('s15', 'Third Taal', 'Sitar Trio', 'First Light', 271, 30, 'Focus'),
   s('s16', 'Overpass', 'Synth Bengaluru', 'Outer Ring Road', 202, 300, 'Workout'),
+  // Taken down on YouTube Music: in a playlist, but never shown or downloaded.
+  s('s17', 'Old Demo Tape', 'Indie Pune', 'Western Ghats', 180, 200, 'Relax', { unavailable: true }),
 ]
+
+/** Every song that can be played. Unavailable ones are left out of everything. */
+export const SONGS: DemoSong[] = ALL_SONGS.filter((x) => !x.unavailable)
+export const isAvailable = (id: string) => !ALL_SONGS.find((x) => x.id === id)?.unavailable
 
 const songsOf = (album: string) => SONGS.filter((x) => x.album === album).map((x) => x.id)
 
@@ -83,12 +101,18 @@ export const ALBUMS: DemoAlbum[] = [
 export const ARTISTS: DemoArtist[] = ALBUMS.map((a, i) => ({ id: `r${i + 1}`, name: a.artist, hue: a.hue + 20, album: a.id }))
 
 export const MIXES: DemoMix[] = [
-  { id: 'm1', title: 'My Supermix', subtitle: 'Indie Pune, Lo-fi Mumbai and more', hue: 228, songs: ['s1', 's2', 's5', 's8', 's10', 's13'] },
+  { id: 'm1', title: 'My Supermix', subtitle: 'Indie Pune, Lo-fi Mumbai and more', hue: 228, songs: ['s1', 's2', 's17', 's5', 's8', 's10', 's13'] },
   { id: 'm2', title: 'Monsoon Mix', subtitle: 'Coastal Folk, Indie Pune', hue: 186, songs: ['s3', 's13', 's1', 's9', 's14', 's6'] },
   { id: 'm3', title: 'Night Drive', subtitle: 'Synth Bengaluru and more', hue: 300, songs: ['s4', 's11', 's7', 's16', 's2'] },
 ]
 
-export const songById = (id: string): DemoSong => SONGS.find((x) => x.id === id) ?? SONGS[0]
+/** Your own playlists to start with: one with songs, one still empty. */
+export const OWN_PLAYLISTS: OwnPlaylist[] = [
+  { id: 'p1', title: 'Road trip', hue: 14, songs: ['s7', 's1', 's11', 's3'] },
+  { id: 'p2', title: 'Late night', hue: 250, songs: [] },
+]
+
+export const songById = (id: string): DemoSong => ALL_SONGS.find((x) => x.id === id) ?? SONGS[0]
 export const albumByTitle = (title: string) => ALBUMS.find((a) => a.title === title)
 export const artistByName = (name: string) => ARTISTS.find((a) => a.name === name)
 
@@ -152,4 +176,88 @@ export function forYouFrom(played: string[], skips: Record<string, number>, roun
     return { seed, songs: (rest.length >= 3 ? rest : radios[i]).slice(0, 6) }
   })
   return { mix, because: because.filter((b) => b.songs.length >= 2) }
+}
+
+// ------------------------------------------------------------ listening
+
+/** Plays on the phone before the demo starts, as Swar's listening profile keeps them. */
+export const STARTING_PLAYS: Record<string, number> = { s5: 7, s2: 5, s1: 4, s8: 3, s10: 3, s13: 2, s4: 1 }
+
+export interface Pulse {
+  listenedSecs: number
+  plays: number
+  songs: number
+  artists: number
+  /** The most played songs, most first. */
+  top: string[]
+  /** Artists by plays, most first. */
+  rotation: string[]
+}
+
+/** Library's listening pulse: totals, On repeat and the artists in your rotation. */
+export function pulseFrom(plays: Record<string, number>): Pulse {
+  const played = Object.entries(plays).filter(([, n]) => n > 0)
+  const byArtist = new Map<string, number>()
+  let listenedSecs = 0
+  for (const [id, n] of played) {
+    const song = songById(id)
+    listenedSecs += song.secs * n
+    byArtist.set(song.artist, (byArtist.get(song.artist) ?? 0) + n)
+  }
+  return {
+    listenedSecs,
+    plays: played.reduce((sum, [, n]) => sum + n, 0),
+    songs: played.length,
+    artists: byArtist.size,
+    top: played.sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id]) => id),
+    rotation: [...byArtist.entries()].sort((a, b) => b[1] - a[1]).map(([name]) => name),
+  }
+}
+
+/** "42m", "3.4h", "12h", as Library shows hours listened. */
+export function hoursText(secs: number): string {
+  const minutes = Math.floor(secs / 60)
+  if (minutes < 60) return `${minutes}m`
+  if (minutes < 600) return `${(minutes / 60).toFixed(1)}h`
+  return `${Math.floor(minutes / 60)}h`
+}
+
+/** The sound signature: 40 bar heights (0 to 1) unique to your listening. */
+export function signature(seed: number, bars = 40): number[] {
+  return Array.from({ length: bars }, (_, i) => {
+    const a = Math.sin((i + 1) * 0.37 + seed * 0.013) * 0.5 + 0.5
+    const b = Math.sin((i + 3) * 1.11 + seed * 0.029) * 0.5 + 0.5
+    return 0.18 + 0.82 * (a * 0.6 + b * 0.4)
+  })
+}
+
+// ---------------------------------------------------------- song or video
+
+export type Version = 'Song' | 'Video'
+export type VersionMode = 'song' | 'video' | 'better'
+
+export const VERSION_MODES: { key: VersionMode; label: string; detail: string }[] = [
+  { key: 'song', label: 'Always song', detail: 'The song (album) version, like YouTube Music\'s song mode' },
+  { key: 'video', label: 'Always video', detail: 'The music video\'s audio when there is one, with the song\'s cover' },
+  { key: 'better', label: 'Better quality', detail: 'Whichever version has the better audio; the video\'s is sometimes higher, often on free accounts' },
+]
+
+/** Which version plays first: the video only when its audio is clearly better (8 kbps or more). */
+export function versionFor(song: DemoSong, mode: VersionMode): Version {
+  if (!song.video || mode === 'song') return 'Song'
+  if (mode === 'video') return 'Video'
+  return song.video.video >= song.video.song + 8 ? 'Video' : 'Song'
+}
+
+// ---------------------------------------------------------------- storage
+
+const MB = 1024 * 1024
+export const CACHE_LIMITS = [128, 256, 512, 1024, 2048, 4096, 8192].map((m) => m * MB)
+export const DEFAULT_CACHE = 512 * MB
+/** The demo phone's free space: the two biggest sizes don't fit. */
+export const FREE_BYTES = 3.1 * 1024 * MB
+
+export function sizeText(bytes: number): string {
+  if (bytes >= 1024 * MB) return `${+(bytes / 1024 / MB).toFixed(1)} GB`
+  return `${Math.round(bytes / MB)} MB`
 }
