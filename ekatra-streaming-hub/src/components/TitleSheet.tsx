@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { PROVIDER_BY_ID } from '../data/providers.ts'
 import { openLinks, whereToWatch } from '../lib/links.ts'
 import { similarTo } from '../lib/recommend.ts'
@@ -21,6 +21,13 @@ const LANG = new Intl.DisplayNames(['en'], { type: 'language' })
 
 export function TitleSheet({ title, pool, services, signals, tmdbKey, onReact, onOpen }: Props) {
   const [live, setLive] = useState<{ id: string; providers: ProviderId[] } | null>(null)
+  const heading = useRef<HTMLHeadingElement>(null)
+
+  // Opening a title from "More like this" swaps the sheet while the dialog stays open. The card that
+  // was clicked is gone, so move focus to the new title's name instead of losing it to the page.
+  useEffect(() => {
+    if (heading.current?.closest('dialog')?.open) heading.current.focus()
+  }, [])
 
   // TMDB discover only tells us the service we searched; ask for the full list when the sheet opens.
   useEffect(() => {
@@ -47,7 +54,9 @@ export function TitleSheet({ title, pool, services, signals, tmdbKey, onReact, o
     <div className="sheet">
       <Thumb title={full} large />
       <div className="sheet__head">
-        <h2>{title.name}</h2>
+        <h2 ref={heading} tabIndex={-1}>
+          {title.name}
+        </h2>
         <p className="sheet__meta">
           {title.kind === 'series' ? 'Series' : 'Film'}
           {title.year ? ` · ${title.year}` : ''}

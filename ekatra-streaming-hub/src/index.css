@@ -668,6 +668,11 @@ h3 {
   margin-top: 20px;
 }
 
+/* Focused from script when the sheet switches titles; it isn't a control, so no ring. */
+.sheet__head h2:focus {
+  outline: none;
+}
+
 .sheet__meta {
   color: var(--muted);
   margin: 6px 0 0;
