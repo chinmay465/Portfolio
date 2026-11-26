@@ -28,7 +28,7 @@ The service URL serves the dashboard. It's open: anyone with the link sees the c
 
 | Variable | |
 | --- | --- |
-| `DATABASE_URL` | Postgres connection string. Neon's free tier works (`postgres://…?sslmode=require`). Without it the service uses PGlite, an embedded Postgres on local disk, which Render's free plan wipes on every deploy. |
+| `DATABASE_URL` | Postgres connection string. Neon's free tier works (`postgres://…?sslmode=require`). Required on Render: without it `/api/health` reports the missing setting and no visits are saved. Locally it falls back to PGlite, an embedded Postgres (about 900 MB of memory, too much for a free Render instance). |
 | `STATS_TOKEN` | Optional. When set, the dashboard and `/api/stats` need this token. Not set in `render.yaml`, so the dashboard is open. |
 | `ALLOWED_ORIGINS` | Comma-separated sites that may send visits, e.g. `https://chinmay-upare.onrender.com`. Add the custom domain when it's live. |
 | `DARSHAK_DATA_DIR` | PGlite folder when `DATABASE_URL` isn't set (default `./data`; `memory://` for in-memory). |
