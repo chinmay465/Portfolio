@@ -19,17 +19,17 @@ Limits: one person on two devices or browsers counts twice, and clearing site da
 | Route | |
 | --- | --- |
 | `POST /api/visit` | Body (text/plain JSON): `{ "id": uuid, "path": "/projects", "referrer": "https://…" }`. Only origins in `ALLOWED_ORIGINS`; 30 per IP per minute. Answers `{ counted, new }`. |
-| `GET /api/stats?days=30` | `Authorization: Bearer <STATS_TOKEN>`. Totals (all time, new today, seen today, 7 and 30 days, returning), new visitors per IST day, top landing pages, referrers and devices. |
+| `GET /api/stats?days=30` | Open by default; needs `Authorization: Bearer <STATS_TOKEN>` only if `STATS_TOKEN` is set. Totals (all time, new today, seen today, 7 and 30 days, returning), new visitors per IST day, top landing pages, referrers and devices. |
 | `GET /api/health` | Health check. |
 
-The service URL serves the dashboard, which asks for the token once per browser.
+The service URL serves the dashboard. It's open: anyone with the link sees the counts, no login. Set `STATS_TOKEN` to lock it behind a token (asked once per browser).
 
 ## Configuration
 
 | Variable | |
 | --- | --- |
 | `DATABASE_URL` | Postgres connection string. Neon's free tier works (`postgres://…?sslmode=require`). Without it the service uses PGlite, an embedded Postgres on local disk, which Render's free plan wipes on every deploy. |
-| `STATS_TOKEN` | Protects the stats. Render generates it from `render.yaml`. |
+| `STATS_TOKEN` | Optional. When set, the dashboard and `/api/stats` need this token. Not set in `render.yaml`, so the dashboard is open. |
 | `ALLOWED_ORIGINS` | Comma-separated sites that may send visits, e.g. `https://chinmay-upare.onrender.com`. Add the custom domain when it's live. |
 | `DARSHAK_DATA_DIR` | PGlite folder when `DATABASE_URL` isn't set (default `./data`; `memory://` for in-memory). |
 
