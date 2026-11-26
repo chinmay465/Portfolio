@@ -20,6 +20,7 @@ Netflix and Prime streams are DRM-protected and only play in their own apps and 
   - *Demo* (default, works offline): about 55 originals and exclusives across the five services
   - *Live from TMDB*: paste a free [TMDB API key](https://www.themoviedb.org/settings/api) in settings. The app then pulls the most popular subscription titles in India for each of your services, searches all of TMDB, and shows real posters, ratings and streaming availability. TMDB's streaming data comes from JustWatch. The key is stored in your browser and only sent to `api.themoviedb.org`
 - Library views (watchlist, liked, history), search on `/`, light and dark themes, a mobile bottom-sheet layout, and reduced-motion support
+- **Loading skeletons:** while the live catalog or a live search is loading from TMDB, the feed shows placeholder cards shaped like the real ones instead of an empty state. With reduced motion on, they don't shimmer
 - **Keyboard-friendly dialogs:** the title sheet, settings and onboarding keep Tab inside, close on Escape and hand focus back to whatever opened them
 
 ## How the recommendations work
@@ -47,8 +48,8 @@ src/
   lib/tmdb.ts              live catalog, search, providers for India (+ tests)
   lib/links.ts             hand-off links to each service (+ tests)
   lib/signals.ts           like/dislike/watchlist/watched rules (+ tests)
-  components/              cards, thumbnails, modal, title sheet, onboarding, settings (+ modal tests)
-  App.tsx
+  components/              cards, loading skeleton, thumbnails, modal, title sheet, onboarding, settings (+ modal tests)
+  App.tsx                  (+ tests for the loading states, with TMDB mocked)
 ```
 
 ## Run
