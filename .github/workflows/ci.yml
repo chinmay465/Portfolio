@@ -158,7 +158,7 @@ jobs:
       - name: Smoke test
         env:
           PORT: "4180"
-          STATS_TOKEN: ci-token
+          DASHBOARD_TOKEN: ci-token
           ALLOWED_ORIGINS: https://chinmay-upare.onrender.com
           DARSHAK_DATA_DIR: memory://
         run: |

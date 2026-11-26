@@ -106,7 +106,7 @@ export default function App() {
         {view.kind === 'token' && (
           <form className="card lock" onSubmit={signIn}>
             <h2>Enter the stats token</h2>
-            <p className="muted">It's the STATS_TOKEN value on the Render service. This browser remembers it.</p>
+            <p className="muted">It's the DASHBOARD_TOKEN value on the Render service. This browser remembers it.</p>
             <input name="token" type="password" autoComplete="current-password" aria-label="Stats token" autoFocus />
             {view.wrong && <p className="warn">That token didn't work.</p>}
             <button type="submit">Open dashboard</button>

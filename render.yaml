@@ -99,7 +99,7 @@ services:
   # beacon per browser session; this keeps one row per browser. Paste a Postgres URL
   # (Neon's free tier works) into DATABASE_URL when the Blueprint asks: without it the
   # counts live on the free instance's disk, which every deploy wipes. The dashboard at
-  # the service URL is open (no token). Set STATS_TOKEN on the service to lock it.
+  # the service URL is open (no token). Set DASHBOARD_TOKEN on the service to lock it.
   - type: web
     name: darshak-visitor-counter
     runtime: node

@@ -10,7 +10,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const databaseUrl = process.env.DATABASE_URL?.trim() || undefined
 const dataDir = process.env.DARSHAK_DATA_DIR ?? path.join(__dirname, '..', 'data')
-const statsToken = process.env.STATS_TOKEN ?? ''
+const statsToken = process.env.DASHBOARD_TOKEN ?? ''
 const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? '')
   .split(',')
   .map((o) => o.trim().replace(/\/$/, ''))
@@ -25,7 +25,7 @@ const needsPostgres = Boolean(process.env.RENDER) && !databaseUrl
 if (!databaseUrl) {
   console.warn('DATABASE_URL is not set: visitors go to an embedded database, which Render wipes on every deploy.')
 }
-if (!statsToken) console.log('Dashboard and /api/stats are open (no STATS_TOKEN set).')
+if (!statsToken) console.log('Dashboard and /api/stats are open (no DASHBOARD_TOKEN set).')
 
 // Listen first so Render's health check passes even while the database is waking or
 // misconfigured; /api/health then says what's wrong instead of the service crash-looping.
