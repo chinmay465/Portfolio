@@ -19,7 +19,7 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? '')
 if (db.kind === 'pglite') {
   console.warn('DATABASE_URL is not set: visitors go to an embedded database, which Render wipes on every deploy.')
 }
-if (!statsToken) console.warn('STATS_TOKEN is not set: anyone can read /api/stats.')
+if (!statsToken) console.log('Dashboard and /api/stats are open (no STATS_TOKEN set).')
 
 const app = createApp({ store, statsToken, allowedOrigins, distDir: path.join(__dirname, '..', 'dist') })
 

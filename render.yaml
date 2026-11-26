@@ -99,7 +99,7 @@ services:
   # beacon per browser session; this keeps one row per browser. Paste a Postgres URL
   # (Neon's free tier works) into DATABASE_URL when the Blueprint asks: without it the
   # counts live on the free instance's disk, which every deploy wipes. The dashboard at
-  # the service URL asks for STATS_TOKEN (generated here; copy it from the dashboard).
+  # the service URL is open (no token). Set STATS_TOKEN on the service to lock it.
   - type: web
     name: darshak-visitor-counter
     runtime: node
@@ -115,8 +115,6 @@ services:
         value: "22"
       - key: DATABASE_URL
         sync: false
-      - key: STATS_TOKEN
-        generateValue: true
       # Sites allowed to send visits. Add the custom domain here once it's live.
       - key: ALLOWED_ORIGINS
         value: https://chinmay-upare.onrender.com

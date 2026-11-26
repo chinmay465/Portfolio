@@ -61,3 +61,22 @@ describe('API', () => {
     expect(statuses.at(-1)).toBe(429)
   })
 })
+
+describe('open dashboard (no STATS_TOKEN)', () => {
+  it('serves stats and config without a token', async () => {
+    const openDbConn = await openDb(undefined, 'memory://')
+    const store = new VisitorStore(openDbConn)
+    await store.migrate()
+    const open = createApp({ store, statsToken: '', allowedOrigins: [SITE] }).listen(0)
+    const url = `http://127.0.0.1:${(open.address() as AddressInfo).port}`
+    try {
+      expect(await (await fetch(`${url}/api/config`)).json()).toEqual({ needsToken: false })
+      const res = await fetch(`${url}/api/stats`)
+      expect(res.status).toBe(200)
+      expect(await res.json()).toMatchObject({ total: 0 })
+    } finally {
+      open.close()
+      await openDbConn.close()
+    }
+  })
+})
