@@ -62,7 +62,7 @@ describe('API', () => {
   })
 })
 
-describe('open dashboard (no STATS_TOKEN)', () => {
+describe('open dashboard (no DASHBOARD_TOKEN)', () => {
   it('serves stats and config without a token', async () => {
     const openDbConn = await openDb(undefined, 'memory://')
     const store = new VisitorStore(openDbConn)
