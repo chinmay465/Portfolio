@@ -1,4 +1,4 @@
-export type ProjectId = 'rail' | 'kavach' | 'swar' | 'ekatra' | 'ank' | 'shodh' | 'setu'
+export type ProjectId = 'rail' | 'kavach' | 'prahari' | 'swar' | 'ekatra' | 'ank' | 'shodh' | 'setu'
 
 export interface Project {
   id: ProjectId
@@ -63,6 +63,25 @@ export const projects: Project[] = [
     download: `${repo}/actions/workflows/ci.yml?query=branch%3Amain`,
     code: `${repo}/tree/main/kavach-adblock`,
     accent: '#4ade80',
+  },
+  {
+    id: 'prahari',
+    name: 'Prahari',
+    glyph: 'प्रहरी',
+    meaning: 'sentinel',
+    tagline: 'Watches your phone while it\'s on and names the app behind every camera, mic, GPS and clipboard use.',
+    points: [
+      'Event-driven watcher for camera, microphone and GPS that names the app and flags use while you weren\'t using it, with alerts',
+      'Precision mode reads Android\'s own access record: exact app and time for location, clipboard, contacts, SMS and more',
+      'Who sees what you type: keyboards, accessibility services, autofill, notification readers, and session-replay SDKs found in each APK',
+      'Canary test for apps that log your input, DNS watch for tracking servers per app, and background uploads against time on screen',
+      'Every app scored 0–100 with its reasons; no wake locks, no polling while the screen is off, nothing leaves the phone',
+    ],
+    stack: ['Kotlin', 'Jetpack Compose', 'AppOps', 'VpnService', 'Dex parsing', 'GitHub Actions'],
+    kind: 'Android app',
+    download: `${repo}/actions/workflows/ci.yml?query=branch%3Amain`,
+    code: `${repo}/tree/main/prahari-privacy-monitor`,
+    accent: '#35e0c8',
   },
   {
     id: 'swar',
