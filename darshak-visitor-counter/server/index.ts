@@ -18,6 +18,10 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? '')
 
 const status: DbStatus = { state: 'connecting', storage: databaseUrl ? 'postgres' : 'pglite', store: null }
 
+// On Render (RENDER=true) the embedded database would be wiped on every deploy and can
+// exhaust a free instance's 512 MB, so require a real Postgres there instead.
+const needsPostgres = Boolean(process.env.RENDER) && !databaseUrl
+
 if (!databaseUrl) {
   console.warn('DATABASE_URL is not set: visitors go to an embedded database, which Render wipes on every deploy.')
 }
@@ -34,6 +38,11 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 let db: Db | null = null
 
 async function connect(attempt = 1): Promise<void> {
+  if (needsPostgres) {
+    Object.assign(status, { state: 'error', error: 'DATABASE_URL is not set. Add the Neon connection string in Render → Environment.' })
+    console.error(status.error)
+    return
+  }
   try {
     db ??= await openDb(databaseUrl, dataDir)
     const store = new VisitorStore(db)
