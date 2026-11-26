@@ -5594,6 +5594,7 @@ form.sd-dialog {
 .vis-prahari {
   display: flex;
   flex-direction: column;
+  container-type: inline-size;
   background: radial-gradient(120% 90% at 25% 45%, #0a2a2c, #050b12 70%);
 }
 .vis-prahari svg {
@@ -5704,6 +5705,16 @@ form.sd-dialog {
   from {
     opacity: 0;
     transform: translateY(-6px);
+  }
+}
+@container (max-width: 480px) {
+  .ph-meta {
+    position: static;
+    width: auto;
+    padding: 0 2px 24px;
+  }
+  .ph-log li:nth-child(n + 3) {
+    display: none;
   }
 }
 @media (prefers-reduced-motion: reduce) {

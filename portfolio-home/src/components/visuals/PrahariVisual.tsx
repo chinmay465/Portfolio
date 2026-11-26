@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 
 const W = 420
 const H = 250
-const C = { x: 112, y: 122 }
-const R = 92
+const C = { x: 130, y: 124 }
+const R = 88
 const STEP_MS = 1400
 
 type Kind = 'Camera' | 'Mic' | 'GPS' | 'Clipboard'
@@ -16,7 +16,7 @@ interface Use {
   note: string
 }
 
-const ANGLE: Record<Kind, number> = { Camera: -60, Mic: 20, GPS: 120, Clipboard: 200 }
+const ANGLE: Record<Kind, number> = { Camera: -90, Mic: 55, GPS: 125, Clipboard: 200 }
 
 // Made-up apps and the kind of thing Prahari flags.
 const USES: Use[] = [
