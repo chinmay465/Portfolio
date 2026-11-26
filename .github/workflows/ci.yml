@@ -139,6 +139,42 @@ jobs:
           curl -fs localhost:4176/api/pool | grep -q '"alive":0'
           curl -s localhost:4176/api/fetch?url=http://example.com | grep -q 'Plain http'
 
+  darshak:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: darshak-visitor-counter
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: darshak-visitor-counter/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - name: Smoke test
+        env:
+          PORT: "4180"
+          STATS_TOKEN: ci-token
+          ALLOWED_ORIGINS: https://chinmay-upare.onrender.com
+          DARSHAK_DATA_DIR: memory://
+        run: |
+          npm start &
+          for i in $(seq 1 30); do curl -fs localhost:4180/api/health > /dev/null && break; sleep 1; done
+          curl -fs localhost:4180/ | grep -q '<div id="root">'
+          visit() {
+            curl -fs -X POST localhost:4180/api/visit -H 'Content-Type: text/plain' \
+              -H 'Origin: https://chinmay-upare.onrender.com' -H 'User-Agent: Mozilla/5.0 (X11; Linux x86_64) Chrome/131.0' \
+              -d '{"id":"3f2b8c1e-6d4a-4b7e-9c2f-1a2b3c4d5e6f","path":"'"$1"'"}'
+          }
+          visit / | grep -q '"new":true'
+          visit /projects | grep -q '"new":false'
+          test "$(curl -s -o /dev/null -w '%{http_code}' localhost:4180/api/stats)" = 401
+          curl -fs localhost:4180/api/stats -H 'Authorization: Bearer ci-token' | grep -q '"total":1'
+
   kavach:
     runs-on: ubuntu-latest
     defaults:

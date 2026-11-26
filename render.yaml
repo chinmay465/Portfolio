@@ -95,6 +95,31 @@ services:
         value: "22"
       - key: SETU_TOKEN
         generateValue: true
+  # Darshak: unique-visitor counter for the portfolio site. portfolio-home sends one
+  # beacon per browser session; this keeps one row per browser. Paste a Postgres URL
+  # (Neon's free tier works) into DATABASE_URL when the Blueprint asks: without it the
+  # counts live on the free instance's disk, which every deploy wipes. The dashboard at
+  # the service URL asks for STATS_TOKEN (generated here; copy it from the dashboard).
+  - type: web
+    name: darshak-visitor-counter
+    runtime: node
+    rootDir: darshak-visitor-counter
+    branch: main
+    autoDeploy: true
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        sync: false
+      - key: STATS_TOKEN
+        generateValue: true
+      # Sites allowed to send visits. Add the custom domain here once it's live.
+      - key: ALLOWED_ORIGINS
+        value: https://chinmay-upare.onrender.com
   # Rail Planner: FastAPI + React in one Docker image. Set RAILRADAR_API_KEY in the
   # dashboard when the Blueprint asks (it powers seat availability). rootDir keeps
   # deploys to changes under rail-planner/.
