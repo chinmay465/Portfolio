@@ -12,6 +12,24 @@ OUT=e2e-out
 mkdir -p "$OUT"
 
 fail() { echo "::error title=Prahari e2e::$1"; exit 1; }
+
+# Always print what happened: crashes, Prahari's own state log lines, the camera
+# service's client history, and small screenshots (base64 JPEG) for review.
+diagnostics() {
+  set +e
+  echo "::group::crash buffer"; adb logcat -d -b crash; echo "::endgroup::"
+  echo "::group::Prahari log"; adb logcat -d -s PrahariWatch PrahariOps AndroidRuntime; echo "::endgroup::"
+  echo "::group::camera service"; adb shell dumpsys media.camera | grep -iE "client|event|connect|disconnect|status" | tail -60; echo "::endgroup::"
+  echo "::group::Prahari notification"; grep -A12 "pkg=$PKG" "$OUT/notifications.txt" 2>/dev/null | head -40; echo "::endgroup::"
+  pip install --quiet pillow > /dev/null 2>&1
+  for f in "$OUT"/*.png; do
+    [ -f "$f" ] || continue
+    echo "::group::screenshot $(basename "$f")"
+    python3 -c "import sys,io,base64; from PIL import Image; im=Image.open(sys.argv[1]).convert('RGB'); im.thumbnail((360,800)); b=io.BytesIO(); im.save(b,'JPEG',quality=55); print('B64:'+base64.b64encode(b.getvalue()).decode())" "$f"
+    echo "::endgroup::"
+  done
+}
+trap diagnostics EXIT
 shot() { adb exec-out screencap -p > "$OUT/$1.png"; }
 tap_text() {
   adb shell uiautomator dump /sdcard/ui.xml > /dev/null

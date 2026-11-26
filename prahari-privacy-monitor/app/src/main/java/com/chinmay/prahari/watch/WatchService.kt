@@ -163,11 +163,16 @@ class WatchService : Service() {
 
     private val cameraCallback = object : CameraManager.AvailabilityCallback() {
         override fun onCameraUnavailable(cameraId: String) {
+            // Only ids and states are logged, never app names: other apps with log access could read them.
+            Log.i(TAG, "camera $cameraId busy (torch=${cameraId in torchOn})")
             if (cameraId in torchOn) return
             start(Kind.CAMERA, "cam:$cameraId", facingOf(cameraId))
         }
 
-        override fun onCameraAvailable(cameraId: String) = end("cam:$cameraId")
+        override fun onCameraAvailable(cameraId: String) {
+            Log.i(TAG, "camera $cameraId free")
+            end("cam:$cameraId")
+        }
     }
 
     private val torchCallback = object : CameraManager.TorchCallback() {
@@ -258,6 +263,7 @@ class WatchService : Service() {
                 .joinToString(" · ").ifEmpty { null },
         )
         val id = db.insert(a)
+        Log.i(TAG, "session ${kind.id} started: attributed=${r.pkg != null} candidates=${r.candidates.size} background=${r.background}")
         open[key] = Open(id, a, locked)
         publish()
         LiveState.bump()
