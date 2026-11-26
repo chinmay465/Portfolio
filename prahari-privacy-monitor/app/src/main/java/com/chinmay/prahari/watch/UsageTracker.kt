@@ -20,6 +20,12 @@ class UsageTracker(context: Context) {
     private var foreground: String? = null
     private val services = HashMap<String, MutableSet<String>>()
     private var cachedAt = 0L
+
+    /** Counts for diagnostics (no package names). */
+    @Volatile var resumedSeen = 0
+        private set
+    @Volatile var eventsSeen = 0
+        private set
     private var cached = Now(null, emptySet())
 
     /** Launchers and the system UI are "nobody" for attribution purposes. */
@@ -45,8 +51,12 @@ class UsageTracker(context: Context) {
             val e = UsageEvents.Event()
             while (events.hasNextEvent()) {
                 events.getNextEvent(e)
+                eventsSeen++
                 when (e.eventType) {
-                    UsageEvents.Event.ACTIVITY_RESUMED -> foreground = e.packageName
+                    UsageEvents.Event.ACTIVITY_RESUMED -> {
+                        foreground = e.packageName
+                        resumedSeen++
+                    }
                     UsageEvents.Event.FOREGROUND_SERVICE_START ->
                         services.getOrPut(e.packageName) { HashSet() }.add(e.className ?: "")
                     UsageEvents.Event.FOREGROUND_SERVICE_STOP -> {

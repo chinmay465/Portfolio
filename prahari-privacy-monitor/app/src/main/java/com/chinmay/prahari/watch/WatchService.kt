@@ -266,7 +266,7 @@ class WatchService : Service() {
         Log.i(
             TAG,
             "session ${kind.id} started: attributed=${r.pkg != null} candidates=${r.candidates.size} background=${r.background} " +
-                "foregroundKnown=${u.foreground != null} services=${u.services.size}",
+                "foregroundKnown=${u.foreground != null} services=${u.services.size} events=${usage.eventsSeen} resumed=${usage.resumedSeen} shells=${usage.shells.size}",
         )
         open[key] = Open(id, a, locked)
         publish()
