@@ -164,9 +164,10 @@ shot 08-app-detail
 adb shell appops set "$PKG" ACTIVATE_VPN allow
 tap_text "Setup"
 sleep 3
-for i in 1 2 3 4 5; do
+read -r W H < <(adb shell wm size | tail -1 | sed -E 's/.*: ([0-9]+)x([0-9]+).*/\1 \2/')
+for i in 1 2 3 4 5 6 7 8; do
   tap_text "DNS watch" && break
-  adb shell input swipe 500 1600 500 600 300
+  adb shell input swipe $((W / 2)) $((H * 7 / 10)) $((W / 2)) $((H * 3 / 10)) 400
   sleep 1
 done
 sleep 5
