@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { DEMO_CATALOG } from './data/catalog.ts'
 import { PROVIDER_BY_ID } from './data/providers.ts'
+import { FeedSkeleton } from './components/FeedSkeleton.tsx'
 import { Modal } from './components/Modal.tsx'
 import { Onboarding } from './components/Onboarding.tsx'
 import { Settings, type Source } from './components/Settings.tsx'
@@ -112,9 +113,11 @@ export default function App() {
     }
   }, [q, tmdbKey])
 
+  // Live search is in flight from the first keystroke past one letter until results for this exact query arrive.
+  const searching = Boolean(tmdbKey) && q.length >= 2 && hits?.q !== q
   const searchResults = useMemo(() => {
     if (!q) return null
-    if (tmdbKey) return hits?.q === q ? hits.titles : null
+    if (tmdbKey) return hits?.q === q ? hits.titles : []
     const n = normalize(q)
     return pool.filter(
       (t) =>
@@ -195,6 +198,7 @@ export default function App() {
     liked: signals.liked.length,
     history: Object.keys(signals.watched).length,
   }
+  const feedTitle = signals.liked.length || counts.history ? 'Recommended for you' : 'Popular on your services'
 
   return (
     <div className="app">
@@ -302,13 +306,23 @@ export default function App() {
           {searchResults !== null ? (
             <section aria-live="polite">
               <h2 className="section-title">
-                {searchResults.length ? `Results for “${q}”` : q.length < 2 && tmdbKey ? 'Keep typing…' : `Nothing for “${q}”`}
+                {searching
+                  ? `Searching for “${q}”…`
+                  : searchResults.length
+                    ? `Results for “${q}”`
+                    : q.length < 2 && tmdbKey
+                      ? 'Keep typing…'
+                      : `Nothing for “${q}”`}
               </h2>
-              <div className="grid">
-                {searchResults.map((t) => (
-                  <TitleCard key={t.id} title={t} services={services} onOpen={openTitle} />
-                ))}
-              </div>
+              {searching ? (
+                <FeedSkeleton count={8} />
+              ) : (
+                <div className="grid">
+                  {searchResults.map((t) => (
+                    <TitleCard key={t.id} title={t} services={services} onOpen={openTitle} />
+                  ))}
+                </div>
+              )}
             </section>
           ) : view === 'home' ? (
             <>
@@ -330,11 +344,12 @@ export default function App() {
               )}
 
               {loading && (
-                <div className="grid" aria-busy="true" aria-label="Loading">
-                  {Array.from({ length: 12 }, (_, i) => (
-                    <div key={i} className="skeleton" />
-                  ))}
-                </div>
+                <section>
+                  <h2 className="section-title">
+                    {feedTitle}
+                  </h2>
+                  <FeedSkeleton label="Loading the live catalog from TMDB…" />
+                </section>
               )}
 
               {!loading && seed && because.length > 0 && (
@@ -362,7 +377,7 @@ export default function App() {
               {!loading && (
                 <section>
                   <h2 className="section-title">
-                    {signals.liked.length || counts.history ? 'Recommended for you' : 'Popular on your services'}
+                    {feedTitle}
                   </h2>
                   {mainFeed.length === 0 ? (
                     <p className="empty">Nothing here yet. Try another filter or add services in settings.</p>
