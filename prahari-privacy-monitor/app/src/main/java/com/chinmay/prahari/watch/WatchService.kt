@@ -62,7 +62,7 @@ class WatchService : Service() {
     private lateinit var power: PowerManager
     private lateinit var keyguard: KeyguardManager
 
-    private class Open(val id: Long, val access: Access, val lockedAtStart: Boolean)
+    private class Open(val id: Long, val access: Access, val lockedAtStart: Boolean, var alerted: Boolean = false)
 
     private val open = HashMap<String, Open>()
     private val torchOn = HashSet<String>()
@@ -263,53 +263,74 @@ class WatchService : Service() {
                 .joinToString(" · ").ifEmpty { null },
         )
         val id = db.insert(a)
-        Log.i(TAG, "session ${kind.id} started: attributed=${r.pkg != null} candidates=${r.candidates.size} background=${r.background}")
+        Log.i(
+            TAG,
+            "session ${kind.id} started: attributed=${r.pkg != null} candidates=${r.candidates.size} background=${r.background} " +
+                "foregroundKnown=${u.foreground != null} services=${u.services.size}",
+        )
         open[key] = Open(id, a, locked)
         publish()
         LiveState.bump()
 
-        // Only alert for uses that last: skips face unlock and app-switch blips.
+        // Check Android's own record (precision mode) and alert once the use has lasted a moment.
         h.postDelayed({
             val o = open[key] ?: return@postDelayed
             if (o.id != id) return@postDelayed
-            val current = refineFromOps(key) ?: o.access
-            if (o.lockedAtStart && current.pkg == null && kind == Kind.CAMERA) return@postDelayed
-            if (alerts.shouldAlert(current)) alerts.post(current)
+            val current = refineFromOps(key, o) ?: o.access
+            maybeAlert(o, current)
         }, ALERT_DELAY_MS)
     }
 
     private fun end(key: String) {
         val o = open.remove(key) ?: return
         val now = System.currentTimeMillis()
-        if (now - o.access.start < MIN_SESSION_MS && o.access.kind == Kind.CAMERA) {
-            // Sub-second camera blips are capability probes, not captures.
-            db.delete(o.id)
-        } else {
-            db.finish(o.id, now)
-        }
+        val brief = now - o.access.start < BRIEF_MS
+        // Brief uses are kept: a silent snapshot can take a few hundred milliseconds.
+        db.finish(o.id, now, if (brief) listOfNotNull(o.access.detail, "brief").joinToString(" · ") else null)
+        var done = o.access.copy(end = now)
+        if (o.access.source != Source.OPS) refineFromOps(key, o, ended = true)?.let { done = it.copy(end = now) }
+        if (!o.alerted) maybeAlert(o, done)
         publish()
         LiveState.bump()
-        notifyStatus()
+    }
+
+    private fun maybeAlert(o: Open, a: Access) {
+        if (o.alerted) return
+        // The lock screen's own camera use (face unlock) has no app behind it.
+        if (o.lockedAtStart && a.pkg == null && a.kind == Kind.CAMERA) return
+        if (alerts.shouldAlert(a)) {
+            alerts.post(a)
+            o.alerted = true
+        }
     }
 
     /**
-     * With precision mode, Android's own record says exactly which app holds
-     * the camera or mic right now. Replace the guess with that.
+     * With precision mode, Android's own record says exactly which app held
+     * the camera or mic. Replace the guess with that.
      */
-    private fun refineFromOps(key: String): Access? {
+    private fun refineFromOps(key: String, o: Open, ended: Boolean = false): Access? {
         if (!ops.granted()) return null
-        val o = open[key] ?: return null
         val kind = o.access.kind
         if (kind != Kind.CAMERA && kind != Kind.MIC) return null
-        val running = ops.read().filter { it.kind == kind && it.running && it.pkg != packageName }.map { it.pkg }.distinct()
-        if (running.isEmpty()) return null
+        val users = ops.read()
+            .filter { it.kind == kind && it.pkg != packageName && (it.running || it.last >= o.access.start - 2_000) }
+            .sortedByDescending { it.running }
+            .map { it.pkg }
+            .distinct()
+        if (users.isEmpty()) return null
         val fg = usage.now().foreground
-        val pkg = running.firstOrNull { it == fg } ?: running.first()
+        val pkg = users.firstOrNull { it == fg } ?: users.first()
         val background = o.access.screenOff || pkg != fg
-        val refined = o.access.copy(pkg = pkg, candidates = running, background = background, source = Source.OPS)
-        db.reattribute(o.id, pkg, running, background)
-        open[key] = Open(o.id, refined, o.lockedAtStart)
-        running.forEach { p -> opsKeysFor(kind).forEach { op -> opsSeen["$p|$op"] = System.currentTimeMillis() } }
+        val refined = o.access.copy(pkg = pkg, candidates = users, background = background, source = Source.OPS)
+        db.reattribute(o.id, pkg, users, background)
+        if (!ended) open[key] = Open(o.id, refined, o.lockedAtStart, o.alerted)
+        val now = System.currentTimeMillis()
+        users.forEach { p ->
+            opsKeysFor(kind).forEach { op ->
+                opsSeen["$p|$op"] = now
+                db.setOpSeen(p, op, now)
+            }
+        }
         publish()
         LiveState.bump()
         return refined
@@ -506,7 +527,7 @@ class WatchService : Service() {
         private const val DAY = 24 * 60 * 60 * 1000L
         private const val POLL_MS = 15 * 60_000L
         private const val ALERT_DELAY_MS = 3_000L
-        private const val MIN_SESSION_MS = 700L
+        private const val BRIEF_MS = 1_000L
 
         private val OP_LABELS = mapOf(
             "android:phone_call_camera" to "during a call",

@@ -74,6 +74,9 @@ for p in CAMERA RECORD_AUDIO ACCESS_FINE_LOCATION ACCESS_COARSE_LOCATION; do
   adb shell pm grant "$CAM" "android.permission.$p" 2> /dev/null || true
 done
 adb shell am start -W -a android.media.action.STILL_IMAGE_CAMERA
+sleep 5
+# First run of the camera app asks about photo locations before it keeps the camera open.
+tap_text "NEXT" || true
 sleep 10
 shot 02-camera-open
 adb shell dumpsys notification --noredact > "$OUT/notifications.txt"

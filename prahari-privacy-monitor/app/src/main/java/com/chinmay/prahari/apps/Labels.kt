@@ -42,6 +42,20 @@ object Labels {
         false
     }
 
+    private val plumbing = ConcurrentHashMap<String, Boolean>()
+
+    /**
+     * Preinstalled components with no screen of their own (the contacts
+     * provider, telecom, "android" itself). They show up only when
+     * "Include preinstalled apps" is on.
+     */
+    fun isPlumbing(ctx: Context, pkg: String?): Boolean {
+        if (pkg == null) return false
+        return plumbing.getOrPut(pkg) {
+            pkg == "android" || (isSystem(ctx, pkg) && ctx.packageManager.getLaunchIntentForPackage(pkg) == null)
+        }
+    }
+
     /** "Camera app" or "Camera app, Zoom + 1 more". */
     fun names(ctx: Context, pkgs: List<String>, max: Int = 2): String {
         if (pkgs.isEmpty()) return "Unknown app"

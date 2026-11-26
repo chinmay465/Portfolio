@@ -76,10 +76,12 @@ fun LiveScreen(padding: PaddingValues, setupNeeded: Boolean, onSetup: () -> Unit
 
     val rows by produceState(emptyList<Access>(), rev, filter, bgOnly) {
         value = withContext(Dispatchers.IO) {
-            val since = System.currentTimeMillis() - Prefs(ctx).retentionDays * 86_400_000L
+            val prefs = Prefs(ctx)
+            val since = System.currentTimeMillis() - prefs.retentionDays * 86_400_000L
             Db.get(ctx).accesses(since, limit = 1500)
                 .filter { filter.kinds == null || it.kind in filter.kinds!! }
                 .filter { !bgOnly || it.background }
+                .filter { prefs.includeSystem || it.source == com.chinmay.prahari.core.Source.LIVE || !Labels.isPlumbing(ctx, it.pkg) }
         }
     }
 
@@ -127,7 +129,7 @@ fun LiveScreen(padding: PaddingValues, setupNeeded: Boolean, onSetup: () -> Unit
                         Panel(onClick = a?.pkg?.let { p -> { onOpenApp(p) } }) {
                             KindBadge(k, 34.dp, live = a != null)
                             Spacer(Modifier.height(8.dp))
-                            Text(k.label, fontSize = 12.sp, color = P.dim)
+                            Text(if (k == Kind.MIC) "Mic" else k.label, fontSize = 12.sp, color = P.dim, maxLines = 1)
                             Text(
                                 when {
                                     a != null -> a.pkg?.let { Labels.name(ctx, it) } ?: if (a.candidates.isEmpty()) "Unknown" else Labels.names(ctx, a.candidates, 1)
