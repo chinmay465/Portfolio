@@ -247,14 +247,7 @@ class WatchService : Service() {
         val now = System.currentTimeMillis()
         val screenOff = !power.isInteractive
         val u = usage.now()
-        val pm = packageManager
-        val r = Attribution.attribute(
-            foreground = u.foreground,
-            screenOff = screenOff,
-            services = u.services,
-            holds = { pkg -> kind.perms.any { pm.checkPermission(it, pkg) == PackageManager.PERMISSION_GRANTED } },
-            ignore = setOf(packageName),
-        )
+        val r = attribute(kind, u, screenOff)
         val locked = keyguard.isKeyguardLocked
         val a = Access(
             kind = kind, pkg = r.pkg, candidates = r.candidates, start = now, end = null,
@@ -272,13 +265,44 @@ class WatchService : Service() {
         publish()
         LiveState.bump()
 
-        // Check Android's own record (precision mode) and alert once the use has lasted a moment.
+        // Check Android's own record (precision mode) or, without it, the usage events
+        // that have arrived since, then alert once the use has lasted a moment.
         h.postDelayed({
             val o = open[key] ?: return@postDelayed
             if (o.id != id) return@postDelayed
-            val current = refineFromOps(key, o) ?: o.access
+            val current = refineFromOps(key, o) ?: reattributeLive(key, o) ?: o.access
             maybeAlert(o, current)
         }, ALERT_DELAY_MS)
+        h.postDelayed({
+            val o = open[key] ?: return@postDelayed
+            if (o.id == id && o.access.source == Source.LIVE && o.access.pkg == null) reattributeLive(key, o)
+        }, LATE_CHECK_MS)
+    }
+
+    private fun attribute(kind: Kind, u: UsageTracker.Now, screenOff: Boolean): Attribution.Result {
+        val pm = packageManager
+        return Attribution.attribute(
+            foreground = u.foreground,
+            screenOff = screenOff,
+            services = u.services,
+            holds = { pkg -> kind.perms.any { pm.checkPermission(it, pkg) == PackageManager.PERMISSION_GRANTED } },
+            ignore = setOf(packageName),
+        )
+    }
+
+    /** Usage events reach Prahari a few seconds late; redo the guess with what has arrived. */
+    private fun reattributeLive(key: String, o: Open, ended: Boolean = false): Access? {
+        if (o.access.source != Source.LIVE) return null
+        val r = attribute(o.access.kind, usage.now(), o.access.screenOff)
+        if (r.pkg == o.access.pkg && r.candidates == o.access.candidates && r.background == o.access.background) return null
+        if (r.pkg == null && r.candidates.isEmpty()) return null
+        val refined = o.access.copy(pkg = r.pkg, candidates = r.candidates, background = r.background)
+        db.reattribute(o.id, r.pkg, r.candidates, r.background, Source.LIVE)
+        if (!ended) open[key] = Open(o.id, refined, o.lockedAtStart, o.alerted)
+        Log.i(TAG, "session ${o.access.kind.id} re-attributed: attributed=${r.pkg != null} background=${r.background}")
+        publish()
+        LiveState.bump()
+        return refined
     }
 
     private fun end(key: String) {
@@ -288,10 +312,30 @@ class WatchService : Service() {
         // Brief uses are kept: a silent snapshot can take a few hundred milliseconds.
         db.finish(o.id, now, if (brief) listOfNotNull(o.access.detail, "brief").joinToString(" · ") else null)
         var done = o.access.copy(end = now)
-        if (o.access.source != Source.OPS) refineFromOps(key, o, ended = true)?.let { done = it.copy(end = now) }
-        if (!o.alerted) maybeAlert(o, done)
+        if (o.access.source != Source.OPS) {
+            (refineFromOps(key, o, ended = true) ?: reattributeLive(key, o, ended = true))?.let { done = it.copy(end = now) }
+        }
+        if (!o.alerted) {
+            if (done.pkg != null || done.candidates.isNotEmpty()) {
+                maybeAlert(o, done)
+            } else {
+                // Ended before the usage events arrived: look again once they have.
+                h.postDelayed({ maybeAlert(o, reattributeEnded(o, done) ?: done) }, LATE_CHECK_MS)
+            }
+        }
         publish()
         LiveState.bump()
+    }
+
+    /** For a use that already ended: what was on screen when it started. */
+    private fun reattributeEnded(o: Open, done: Access): Access? {
+        val start = done.start
+        val fg = usage.history(start - 10 * 60_000, start + 2_000).foregroundAt(start)
+        val r = attribute(done.kind, UsageTracker.Now(fg, usage.now().services), done.screenOff)
+        if (r.pkg == null && r.candidates.isEmpty()) return null
+        db.reattribute(o.id, r.pkg, r.candidates, r.background, Source.LIVE)
+        LiveState.bump()
+        return done.copy(pkg = r.pkg, candidates = r.candidates, background = r.background)
     }
 
     private fun maybeAlert(o: Open, a: Access) {
@@ -528,6 +572,7 @@ class WatchService : Service() {
         private const val POLL_MS = 15 * 60_000L
         private const val ALERT_DELAY_MS = 3_000L
         private const val BRIEF_MS = 1_000L
+        private const val LATE_CHECK_MS = 15_000L
 
         private val OP_LABELS = mapOf(
             "android:phone_call_camera" to "during a call",

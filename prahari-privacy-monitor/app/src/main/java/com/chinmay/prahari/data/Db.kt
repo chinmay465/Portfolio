@@ -69,12 +69,12 @@ class Db private constructor(context: Context) :
         writableDatabase.delete("access", "id = ?", arrayOf(id.toString()))
     }
 
-    fun reattribute(id: Long, pkg: String, candidates: List<String>, background: Boolean) {
+    fun reattribute(id: Long, pkg: String?, candidates: List<String>, background: Boolean, source: Source = Source.OPS) {
         val v = ContentValues().apply {
             put("pkg", pkg)
-            put("candidates", candidates.joinToString("|", "|", "|"))
+            put("candidates", if (candidates.isEmpty()) "" else candidates.joinToString("|", "|", "|"))
             put("background", if (background) 1 else 0)
-            put("source", Source.OPS.name)
+            put("source", source.name)
         }
         writableDatabase.update("access", v, "id = ?", arrayOf(id.toString()))
     }

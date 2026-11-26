@@ -58,8 +58,7 @@ PY
 adb wait-for-device
 adb install -r -g "$APK"
 adb shell appops set "$PKG" GET_USAGE_STATS allow
-adb shell pm grant "$PKG" android.permission.GET_APP_OPS_STATS
-adb shell pm grant "$PKG" android.permission.READ_LOGS
+# Precision mode is granted later: the first check covers the plain setup.
 adb logcat -c
 
 adb shell am start -W -n "$PKG/.MainActivity"
@@ -84,10 +83,15 @@ adb shell dumpsys notification --noredact > "$OUT/notifications.txt"
 adb shell input keyevent KEYCODE_HOME
 sleep 4
 
+sleep 12  # let the late re-attribution of brief uses run
+
 # Read Prahari's database (debug build, so run-as works).
-for f in prahari.db prahari.db-wal prahari.db-shm; do
-  adb exec-out run-as "$PKG" cat "databases/$f" > "$OUT/$f" 2> /dev/null || rm -f "$OUT/$f"
-done
+pull_db() {
+  for f in prahari.db prahari.db-wal prahari.db-shm; do
+    adb exec-out run-as "$PKG" cat "databases/$f" > "$OUT/$f" 2> /dev/null || rm -f "$OUT/$f"
+  done
+}
+pull_db
 python3 - "$OUT/prahari.db" "$CAM" <<'PY'
 import sqlite3, sys
 db, cam = sys.argv[1], sys.argv[2]
@@ -95,13 +99,37 @@ rows = sqlite3.connect(db).execute("SELECT kind, pkg, candidates, background, so
 for r in rows:
     print(r)
 camera = [r for r in rows if r[0] == "camera"]
-if not camera:
-    print("::error title=Prahari e2e::no camera use recorded"); sys.exit(1)
-if not any(r[1] == cam for r in camera):
-    print(f"::error title=Prahari e2e::camera use not attributed to {cam}"); sys.exit(1)
-if not all(r[7] is not None for r in camera):
-    print("::error title=Prahari e2e::camera session still open after the camera closed"); sys.exit(1)
-print(f"camera use attributed to {cam}: ok")
+def err(m):
+    print("::error title=Prahari e2e::" + m); sys.exit(1)
+if not camera: err("no camera use recorded")
+if any(r[4] != "LIVE" for r in rows): err("precision rows without precision mode")
+if not all(r[1] == cam for r in camera): err(f"camera use not attributed to {cam} from usage events alone")
+if any(r[3] for r in camera): err("camera app was on screen but the use is marked background")
+if not all(r[7] is not None for r in camera): err("camera session still open after the camera closed")
+print(f"camera use attributed to {cam}, on screen, without precision mode: ok")
+PY
+
+# Precision mode: grant over adb, turn the screen off and on (Prahari reads
+# Android's access record then), and expect exact rows.
+adb shell pm grant "$PKG" android.permission.GET_APP_OPS_STATS
+adb shell pm grant "$PKG" android.permission.READ_LOGS
+adb shell input keyevent KEYCODE_SLEEP
+sleep 3
+adb shell input keyevent KEYCODE_WAKEUP
+sleep 2
+adb shell wm dismiss-keyguard || true
+sleep 6
+pull_db
+python3 - "$OUT/prahari.db" "$CAM" <<'PY'
+import sqlite3, sys
+db, cam = sys.argv[1], sys.argv[2]
+rows = sqlite3.connect(db).execute("SELECT kind, pkg, source FROM access WHERE source = 'OPS'").fetchall()
+print(f"{len(rows)} rows from Android's access record, kinds: {sorted({r[0] for r in rows})}")
+if not rows:
+    print("::error title=Prahari e2e::precision mode recorded nothing"); sys.exit(1)
+dup = [r for r in rows if r[0] == "camera" and r[1] == cam]
+if dup:
+    print("::error title=Prahari e2e::camera use recorded twice (live and access record)"); sys.exit(1)
 PY
 
 # Every screen renders without crashing.

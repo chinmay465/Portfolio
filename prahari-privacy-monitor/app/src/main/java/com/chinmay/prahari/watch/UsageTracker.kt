@@ -45,7 +45,10 @@ class UsageTracker(context: Context) {
         val t = System.currentTimeMillis()
         if (maxAgeMs > 0 && t - cachedAt < maxAgeMs) return cached
         if (!hasAccess()) return Now(null, emptySet())
-        val from = if (cursor == 0L) t - DAY else cursor
+        // Android makes usage events visible a few seconds after they happen, so each
+        // read overlaps the previous one: events that showed up late are still applied.
+        val from = if (cursor == 0L) t - DAY else cursor - OVERLAP
+        var lastResumed: String? = null
         try {
             val events = usm.queryEvents(from, t)
             val e = UsageEvents.Event()
@@ -54,7 +57,7 @@ class UsageTracker(context: Context) {
                 eventsSeen++
                 when (e.eventType) {
                     UsageEvents.Event.ACTIVITY_RESUMED -> {
-                        foreground = e.packageName
+                        lastResumed = e.packageName
                         resumedSeen++
                     }
                     UsageEvents.Event.FOREGROUND_SERVICE_START ->
@@ -68,6 +71,7 @@ class UsageTracker(context: Context) {
             }
         } catch (_: SecurityException) {
         }
+        if (lastResumed != null) foreground = lastResumed
         cursor = t
         val fg = foreground?.takeIf { it !in shells }
         cached = Now(fg, services.keys.toSet())
@@ -121,6 +125,7 @@ class UsageTracker(context: Context) {
 
     companion object {
         private const val DAY = 24 * 60 * 60 * 1000L
+        private const val OVERLAP = 5 * 60 * 1000L
 
         fun hasUsageAccess(ctx: Context): Boolean {
             val aom = ctx.getSystemService(AppOpsManager::class.java)
