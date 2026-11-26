@@ -73,7 +73,15 @@ class DnsWatchService : VpnService() {
             return
         }
         tun = fd
-        tunnel = DnsTunnel(this, fd).also { it.start() }
+        tunnel = DnsTunnel(this, fd) {
+            // The tunnel stopped unexpectedly: take the VPN down so apps go back to normal DNS.
+            LiveState.dnsError.value = "DNS watch stopped unexpectedly and was turned off. Turn it on again in Setup."
+            Prefs(this).dnsWatch = false
+            android.os.Handler(mainLooper).post {
+                shutdown()
+                stopSelf()
+            }
+        }.also { it.start() }
         LiveState.dnsOn.value = true
         LiveState.dnsError.value = null
     }

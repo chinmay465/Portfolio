@@ -14,6 +14,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /** Tracker-SDK scanning: each APK is read once per version, never while it would cost you battery. */
 object Scanner {
+    private const val TRYING = "#trying"
     private val busy = AtomicBoolean(false)
 
     /** Scans apps whose version changed since their last scan. Returns how many were scanned. */
@@ -22,9 +23,13 @@ object Scanner {
         try {
             val db = Db.get(ctx)
             val known = db.scans()
-            val todo = apps.filter { known[it.pkg]?.stamp != it.stamp }
+            // An app whose scan was started but never finished (Prahari was killed or ran
+            // out of memory on it) is not retried for that version, so one odd APK can't
+            // crash Prahari every time Apps opens.
+            val todo = apps.filter { known[it.pkg]?.stamp.let { s -> s != it.stamp && s != it.stamp + TRYING } }
             todo.forEachIndexed { i, app ->
                 progress(i, todo.size, app.label)
+                db.putScan(app.pkg, Db.ScanRow(app.stamp + TRYING, emptyList(), System.currentTimeMillis()))
                 val found = DexTypes.trackersInApks(app.apks)
                 db.putScan(app.pkg, Db.ScanRow(app.stamp, found.sorted(), System.currentTimeMillis()))
             }

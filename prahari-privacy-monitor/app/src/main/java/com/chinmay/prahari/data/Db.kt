@@ -82,8 +82,8 @@ class Db private constructor(context: Context) :
     /** Is there already a [kind] row for [pkg] that started within [window] ms of [t]? */
     fun hasNear(kind: Kind, pkg: String, t: Long, window: Long): Boolean =
         readableDatabase.rawQuery(
-            "SELECT 1 FROM access WHERE kind = ? AND (pkg = ? OR candidates LIKE ?) AND start BETWEEN ? AND ? LIMIT 1",
-            arrayOf(kind.id, pkg, "%|$pkg|%", (t - window).toString(), (t + window).toString()),
+            "SELECT 1 FROM access WHERE kind = ? AND (pkg = ? OR instr(candidates, ?) > 0) AND start BETWEEN ? AND ? LIMIT 1",
+            arrayOf(kind.id, pkg, "|$pkg|", (t - window).toString(), (t + window).toString()),
         ).use { it.moveToFirst() }
 
     /** Closes rows left open when the process died mid-session. */
@@ -92,8 +92,9 @@ class Db private constructor(context: Context) :
     }
 
     fun accesses(since: Long, pkg: String? = null, limit: Int = 500): List<Access> {
-        val where = if (pkg == null) "start >= ?" else "start >= ? AND (pkg = ? OR candidates LIKE ?)"
-        val args = if (pkg == null) arrayOf(since.toString()) else arrayOf(since.toString(), pkg, "%|$pkg|%")
+        // instr, not LIKE: "_" in a package name is a LIKE wildcard and would match other apps.
+        val where = if (pkg == null) "start >= ?" else "start >= ? AND (pkg = ? OR instr(candidates, ?) > 0)"
+        val args = if (pkg == null) arrayOf(since.toString()) else arrayOf(since.toString(), pkg, "|$pkg|")
         readableDatabase.query("access", null, where, args, null, null, "start DESC", limit.toString()).use { c ->
             val out = ArrayList<Access>(c.count)
             while (c.moveToNext()) {

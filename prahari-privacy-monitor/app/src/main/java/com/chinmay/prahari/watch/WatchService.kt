@@ -62,7 +62,13 @@ class WatchService : Service() {
     private lateinit var power: PowerManager
     private lateinit var keyguard: KeyguardManager
 
-    private class Open(val id: Long, val access: Access, val lockedAtStart: Boolean, var alerted: Boolean = false)
+    private class Open(
+        val id: Long,
+        val access: Access,
+        val lockedAtStart: Boolean,
+        var alerted: Boolean = false,
+        val torchAtStart: Boolean = false,
+    )
 
     private val open = HashMap<String, Open>()
     private val torchOn = HashSet<String>()
@@ -165,8 +171,9 @@ class WatchService : Service() {
         override fun onCameraUnavailable(cameraId: String) {
             // Only ids and states are logged, never app names: other apps with log access could read them.
             Log.i(TAG, "camera $cameraId busy (torch=${cameraId in torchOn})")
-            if (cameraId in torchOn) return
-            start(Kind.CAMERA, "cam:$cameraId", facingOf(cameraId))
+            // Always recorded, even with the flashlight on: an app could switch the torch on
+            // first to hide a capture. A pure flashlight session is dropped when it ends.
+            start(Kind.CAMERA, "cam:$cameraId", facingOf(cameraId), torchAtStart = cameraId in torchOn)
         }
 
         override fun onCameraAvailable(cameraId: String) {
@@ -177,19 +184,12 @@ class WatchService : Service() {
 
     private val torchCallback = object : CameraManager.TorchCallback() {
         override fun onTorchModeChanged(cameraId: String, enabled: Boolean) {
-            if (enabled) {
-                torchOn += cameraId
-                // The flashlight can briefly mark the camera busy: that isn't a camera use.
-                open["cam:$cameraId"]?.let {
-                    if (System.currentTimeMillis() - it.access.start < 3_000) {
-                        db.delete(it.id)
-                        open.remove("cam:$cameraId")
-                        publish()
-                    }
-                }
-            } else {
-                torchOn -= cameraId
-            }
+            if (enabled) torchOn += cameraId else torchOn -= cameraId
+        }
+
+        // An app opening the camera takes the torch away: from then on it's a real camera use.
+        override fun onTorchModeUnavailable(cameraId: String) {
+            torchOn -= cameraId
         }
     }
 
@@ -242,7 +242,7 @@ class WatchService : Service() {
 
     // ---------- sessions ----------
 
-    private fun start(kind: Kind, key: String, detail: String?) {
+    private fun start(kind: Kind, key: String, detail: String?, torchAtStart: Boolean = false) {
         if (key in open) return
         val now = System.currentTimeMillis()
         val screenOff = !power.isInteractive
@@ -261,7 +261,7 @@ class WatchService : Service() {
             "session ${kind.id} started: attributed=${r.pkg != null} candidates=${r.candidates.size} background=${r.background} " +
                 "foregroundKnown=${u.foreground != null} services=${u.services.size} events=${usage.eventsSeen} resumed=${usage.resumedSeen} shells=${usage.shells.size}",
         )
-        open[key] = Open(id, a, locked)
+        open[key] = Open(id, a, locked, torchAtStart = torchAtStart)
         publish()
         LiveState.bump()
 
@@ -298,7 +298,7 @@ class WatchService : Service() {
         if (r.pkg == null && r.candidates.isEmpty()) return null
         val refined = o.access.copy(pkg = r.pkg, candidates = r.candidates, background = r.background)
         db.reattribute(o.id, r.pkg, r.candidates, r.background, Source.LIVE)
-        if (!ended) open[key] = Open(o.id, refined, o.lockedAtStart, o.alerted)
+        if (!ended) open[key] = Open(o.id, refined, o.lockedAtStart, o.alerted, o.torchAtStart)
         Log.i(TAG, "session ${o.access.kind.id} re-attributed: attributed=${r.pkg != null} background=${r.background}")
         publish()
         LiveState.bump()
@@ -308,6 +308,13 @@ class WatchService : Service() {
     private fun end(key: String) {
         val o = open.remove(key) ?: return
         val now = System.currentTimeMillis()
+        if (o.torchAtStart && key.removePrefix("cam:") in torchOn) {
+            // The flashlight held the camera the whole time and nothing took it over.
+            db.delete(o.id)
+            publish()
+            LiveState.bump()
+            return
+        }
         val brief = now - o.access.start < BRIEF_MS
         // Brief uses are kept: a silent snapshot can take a few hundred milliseconds.
         db.finish(o.id, now, if (brief) listOfNotNull(o.access.detail, "brief").joinToString(" · ") else null)
@@ -340,6 +347,8 @@ class WatchService : Service() {
 
     private fun maybeAlert(o: Open, a: Access) {
         if (o.alerted) return
+        // Still the flashlight: wait for the session to end or the torch to be taken.
+        if (o.torchAtStart && a.end == null && open.entries.any { it.value.id == o.id && it.key.removePrefix("cam:") in torchOn }) return
         // The lock screen's own camera use (face unlock) has no app behind it.
         if (o.lockedAtStart && a.pkg == null && a.kind == Kind.CAMERA) return
         if (alerts.shouldAlert(a)) {
@@ -367,7 +376,7 @@ class WatchService : Service() {
         val background = o.access.screenOff || pkg != fg
         val refined = o.access.copy(pkg = pkg, candidates = users, background = background, source = Source.OPS)
         db.reattribute(o.id, pkg, users, background)
-        if (!ended) open[key] = Open(o.id, refined, o.lockedAtStart, o.alerted)
+        if (!ended) open[key] = Open(o.id, refined, o.lockedAtStart, o.alerted, o.torchAtStart)
         val now = System.currentTimeMillis()
         users.forEach { p ->
             opsKeysFor(kind).forEach { op ->
@@ -525,6 +534,7 @@ class WatchService : Service() {
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setContentIntent(open)
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
             .build()
     }
 

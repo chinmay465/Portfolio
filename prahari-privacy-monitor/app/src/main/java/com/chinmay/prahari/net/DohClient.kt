@@ -7,7 +7,8 @@ import java.net.URI
 /**
  * DNS-over-HTTPS (RFC 8484) client. Queries leave the phone encrypted, so the
  * Wi-Fi owner, the mobile carrier or anyone on the network can't read or log
- * which domains your apps look up. There is deliberately no plaintext fallback.
+ * which domains your apps look up. If every endpoint fails, DnsTunnel falls back
+ * to the network's own resolver so the phone never loses DNS.
  */
 class DohClient internal constructor(
     private val endpoints: List<String>,
@@ -62,8 +63,17 @@ class DohClient internal constructor(
             throw IOException("Unexpected DoH content type")
         }
         // Streams are closed but the connection is kept for reuse (HTTP keep-alive).
+        if (conn.contentLengthLong > MAX_DNS_MESSAGE) throw IOException("DoH response too large")
         return conn.inputStream.use { input ->
-            val body = input.readBytes()
+            // Read at most one byte past the limit, so a bad server can't make us buffer more.
+            val buf = java.io.ByteArrayOutputStream()
+            val chunk = ByteArray(4_096)
+            while (buf.size() <= MAX_DNS_MESSAGE) {
+                val n = input.read(chunk)
+                if (n < 0) break
+                buf.write(chunk, 0, n)
+            }
+            val body = buf.toByteArray()
             if (body.size < 12 || body.size > MAX_DNS_MESSAGE) throw IOException("Bad DoH response size")
             body
         }
@@ -71,7 +81,8 @@ class DohClient internal constructor(
 
     companion object {
         private const val DNS_MESSAGE = "application/dns-message"
-        private const val MAX_DNS_MESSAGE = 65_535
+        // Largest DNS message that still fits in one IPv4 + UDP packet back to the app.
+        private const val MAX_DNS_MESSAGE = 65_535 - 28
 
         /**
          * Cloudflare first, then Quad9 as a different operator. Both state that

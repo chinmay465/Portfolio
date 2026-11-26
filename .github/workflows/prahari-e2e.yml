@@ -10,6 +10,9 @@ on:
       - .github/workflows/prahari-e2e.yml
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   emulator:
     runs-on: ubuntu-latest

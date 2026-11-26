@@ -24,8 +24,10 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
 
-    <!-- Optional: DNS watch forwards lookups over DNS-over-HTTPS. -->
+    <!-- Optional: DNS watch forwards lookups over DNS-over-HTTPS, falling back to
+         the network's own DNS server (found via the network state) if DoH is blocked. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- Optional precision mode, granted only over adb (development permissions):
          exact per-app access history for camera, mic, location, clipboard,

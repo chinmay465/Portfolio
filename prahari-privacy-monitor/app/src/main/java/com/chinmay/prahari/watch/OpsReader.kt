@@ -141,6 +141,7 @@ class OpsReader(context: Context) {
         private const val TAG = "PrahariOps"
         const val PERMISSION = "android.permission.GET_APP_OPS_STATS"
         const val ADB_GRANT = "adb shell pm grant com.chinmay.prahari android.permission.GET_APP_OPS_STATS"
+        const val ADB_REVOKE = "adb shell pm revoke com.chinmay.prahari android.permission.GET_APP_OPS_STATS"
 
         /**
          * Accesses made by the app itself or through a system proxy on its

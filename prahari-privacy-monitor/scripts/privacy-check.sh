@@ -44,6 +44,7 @@ expected = {
     "android.permission.ACCESS_COARSE_LOCATION",
     "android.permission.ACCESS_FINE_LOCATION",
     "android.permission.INTERNET",
+    "android.permission.ACCESS_NETWORK_STATE",
     "android.permission.GET_APP_OPS_STATS",
     "android.permission.READ_LOGS",
     f"{pkg}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",  # added by androidx.core, signature-only

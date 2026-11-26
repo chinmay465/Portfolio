@@ -61,8 +61,14 @@ object DexTypes {
                     while (entries.hasMoreElements()) {
                         val e = entries.nextElement()
                         if (!DEX_NAME.matches(e.name)) continue
-                        if (e.size > MAX_DEX) continue
-                        val bytes = zip.getInputStream(e).use { it.readFully(e.size) }
+                        // Unknown or huge sizes are skipped: a crafted APK must not be able to
+                        // exhaust Prahari's memory (it shares a process with the watcher).
+                        if (e.size !in 0x70..MAX_DEX) continue
+                        val bytes = try {
+                            zip.getInputStream(e).use { it.readFully(e.size) }
+                        } catch (_: OutOfMemoryError) {
+                            continue
+                        }
                         found += trackersIn(bytes)
                     }
                 }
@@ -73,22 +79,20 @@ object DexTypes {
         return found
     }
 
-    private fun InputStream.readFully(size: Long): ByteArray =
-        if (size in 1..Int.MAX_VALUE) {
-            val out = ByteArray(size.toInt())
-            var n = 0
-            while (n < out.size) {
-                val r = read(out, n, out.size - n)
-                if (r < 0) break
-                n += r
-            }
-            out
-        } else {
-            readBytes()
+    /** Reads exactly [size] bytes (the declared size); never more, whatever the stream holds. */
+    private fun InputStream.readFully(size: Long): ByteArray {
+        val out = ByteArray(size.toInt())
+        var n = 0
+        while (n < out.size) {
+            val r = read(out, n, out.size - n)
+            if (r < 0) break
+            n += r
         }
+        return out
+    }
 
     private val DEX_NAME = Regex("classes\\d*\\.dex")
-    private const val MAX_DEX = 96L * 1024 * 1024
+    private const val MAX_DEX = 48L * 1024 * 1024
 
     private fun u32(b: ByteArray, i: Int): Int =
         (b[i].toInt() and 0xFF) or ((b[i + 1].toInt() and 0xFF) shl 8) or

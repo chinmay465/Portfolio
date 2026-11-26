@@ -155,7 +155,12 @@ fun SetupScreen(padding: PaddingValues, resumeTick: Int) {
                     CommandBox(Canary.ADB_GRANT)
                 }
                 Spacer(Modifier.height(6.dp))
-                Text("Both are read-only. Revoke any time by uninstalling Prahari or running the same command with revoke.", color = P.faint, fontSize = 12.sp)
+                Text(
+                    "Both are read-only, change nothing on the phone and disappear when Prahari is uninstalled. Log access is broad (every app's log), so revoke it once you're done with canary tests:",
+                    color = P.faint, fontSize = 12.sp,
+                )
+                if (logs) CommandBox(Canary.ADB_REVOKE)
+                if (opsGranted) CommandBox(OpsReader.ADB_REVOKE)
                 if (opsGranted) {
                     Spacer(Modifier.height(8.dp))
                     OutlinedButton(onClick = { WatchService.pollNow(ctx); refresh() }) { Text("Read access record now") }

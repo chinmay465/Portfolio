@@ -159,6 +159,49 @@ tap_text "Camera" 2 || true
 sleep 4
 shot 08-app-detail
 
+# DNS watch must never cost the phone its DNS: lookups resolve with it on, and
+# still resolve when every DoH server is blocked (fallback to the network's DNS).
+adb shell appops set "$PKG" ACTIVATE_VPN allow
+tap_text "Setup"
+sleep 3
+for i in 1 2 3 4 5; do
+  tap_text "DNS watch" && break
+  adb shell input swipe 500 1600 500 600 300
+  sleep 1
+done
+sleep 5
+shot 09-dns-watch
+adb shell dumpsys activity services "$PKG" | grep -q "DnsWatchService" || fail "DNS watch did not start"
+resolves() { adb shell ping -c 1 -W 3 "$1" 2>&1 | tee -a "$OUT/ping.txt" | grep -q "^PING "; }
+resolves example.com || fail "DNS broken with DNS watch on"
+resolves www.wikipedia.org || fail "DNS broken with DNS watch on"
+adb root > /dev/null && sleep 3 && adb wait-for-device
+for ip in 1.1.1.1 1.0.0.1 9.9.9.9 149.112.112.112; do
+  adb shell iptables -I OUTPUT -d "$ip" -p tcp --dport 443 -j REJECT --reject-with tcp-reset
+done
+resolves www.mozilla.org || fail "DNS broken when DoH is blocked (no fallback)"
+resolves github.com || fail "DNS broken when DoH is blocked (no fallback)"
+echo "DNS keeps working with DNS watch on, with and without DoH: ok"
+sleep 32  # let the batch of lookups reach the database
+pull_db() {
+  for f in prahari.db prahari.db-wal prahari.db-shm; do
+    adb exec-out run-as "$PKG" cat "databases/$f" > "$OUT/$f" 2> /dev/null || rm -f "$OUT/$f"
+  done
+}
+pull_db
+python3 - "$OUT/prahari.db" <<'PY'
+import sqlite3, sys
+rows = sqlite3.connect(sys.argv[1]).execute("SELECT pkg, domain, count FROM dns").fetchall()
+for r in rows[:20]:
+    print(r)
+names = {r[1] for r in rows}
+if "example.com" not in names:
+    print("::error title=Prahari e2e::DNS watch recorded no lookups"); sys.exit(1)
+if not names & {"www.mozilla.org", "github.com"}:
+    print("::error title=Prahari e2e::lookups made while DoH was blocked did not go through the fallback"); sys.exit(1)
+print("lookups recorded, including through the fallback: ok")
+PY
+
 adb logcat -d -b crash > "$OUT/crash.txt" || true
 if grep -q "$PKG" "$OUT/crash.txt"; then
   cat "$OUT/crash.txt"

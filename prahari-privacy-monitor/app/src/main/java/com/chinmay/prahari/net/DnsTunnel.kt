@@ -16,10 +16,14 @@ import java.io.FileDescriptor
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
+import java.net.DatagramPacket
+import java.net.DatagramSocket
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.RejectedExecutionException
 
 /**
@@ -30,6 +34,8 @@ import java.util.concurrent.RejectedExecutionException
 class DnsTunnel(
     private val service: VpnService,
     private val tun: ParcelFileDescriptor,
+    /** Called if the tunnel stops on its own, so the VPN is torn down instead of swallowing DNS. */
+    private val onDied: () -> Unit,
 ) {
     private val doh = DohClient()
     private val cm = service.getSystemService(ConnectivityManager::class.java)
@@ -39,7 +45,11 @@ class DnsTunnel(
 
     private val input = FileInputStream(tun.fileDescriptor)
     private val output = FileOutputStream(tun.fileDescriptor)
-    private val forwarders: ExecutorService = Executors.newFixedThreadPool(6)
+    // Bounded: a flood of lookups is dropped (apps retry) instead of growing memory.
+    private val forwarders: ExecutorService = ThreadPoolExecutor(
+        6, 6, 30, TimeUnit.SECONDS, ArrayBlockingQueue(256), ThreadPoolExecutor.DiscardPolicy(),
+    ).apply { allowCoreThreadTimeOut(true) }
+    @Volatile private var stopping = false
     private val wakePipe: Array<FileDescriptor> = Os.pipe()
     private var thread: Thread? = null
 
@@ -52,6 +62,7 @@ class DnsTunnel(
     }
 
     fun stop() {
+        stopping = true
         closeQuietly(wakePipe[1])
         thread?.join(2_000)
         thread = null
@@ -87,10 +98,17 @@ class DnsTunnel(
                     continue
                 }
                 val n = input.read(buf)
-                if (n > 0) handle(buf, n)
+                if (n > 0) {
+                    try {
+                        handle(buf, n)
+                    } catch (_: Exception) {
+                        // One bad packet must not stop DNS for the whole phone.
+                    }
+                }
             }
         } catch (_: Exception) {
         }
+        if (!stopping) onDied()
     }
 
     private fun handle(buf: ByteArray, len: Int) {
@@ -155,15 +173,46 @@ class DnsTunnel(
     }
 
     private fun forward(query: Packets.DnsQuery) {
+        val payload = query.dnsPayload()
         val response = try {
-            doh.resolve(query.dnsPayload())
+            doh.resolve(payload)
         } catch (_: IOException) {
-            return
+            // Some networks block DoH. Watching must never cost the phone its DNS, so fall
+            // back to the network's own resolver, the one Android would use without Prahari.
+            try {
+                plainDns(payload)
+            } catch (_: IOException) {
+                return
+            }
         }
         try {
             synchronized(output) { output.write(Packets.buildReply(query, response)) }
         } catch (_: IOException) {
         }
+    }
+
+    private fun plainDns(payload: ByteArray): ByteArray {
+        // Prahari is excluded from its own VPN, so this is the underlying network.
+        val servers = cm.getLinkProperties(cm.activeNetwork)?.dnsServers.orEmpty()
+        var last: IOException = IOException("No network DNS server")
+        for (server in servers.take(2)) {
+            try {
+                DatagramSocket().use { socket ->
+                    service.protect(socket)
+                    socket.soTimeout = 3_000
+                    socket.send(DatagramPacket(payload, payload.size, server, 53))
+                    val buf = ByteArray(4_096)
+                    val reply = DatagramPacket(buf, buf.size)
+                    socket.receive(reply)
+                    // Only accept the answer to this query (same transaction id).
+                    if (reply.length < 12 || buf[0] != payload[0] || buf[1] != payload[1]) throw IOException("Mismatched DNS reply")
+                    return buf.copyOf(reply.length)
+                }
+            } catch (e: IOException) {
+                last = e
+            }
+        }
+        throw last
     }
 
     private fun closeQuietly(fd: FileDescriptor) {

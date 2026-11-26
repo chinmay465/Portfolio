@@ -56,6 +56,15 @@ class Alerts(context: Context) {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(open)
+            // On the lock screen, say only that something happened, not which app.
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(
+                NotificationCompat.Builder(ctx, PrahariApp.CH_ALERTS)
+                    .setSmallIcon(R.drawable.ic_stat_watch)
+                    .setContentTitle("Prahari alert")
+                    .setContentText("Unlock to see which app")
+                    .build(),
+            )
             .build()
         try {
             NotificationManagerCompat.from(ctx).notify((a.kind.ordinal shl 20) + ((a.pkg?.hashCode() ?: 0) and 0xFFFFF), n)

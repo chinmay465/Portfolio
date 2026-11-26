@@ -240,7 +240,10 @@ fun levelColor(l: Risk.Level) = when (l) {
 
 @Composable
 fun SettingRow(title: String, body: String?, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        Modifier.fillMaxWidth().clickable(enabled = enabled) { onChange(!checked) }.padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Column(Modifier.weight(1f)) {
             Text(title, style = androidx.compose.material3.MaterialTheme.typography.titleSmall)
             if (body != null) Text(body, color = P.dim, fontSize = 13.sp)

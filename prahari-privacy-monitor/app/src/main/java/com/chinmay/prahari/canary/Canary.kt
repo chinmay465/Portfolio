@@ -14,6 +14,7 @@ object Canary {
 
     const val READ_LOGS = "android.permission.READ_LOGS"
     const val ADB_GRANT = "adb shell pm grant com.chinmay.prahari android.permission.READ_LOGS"
+    const val ADB_REVOKE = "adb shell pm revoke com.chinmay.prahari android.permission.READ_LOGS"
 
     private val rnd = SecureRandom()
     private const val ALPHABET = "bcdfghjkmnpqrstvwxz"
