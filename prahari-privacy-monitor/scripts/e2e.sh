@@ -56,7 +56,11 @@ PY
 }
 
 adb wait-for-device
-adb install -r -g "$APK"
+# Not `install -g`: that would also grant the adb-only precision permissions.
+adb install -r "$APK"
+for p in POST_NOTIFICATIONS ACCESS_FINE_LOCATION ACCESS_COARSE_LOCATION; do
+  adb shell pm grant "$PKG" "android.permission.$p"
+done
 adb shell appops set "$PKG" GET_USAGE_STATS allow
 # Precision mode is granted later: the first check covers the plain setup.
 adb logcat -c
