@@ -6,8 +6,16 @@ import type { NextFunction, Request, Response } from 'express'
 import type { VisitorStore } from './store.ts'
 import { isBot, parseVisit } from './visit.ts'
 
+/** Shared with index.ts, which connects the database after the server is listening. */
+export interface DbStatus {
+  state: 'connecting' | 'ready' | 'error'
+  storage: 'postgres' | 'pglite'
+  store: VisitorStore | null
+  error?: string
+}
+
 export interface AppOptions {
-  store: VisitorStore
+  status: DbStatus
   /** Bearer token for /api/stats. Empty means the stats are open (local runs only). */
   statsToken: string
   /** Sites allowed to send visits. Empty allows any origin. */
@@ -40,7 +48,13 @@ function sameToken(given: string, expected: string): boolean {
 }
 
 export function createApp(opts: AppOptions): express.Express {
-  const { store, statsToken, allowedOrigins } = opts
+  const { status, statsToken, allowedOrigins } = opts
+
+  function notReady(res: Response): boolean {
+    if (status.store) return false
+    res.status(503).json({ error: 'Database not ready', state: status.state, detail: status.error })
+    return true
+  }
   const app = express()
   app.set('trust proxy', true)
   app.disable('x-powered-by')
@@ -82,8 +96,9 @@ export function createApp(opts: AppOptions): express.Express {
         res.status(400).json({ error: 'Invalid visit' })
         return
       }
+      if (notReady(res)) return
       try {
-        const isNew = await store.record(visit)
+        const isNew = await status.store!.record(visit)
         res.json({ counted: true, new: isNew })
       } catch (err) {
         console.error('record failed', err)
@@ -107,17 +122,20 @@ export function createApp(opts: AppOptions): express.Express {
       }
     }
     const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365)
+    if (notReady(res)) return
     try {
       res.set('Cache-Control', 'no-store')
-      res.json(await store.stats(days))
+      res.json(await status.store!.stats(days))
     } catch (err) {
       console.error('stats failed', err)
       res.status(500).json({ error: 'Could not load stats' })
     }
   })
 
+  // Always 200 so Render keeps the service up; `database` says whether visits are saved.
   app.get('/api/health', (_req, res) => {
-    res.json({ ok: true })
+    res.set('Cache-Control', 'no-store')
+    res.json({ ok: true, database: status.state, storage: status.storage, ...(status.error ? { error: status.error } : {}) })
   })
 
   // ---- dashboard (production build) ----

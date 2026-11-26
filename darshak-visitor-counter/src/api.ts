@@ -49,6 +49,10 @@ export async function fetchStats(days: number, token: string): Promise<Stats> {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
   if (res.status === 401) throw new Unauthorized()
+  if (res.status === 503) {
+    const body = (await res.json().catch(() => ({}))) as { detail?: string }
+    throw new Error(`The database isn't connected yet${body.detail ? `: ${body.detail}` : ''}. It retries on its own.`)
+  }
   if (!res.ok) throw new Error(`Stats failed (${res.status})`)
   return (await res.json()) as Stats
 }

@@ -18,7 +18,7 @@ beforeAll(async () => {
   db = await openDb(undefined, 'memory://')
   const store = new VisitorStore(db)
   await store.migrate()
-  server = createApp({ store, statsToken: 'secret', allowedOrigins: [SITE], rateLimit: 5 }).listen(0)
+  server = createApp({ status: { state: 'ready', storage: 'pglite', store }, statsToken: 'secret', allowedOrigins: [SITE], rateLimit: 5 }).listen(0)
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
 })
 afterAll(async () => {
@@ -67,7 +67,7 @@ describe('open dashboard (no STATS_TOKEN)', () => {
     const openDbConn = await openDb(undefined, 'memory://')
     const store = new VisitorStore(openDbConn)
     await store.migrate()
-    const open = createApp({ store, statsToken: '', allowedOrigins: [SITE] }).listen(0)
+    const open = createApp({ status: { state: 'ready', storage: 'pglite', store }, statsToken: '', allowedOrigins: [SITE] }).listen(0)
     const url = `http://127.0.0.1:${(open.address() as AddressInfo).port}`
     try {
       expect(await (await fetch(`${url}/api/config`)).json()).toEqual({ needsToken: false })
@@ -77,6 +77,33 @@ describe('open dashboard (no STATS_TOKEN)', () => {
     } finally {
       open.close()
       await openDbConn.close()
+    }
+  })
+})
+
+describe('database not ready', () => {
+  it('stays up, reports the error and refuses visits with 503', async () => {
+    const down = createApp({
+      status: { state: 'error', storage: 'postgres', store: null, error: 'ECONNREFUSED: connect failed' },
+      statsToken: '',
+      allowedOrigins: [],
+    }).listen(0)
+    const url = `http://127.0.0.1:${(down.address() as AddressInfo).port}`
+    try {
+      expect(await (await fetch(`${url}/api/health`)).json()).toEqual({
+        ok: true,
+        database: 'error',
+        storage: 'postgres',
+        error: 'ECONNREFUSED: connect failed',
+      })
+      const res = await fetch(`${url}/api/visit`, {
+        method: 'POST',
+        headers: { 'User-Agent': CHROME },
+        body: JSON.stringify({ id: ID }),
+      })
+      expect(res.status).toBe(503)
+    } finally {
+      down.close()
     }
   })
 })
