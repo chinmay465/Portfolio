@@ -36,3 +36,11 @@ describe('visit parsing', () => {
     expect(deviceOf('Mozilla/5.0 (Windows NT 10.0)')).toBe('desktop')
   })
 })
+
+describe('describeError', () => {
+  it('never leaks the connection string', async () => {
+    const { describeError } = await import('./db.ts')
+    const msg = describeError(new Error('bad url postgresql://u:secret@host/db?sslmode=require'))
+    expect(msg).not.toContain('secret')
+  })
+})
