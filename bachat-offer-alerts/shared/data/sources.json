@@ -1,0 +1,37 @@
+{
+  "comment": "Default offer sources, shared by the web app and the Android app. Telegram entries read the channel's public web preview (t.me/s/<channel>), which needs no login or API key. Users can add more public channels, or RSS feeds through the code, in Settings. Checked live by CI (npm run probe).",
+  "sources": [
+    {
+      "id": "tg:desidime",
+      "kind": "telegram",
+      "channel": "desidime",
+      "name": "DesiDime",
+      "enabled": true,
+      "note": "India's biggest deals community: food, grocery, shopping and bank offers, with the discount in most posts"
+    },
+    {
+      "id": "tg:grabonindiaofficial",
+      "kind": "telegram",
+      "channel": "GrabOnIndiaOfficial",
+      "name": "GrabOn India",
+      "enabled": true,
+      "note": "Coupons, flash sales and price-error alerts across 4,000+ stores"
+    },
+    {
+      "id": "tg:powerloot",
+      "kind": "telegram",
+      "channel": "PowerLoot",
+      "name": "PowerLoot",
+      "enabled": true,
+      "note": "Loot deals and big discounts, mostly fashion and electronics"
+    },
+    {
+      "id": "tg:realearnkaro",
+      "kind": "telegram",
+      "channel": "realearnkaro",
+      "name": "EarnKaro",
+      "enabled": true,
+      "note": "Daily deals across Amazon, Flipkart, Myntra and Ajio"
+    }
+  ]
+}

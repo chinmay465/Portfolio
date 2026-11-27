@@ -197,6 +197,77 @@ jobs:
           name: kavach-debug-apk
           path: kavach-adblock/app/build/outputs/apk/debug/app-debug.apk
 
+  bachat:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bachat-offer-alerts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: bachat-offer-alerts/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - name: Smoke test (fixture sources, in-memory database)
+        env:
+          PORT: "4182"
+          BACHAT_FIXTURES: "1"
+          BACHAT_DATA_DIR: memory://
+        run: |
+          npm start &
+          for i in $(seq 1 30); do curl -fs localhost:4182/api/health | grep -q '"ok":true' && break; sleep 1; done
+          curl -fs localhost:4182/ | grep -q '<div id="root">'
+          curl -fs localhost:4182/sw.js | grep -q 'showNotification'
+          curl -fs localhost:4182/manifest.webmanifest | grep -q '"display": "standalone"'
+          curl -fs localhost:4182/api/config | grep -q '"publicKey":"B'
+          curl -fs localhost:4182/api/deals | grep -q '"platform":"zepto"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST localhost:4182/api/subscriptions -H 'Content-Type: application/json' -d '{"subscription":{"endpoint":"https://evil.example/x","keys":{"p256dh":"a","auth":"b"}}}')" = 400
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: End-to-end tests (phone viewport)
+        run: npm run test:e2e
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bachat-playwright-report
+          path: |
+            bachat-offer-alerts/playwright-report
+            bachat-offer-alerts/test-results
+          retention-days: 7
+      # Reads the real channels from GitHub's network. Informational: a source being
+      # down shouldn't fail the build, but the log shows which ones still work.
+      - name: Live source check
+        continue-on-error: true
+        run: npm run probe -- --show
+
+  bachat-android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bachat-offer-alerts/android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - run: chmod +x gradlew
+      - run: ./gradlew testDebugUnitTest assembleDebug
+      - name: Privacy check (permissions, exported components, tracker SDKs, endpoints)
+        run: bash scripts/privacy-check.sh
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: bachat-debug-apk
+          path: bachat-offer-alerts/android/app/build/outputs/apk/debug/app-debug.apk
+
   rail-backend:
     runs-on: ubuntu-latest
     defaults:

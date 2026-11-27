@@ -20,7 +20,7 @@ test('a filtered projects link keeps its query after a refresh', async ({ page }
   await expect(page.getByRole('heading', { level: 1, name: 'Projects' })).toBeVisible()
   for (const p of projects) {
     const card = page.locator(`main a[href="/projects/${p.id}"]`)
-    if (p.kind === 'Android app') await expect(card.first()).toBeVisible()
+    if (p.kind === 'Android app' || p.download) await expect(card.first()).toBeVisible()
     else await expect(card).toHaveCount(0)
   }
 })

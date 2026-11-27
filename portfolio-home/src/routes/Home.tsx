@@ -16,7 +16,7 @@ export default function Home() {
   const { reduced } = useSite()
   usePageMeta(
     null,
-    'Chinmay Upare, senior frontend developer at KredX. React, Next.js and TypeScript: design systems, micro-frontends, KYC and payments, plus seven side projects.',
+    'Chinmay Upare, senior frontend developer at KredX. React, Next.js and TypeScript: design systems, micro-frontends, KYC and payments, plus eight side projects.',
   )
   const featured = FEATURED.map((id) => projects.find((p) => p.id === id)!)
   const highlights = impact.filter((i) => ['Company onboarding', 'Lighthouse score', 'Shared UI components'].includes(i.what))

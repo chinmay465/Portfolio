@@ -1,0 +1,21 @@
+{
+  "comment": "Shared by the web app and the Android app. Order matters: earlier entries win ties, and a platform listed in 'beats' takes the deal when both are mentioned (Instamart over Swiggy).",
+  "platforms": [
+    { "id": "zomato", "name": "Zomato", "group": "food", "color": "#e23744", "names": ["zomato"], "domains": ["zomato.com", "zoma.to"] },
+    { "id": "swiggy", "name": "Swiggy", "group": "food", "color": "#fc8019", "names": ["swiggy"], "domains": ["swiggy.com", "swig.gy"] },
+    { "id": "instamart", "name": "Instamart", "group": "grocery", "color": "#e2387f", "names": ["instamart"], "domains": ["swiggy.com/instamart"], "beats": ["swiggy"] },
+    { "id": "blinkit", "name": "Blinkit", "group": "grocery", "color": "#f8cb46", "names": ["blinkit", "grofers"], "domains": ["blinkit.com", "blinkit.in"] },
+    { "id": "zepto", "name": "Zepto", "group": "grocery", "color": "#8b5cf6", "names": ["zepto"], "domains": ["zeptonow.com", "zepto.co", "zepto.com"] },
+    { "id": "bigbasket", "name": "BigBasket", "group": "grocery", "color": "#84c225", "names": ["bigbasket", "bbnow", "bb now"], "domains": ["bigbasket.com"] },
+    { "id": "amazon", "name": "Amazon", "group": "shopping", "color": "#ff9900", "names": ["amazon"], "domains": ["amazon.in", "amzn.to", "amzn.in", "amazon.com"] },
+    { "id": "flipkart", "name": "Flipkart", "group": "shopping", "color": "#2874f0", "names": ["flipkart"], "domains": ["flipkart.com", "fkrt.it", "fkrt.co", "fktr.in"] },
+    { "id": "myntra", "name": "Myntra", "group": "shopping", "color": "#ff3f6c", "names": ["myntra"], "domains": ["myntra.com", "myntr.it"] },
+    { "id": "ajio", "name": "Ajio", "group": "shopping", "color": "#6f93b8", "names": ["ajio"], "domains": ["ajio.com", "ajiio.in"] },
+    { "id": "nykaa", "name": "Nykaa", "group": "shopping", "color": "#fc2779", "names": ["nykaa"], "domains": ["nykaa.com", "nykaafashion.com"] },
+    { "id": "jiomart", "name": "JioMart", "group": "grocery", "color": "#0078ad", "names": ["jiomart", "jio mart"], "domains": ["jiomart.com"] },
+    { "id": "pvr", "name": "PVR INOX", "group": "movies", "color": "#ffcc00", "names": ["pvr", "inox"], "domains": ["pvrcinemas.com", "inoxmovies.com"] },
+    { "id": "bookmyshow", "name": "BookMyShow", "group": "movies", "color": "#f84464", "names": ["bookmyshow", "book my show"], "domains": ["bookmyshow.com", "bmsurl.co"] },
+    { "id": "district", "name": "District", "group": "movies", "color": "#7c3aed", "names": ["district app", "district by zomato"], "domains": ["district.in"] },
+    { "id": "other", "name": "Other stores", "group": "other", "color": "#94a3b8", "names": [], "domains": [] }
+  ]
+}

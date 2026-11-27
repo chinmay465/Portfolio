@@ -1121,6 +1121,114 @@ kbd {
   border-radius: 3px;
 }
 
+/* Bachat */
+.vis-bachat {
+  background: linear-gradient(160deg, #1c1a08, #0e0c15 70%);
+}
+.ba-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--ink-3);
+}
+.ba-rule b {
+  color: #12100a;
+  background: var(--accent);
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+.ba-rule em {
+  font-style: normal;
+  color: #ff3d7f;
+  font-weight: 600;
+}
+.ba-count strong {
+  color: var(--ink);
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  margin-right: 4px;
+}
+.ba-toast {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  top: 52px;
+  z-index: 2;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(32, 28, 42, 0.96);
+  border: 1px solid #ff3d7f;
+  box-shadow: 0 16px 40px -12px rgba(255, 61, 127, 0.5);
+  color: var(--ink-3);
+  font-size: 13px;
+  animation: ba-drop 0.45s var(--ease) both;
+}
+.ba-toast b {
+  display: block;
+  color: var(--ink);
+}
+@keyframes ba-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+}
+.ba-feed {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 7px;
+}
+.ba-feed li {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid transparent;
+  color: var(--ink-3);
+  animation: line-in 0.5s var(--ease) both;
+}
+.ba-feed li.hit {
+  border-color: color-mix(in oklab, var(--accent) 45%, transparent);
+  color: var(--ink);
+}
+.ba-feed li.wow {
+  border-color: #ff3d7f;
+  background: rgba(255, 61, 127, 0.1);
+  color: var(--ink);
+}
+.ba-tag {
+  font-weight: 800;
+  font-size: 17px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.wow .ba-tag {
+  color: #ff3d7f;
+}
+.ba-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ba-text i {
+  font-style: normal;
+  font-weight: 700;
+  color: var(--c);
+  margin-right: 8px;
+}
+
 /* Shodh */
 .vis-shodh {
   background: linear-gradient(160deg, #0d1f24, #07100f 70%);

@@ -7,11 +7,11 @@ import ProjectCard from '../components/ProjectCard'
 const FILTERS: { id: string; label: string; test: (p: Project) => boolean }[] = [
   { id: 'all', label: 'All', test: () => true },
   { id: 'web', label: 'Web apps', test: (p) => Boolean(p.live) },
-  { id: 'android', label: 'Android apps', test: (p) => p.kind === 'Android app' },
+  { id: 'android', label: 'Android apps', test: (p) => p.kind === 'Android app' || Boolean(p.download) },
 ]
 
 export default function Projects() {
-  usePageMeta('Projects', 'Seven side projects by Chinmay Upare: web apps in React, TypeScript and Python, and Android apps in Kotlin.')
+  usePageMeta('Projects', `${projects.length} side projects by Chinmay Upare: web apps in React, TypeScript and Python, and Android apps in Kotlin.`)
   const [params, setParams] = useSearchParams()
   const current = FILTERS.find((f) => f.id === params.get('type')) ?? FILTERS[0]
   const list = projects.filter(current.test)

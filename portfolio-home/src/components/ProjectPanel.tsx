@@ -80,6 +80,11 @@ export default function ProjectPanel({ project: p, health, reduced }: Props) {
               Try the demo
             </Link>
           )}
+          {p.live && p.download && (
+            <a className="btn btn-ghost" href={p.download} target="_blank" rel="noopener noreferrer">
+              Get the APK
+            </a>
+          )}
           {p.code && (
             <a className="btn btn-ghost" href={p.code} target="_blank" rel="noopener noreferrer">
               View the code
