@@ -1,10 +1,26 @@
 import { describe, expect, it } from 'vitest'
-import { dayKey, formatDate, matchesQuery, toDevanagari } from './format'
+import { dayKey, formatDate, formatShortDate, matchesQuery, num, toDevanagari } from './format'
 
 describe('toDevanagari', () => {
   it('converts every digit', () => {
     expect(toDevanagari(2026)).toBe('२०२६')
     expect(toDevanagari('17/11')).toBe('१७/११')
+  })
+  it('maps each of 0–9 to its Devanagari numeral', () => {
+    expect(toDevanagari('0123456789')).toBe('०१२३४५६७८९')
+  })
+  it('leaves non-digits, including Devanagari text, untouched', () => {
+    expect(toDevanagari('सकाळ 1932')).toBe('सकाळ १९३२')
+    expect(toDevanagari('Pune')).toBe('Pune')
+    expect(toDevanagari('')).toBe('')
+  })
+})
+
+describe('num', () => {
+  it('uses Devanagari numerals in Marathi and Latin digits in English', () => {
+    expect(num(7, 'mr')).toBe('७')
+    expect(num(1881, 'mr')).toBe('१८८१')
+    expect(num(1881, 'en')).toBe('1881')
   })
 })
 
@@ -15,6 +31,51 @@ describe('formatDate', () => {
   })
   it('formats English', () => {
     expect(formatDate(d, 'en')).toEqual({ weekday: 'Tuesday', date: '17 November 2026' })
+  })
+
+  it('names every Marathi month', () => {
+    const months = Array.from({ length: 12 }, (_, m) => formatDate(new Date(2026, m, 1), 'mr').date)
+    expect(months).toEqual([
+      '१ जानेवारी २०२६',
+      '१ फेब्रुवारी २०२६',
+      '१ मार्च २०२६',
+      '१ एप्रिल २०२६',
+      '१ मे २०२६',
+      '१ जून २०२६',
+      '१ जुलै २०२६',
+      '१ ऑगस्ट २०२६',
+      '१ सप्टेंबर २०२६',
+      '१ ऑक्टोबर २०२६',
+      '१ नोव्हेंबर २०२६',
+      '१ डिसेंबर २०२६',
+    ])
+  })
+
+  it('names every Marathi weekday', () => {
+    // 15–21 November 2026 runs Sunday to Saturday.
+    const days = Array.from({ length: 7 }, (_, i) => formatDate(new Date(2026, 10, 15 + i), 'mr').weekday)
+    expect(days).toEqual(['रविवार', 'सोमवार', 'मंगळवार', 'बुधवार', 'गुरुवार', 'शुक्रवार', 'शनिवार'])
+  })
+
+  it('names every English weekday', () => {
+    const days = Array.from({ length: 7 }, (_, i) => formatDate(new Date(2026, 10, 15 + i), 'en').weekday)
+    expect(days).toEqual(['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'])
+  })
+
+  it('writes two-digit days and the year in Devanagari', () => {
+    expect(formatDate(new Date(2027, 0, 31), 'mr')).toEqual({ weekday: 'रविवार', date: '३१ जानेवारी २०२७' })
+  })
+})
+
+describe('formatShortDate', () => {
+  it('formats day and month in Marathi', () => {
+    expect(formatShortDate({ y: 2026, m: 11, d: 17 }, 'mr')).toBe('१७ नोव्हेंबर')
+    expect(formatShortDate({ y: 2026, m: 5, d: 3 }, 'mr')).toBe('३ मे')
+  })
+  it('uses the short English month', () => {
+    expect(formatShortDate({ y: 2026, m: 11, d: 17 }, 'en')).toBe('17 Nov')
+    expect(formatShortDate({ y: 2026, m: 1, d: 9 }, 'en')).toBe('9 Jan')
+    expect(formatShortDate({ y: 2026, m: 12, d: 31 }, 'en')).toBe('31 Dec')
   })
 })
 
