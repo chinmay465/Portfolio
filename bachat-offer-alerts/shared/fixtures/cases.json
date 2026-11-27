@@ -15,6 +15,9 @@
     { "text": "BookMyShow: ₹200 off on 2 tickets, code SHOW200", "percent": null, "kind": null, "upTo": false, "priceError": false, "platform": "bookmyshow", "extraordinary": false },
     { "text": "Big deal on cookware", "links": ["https://www.swiggy.com/instamart/item/123"], "percent": null, "kind": null, "upTo": false, "priceError": false, "platform": "instamart", "extraordinary": false },
     { "text": "Ajio insane loot: Puma sneakers -91%\n₹449 only", "percent": 91, "kind": "percent", "upTo": false, "priceError": false, "platform": "ajio", "extraordinary": true },
+    { "text": "90% off on - Swiggy Black Friday Sale upto 90% off on food, restaurant specific", "percent": 90, "kind": "percent", "upTo": true, "priceError": false, "platform": "swiggy", "extraordinary": false },
+    { "text": "Black Friday Sale | Upto 50% Off + Extra 20% Off | Free shipping on all orders", "percent": 20, "kind": "percent", "upTo": false, "priceError": false, "platform": "other", "extraordinary": false },
+    { "text": "Loot: Puma winter wear Min 65% off", "percent": 65, "kind": "percent", "upTo": false, "priceError": false, "platform": "other", "extraordinary": false },
     { "text": "Up to 90% off on Amazon Great Indian Sale fashion", "percent": 90, "kind": "percent", "upTo": true, "priceError": false, "platform": "amazon", "extraordinary": false }
   ]
 }

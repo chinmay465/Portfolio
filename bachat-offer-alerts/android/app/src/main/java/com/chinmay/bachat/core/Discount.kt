@@ -125,6 +125,9 @@ object Discount {
         val priceError = PRICE_ERROR.containsMatchIn(t)
         val loot = LOOT.containsMatchIn(t)
 
+        // "90% off on - Sale upto 90% off": a headline that restates an "up to" claim is still "up to".
+        upToBest?.let { claim -> exact.removeAll { it.rank == 2 && it.value == claim } }
+
         if (exact.isNotEmpty()) {
             val priceBased = exact.filter { it.rank == 3 }
             val pool = priceBased.ifEmpty { exact }

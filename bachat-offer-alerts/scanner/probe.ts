@@ -32,6 +32,11 @@ for (const s of sources) {
         const pct = d.percent === null ? '  — ' : `${d.upTo ? '≤' : ' '}${String(d.percent).padStart(3)}%`
         const flags = [d.kind, d.priceError && 'price-error', d.loot && 'loot'].filter(Boolean).join(',')
         console.log(`      ${pct} ${d.platform.padEnd(10)} ${flags.padEnd(16)} ${d.title.slice(0, 90)}`)
+        // Unrecognised store: show what the post says, to grow shared/data/platforms.json.
+        if (d.platform === 'other') {
+          const hosts = [...new Set([d.url, d.postUrl].map((u) => { try { return new URL(u).hostname } catch { return '' } }))].join(' ')
+          console.log(`              ↳ ${d.text.replace(/\s+/g, ' ').slice(0, 220)}  [${hosts}]`)
+        }
       }
     }
     if (!deals.length) failed++

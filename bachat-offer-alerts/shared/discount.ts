@@ -130,6 +130,12 @@ export function extractDiscount(text: string): DiscountInfo {
   const priceError = PRICE_ERROR.test(t)
   const loot = LOOT.test(t)
 
+  // "90% off on - Sale upto 90% off": a headline that restates an "up to" claim is still "up to".
+  if (upToBest !== null) {
+    const claim = upToBest
+    for (let i = exact.length - 1; i >= 0; i--) if (exact[i].rank === 2 && exact[i].value === claim) exact.splice(i, 1)
+  }
+
   if (exact.length) {
     // Prices beat stated percentages (they're what you pay); otherwise the biggest claim wins.
     const priceBased = exact.filter((e) => e.rank === 3)
