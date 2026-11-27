@@ -31,14 +31,14 @@ describe('/projects filter', () => {
 
   it('?type=web shows only the web apps', async () => {
     await open('/projects?type=web')
-    expect(cards()).toEqual(names(['rail', 'ekatra', 'ank', 'shodh', 'setu']))
+    expect(cards()).toEqual(names(['rail', 'bachat', 'ekatra', 'ank', 'shodh', 'setu']))
     expect(selected()).toBe('Web apps')
     expect(screen.getByRole('region', { name: 'Web apps' })).toBeTruthy()
   })
 
   it('?type=android shows only the Android apps', async () => {
     await open('/projects?type=android')
-    expect(cards()).toEqual(names(['kavach', 'swar']))
+    expect(cards()).toEqual(names(['bachat', 'kavach', 'swar']))
     expect(selected()).toBe('Android apps')
   })
 
@@ -52,15 +52,15 @@ describe('/projects filter', () => {
     await open('/projects')
     const count = (label: string) => screen.getByRole('tab', { name: new RegExp(`^${label}`) }).querySelector('span')?.textContent
     expect(count('All')).toBe(String(projects.length))
-    expect(count('Web apps')).toBe('5')
-    expect(count('Android apps')).toBe('2')
+    expect(count('Web apps')).toBe('6')
+    expect(count('Android apps')).toBe('3')
   })
 
   it('updates the URL and the cards when a tab is pressed', async () => {
     const router = await open('/projects')
     fireEvent.click(screen.getByRole('tab', { name: /^Android apps/ }))
     expect(router.state.location.search).toBe('?type=android')
-    expect(cards()).toEqual(names(['kavach', 'swar']))
+    expect(cards()).toEqual(names(['bachat', 'kavach', 'swar']))
     fireEvent.click(screen.getByRole('tab', { name: /^All/ }))
     expect(router.state.location.search).toBe('')
     expect(cards()).toHaveLength(projects.length)

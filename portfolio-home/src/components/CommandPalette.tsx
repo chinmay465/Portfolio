@@ -25,6 +25,9 @@ const items: Item[] = [
       : p.download
         ? { id: `${p.id}-apk`, title: `Get the ${p.name} APK`, hint: 'GitHub Actions', href: p.download, external: true, accent: p.accent }
         : { id: `${p.id}-demo`, title: `Try the ${p.name} demo`, hint: 'Interactive', href: `/projects/${p.id}#demo`, external: false, accent: p.accent },
+    ...(p.live && p.download
+      ? [{ id: `${p.id}-apk`, title: `Get the ${p.name} APK`, hint: 'GitHub Actions', href: p.download, external: true, accent: p.accent }]
+      : []),
     ...(p.code
       ? [{ id: `${p.id}-code`, title: `${p.name} source code`, hint: 'GitHub', href: p.code, external: true, accent: p.accent }]
       : []),

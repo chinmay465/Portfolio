@@ -118,6 +118,27 @@ services:
       # Sites allowed to send visits. Add the custom domain here once it's live.
       - key: ALLOWED_ORIGINS
         value: https://chinmay-upare.onrender.com
+  # Bachat: offer alerts (PWA + web push). GitHub Actions scans every ten minutes
+  # (.github/workflows/bachat-scan.yml), so this free service can sleep between visits.
+  # Paste the same Postgres URL (Neon's free tier works) into DATABASE_URL here and into
+  # the repo secret BACHAT_DATABASE_URL: both sides share deals, subscribers and push keys.
+  - type: web
+    name: bachat-offer-alerts
+    runtime: node
+    rootDir: bachat-offer-alerts
+    branch: main
+    autoDeploy: true
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        sync: false
+      - key: BACHAT_CONTACT
+        value: https://bachat-offer-alerts.onrender.com
   # Rail Planner: FastAPI + React in one Docker image. Set RAILRADAR_API_KEY in the
   # dashboard when the Blueprint asks (it powers seat availability). rootDir keeps
   # deploys to changes under rail-planner/.

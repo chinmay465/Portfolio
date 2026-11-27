@@ -9,7 +9,7 @@ import { useMagnetic } from '../hooks/motion'
 export default function AllProjectsCta() {
   const arrow = useMagnetic<HTMLSpanElement>(0.4)
   const web = projects.filter((p) => p.live).length
-  const android = projects.filter((p) => p.kind === 'Android app').length
+  const android = projects.filter((p) => p.kind === 'Android app' || Boolean(p.download)).length
 
   const move = (e: React.PointerEvent<HTMLAnchorElement>) => {
     const r = e.currentTarget.getBoundingClientRect()

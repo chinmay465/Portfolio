@@ -63,7 +63,7 @@ describe('projects', () => {
     expect(JSON.stringify(swar)).not.toContain('github.com')
   })
   it('only pings projects that have a live URL', () => {
-    expect(webProjects.map((p) => p.id)).toEqual(['rail', 'ekatra', 'ank', 'shodh', 'setu'])
+    expect(webProjects.map((p) => p.id)).toEqual(['rail', 'bachat', 'ekatra', 'ank', 'shodh', 'setu'])
     expect(projects.map((p) => p.id)).toContain('kavach')
     expect(projects.map((p) => p.id)).toContain('swar')
   })

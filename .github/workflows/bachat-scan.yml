@@ -1,0 +1,35 @@
+name: Bachat scan
+
+# Checks the deal sources and sends web push alerts every ten minutes, so the
+# Render free service can sleep. Needs the repo secret BACHAT_DATABASE_URL: the
+# same Postgres connection string the bachat-offer-alerts service uses.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: bachat-scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    defaults:
+      run:
+        working-directory: bachat-offer-alerts
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: bachat-offer-alerts
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: bachat-offer-alerts/package-lock.json
+      - run: npm ci --omit=dev
+      - name: Scan and alert
+        env:
+          DATABASE_URL: ${{ secrets.BACHAT_DATABASE_URL }}
+        run: npm run scan

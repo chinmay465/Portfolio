@@ -1,4 +1,4 @@
-export type ProjectId = 'rail' | 'kavach' | 'swar' | 'ekatra' | 'ank' | 'shodh' | 'setu'
+export type ProjectId = 'rail' | 'bachat' | 'kavach' | 'swar' | 'ekatra' | 'ank' | 'shodh' | 'setu'
 
 export interface Project {
   id: ProjectId
@@ -13,7 +13,7 @@ export interface Project {
   kind: 'Static site' | 'Node web service' | 'Python web service' | 'Android app'
   /** Deployed web app. Pinged by the status console. Absent for the Android apps. */
   live?: string
-  /** Where to get the Android APK (built by CI). */
+  /** Where to get the Android APK (built by CI). A web app can have one too (Bachat). */
   download?: string
   /** Source on GitHub. Absent for apps kept in a private repository. */
   code?: string
@@ -45,6 +45,26 @@ export const projects: Project[] = [
     live: 'https://chinmay-rail-planner.onrender.com',
     code: `${repo}/tree/main/rail-planner`,
     accent: '#ff6b3d',
+  },
+  {
+    id: 'bachat',
+    name: 'Bachat',
+    glyph: 'बचत',
+    meaning: 'savings',
+    tagline: 'Alerts for big offers on Zomato, Swiggy, Instamart, Blinkit, Zepto, Amazon, Flipkart and PVR, by your own rules.',
+    points: [
+      'Watches public deal channels and works out the store and the real discount from each post: price against MRP, flat-off-on-minimum, buy-one-get-one and ₹1 deals',
+      'Your rules: minimum discount, which stores, offers live now or posted earlier, keywords, muted words and quiet hours',
+      'A separate loud alert for extraordinary deals: real 90%+ off or a price error, from any store, even during quiet hours',
+      'A PWA with web push, scanned every ten minutes by GitHub Actions, and a Kotlin Android app that checks on the phone itself',
+      'One discount engine in TypeScript with a Kotlin port, both held to the same shared test cases',
+    ],
+    stack: ['React 19', 'TypeScript', 'Express', 'Web Push', 'Kotlin', 'Jetpack Compose', 'WorkManager'],
+    kind: 'Node web service',
+    live: 'https://bachat-offer-alerts.onrender.com',
+    download: `${repo}/actions/workflows/ci.yml?query=branch%3Amain`,
+    code: `${repo}/tree/main/bachat-offer-alerts`,
+    accent: '#d4ff3a',
   },
   {
     id: 'kavach',
