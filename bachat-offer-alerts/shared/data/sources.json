@@ -1,0 +1,21 @@
+{
+  "comment": "Default offer sources, shared by the web app and the Android app. Telegram entries read the channel's public web preview (t.me/s/<channel>), which needs no login or API key. Users can add more public channels in Settings.",
+  "sources": [
+    {
+      "id": "tg:desidime",
+      "kind": "telegram",
+      "channel": "desidime",
+      "name": "DesiDime",
+      "enabled": true,
+      "note": "India's biggest deals community: food, grocery, shopping and bank offers, with discount % in most posts"
+    },
+    {
+      "id": "rss:dealsforindia",
+      "kind": "rss",
+      "url": "https://www.reddit.com/r/dealsforindia/new/.rss",
+      "name": "r/dealsforindia",
+      "enabled": true,
+      "note": "Reddit deals board; Reddit sometimes blocks cloud servers, so this works best from the Android app"
+    }
+  ]
+}
