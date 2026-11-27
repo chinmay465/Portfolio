@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { PAPERS } from '../data/papers'
 import { dayKey, formatDate, formatShortDate, matchesQuery, num, toDevanagari } from './format'
 
 describe('toDevanagari', () => {
@@ -93,5 +94,47 @@ describe('matchesQuery', () => {
   })
   it('matches everything on an empty query', () => {
     expect(matchesQuery(['x'], '  ')).toBe(true)
+  })
+})
+
+describe('paper search', () => {
+  // Same call App.tsx makes for the search box.
+  const search = (query: string) =>
+    PAPERS.filter((p) => matchesQuery([p.name.mr, p.name.en], query)).map((p) => p.id)
+
+  it('finds every paper by its Marathi or English name', () => {
+    for (const p of PAPERS) {
+      expect(search(p.name.mr)).toContain(p.id)
+      expect(search(p.name.en)).toContain(p.id)
+    }
+  })
+
+  it('matches the same papers for a prefix typed in either script', () => {
+    expect(search('लोक')).toEqual(['lokmat', 'loksatta'])
+    expect(search('lok')).toEqual(['lokmat', 'loksatta'])
+    expect(search('पुढा')).toEqual(['pudhari'])
+    expect(search('pudh')).toEqual(['pudhari'])
+  })
+
+  it('ignores case and spaces in English names', () => {
+    expect(search('SAKAL')).toEqual(['sakal'])
+    expect(search('punyanagari')).toEqual(['punya-nagari'])
+    expect(search('  Tarun   Bharat ')).toEqual(['tarun-bharat'])
+  })
+
+  it('ignores spaces in Devanagari names', () => {
+    expect(search('तरुणभारत')).toEqual(['tarun-bharat'])
+    expect(search('महाराष्ट्र टाइम्स')).toEqual(['maharashtra-times'])
+    expect(search('पुण्य नगरी')).toEqual(['punya-nagari'])
+  })
+
+  it('matches inside a name, not only at the start', () => {
+    expect(search('टाइम्स')).toEqual(['maharashtra-times'])
+    expect(search('times')).toEqual(['maharashtra-times'])
+  })
+
+  it('returns nothing for a name no paper has', () => {
+    expect(search('हिंदू')).toEqual([])
+    expect(search('hindu')).toEqual([])
   })
 })
