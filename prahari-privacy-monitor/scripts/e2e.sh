@@ -18,7 +18,8 @@ fail() { echo "::error title=Prahari e2e::$1"; exit 1; }
 diagnostics() {
   set +e
   echo "::group::crash buffer"; adb logcat -d -b crash; echo "::endgroup::"
-  echo "::group::Prahari log"; adb logcat -d -s PrahariWatch PrahariOps AndroidRuntime; echo "::endgroup::"
+  echo "::group::Prahari log"; adb logcat -d -s PrahariWatch PrahariOps PrahariDns AndroidRuntime:E; echo "::endgroup::"
+  echo "::group::DNS checks"; cat "$OUT/ping.txt" 2> /dev/null; adb shell dumpsys connectivity | grep -iE "VPN|dns" | head -20; echo "::endgroup::"
   echo "::group::usage events"; adb shell dumpsys usagestats | grep -E "ACTIVITY_RESUMED|FOREGROUND_SERVICE_START" | tail -12; adb shell cmd package query-activities -a android.intent.action.MAIN -c android.intent.category.HOME | grep -i "packageName" | head; echo "::endgroup::"
   echo "::group::camera service"; adb shell dumpsys media.camera | grep -iE "client|event|connect|disconnect|status" | tail -60; echo "::endgroup::"
   echo "::group::Prahari notification"; grep -A12 "pkg=$PKG" "$OUT/notifications.txt" 2>/dev/null | head -40; echo "::endgroup::"
@@ -173,7 +174,8 @@ done
 sleep 5
 shot 09-dns-watch
 adb shell dumpsys activity services "$PKG" | grep -q "DnsWatchService" || fail "DNS watch did not start"
-resolves() { adb shell ping -c 1 -W 3 "$1" 2>&1 | tee -a "$OUT/ping.txt" | grep -q "^PING "; }
+# Resolution, not reachability: ping prints "PING host (ip)" once the name resolves.
+resolves() { adb shell ping -c 1 -W 2 "$1" 2>&1 | tee -a "$OUT/ping.txt" | grep -q "PING "; }
 resolves example.com || fail "DNS broken with DNS watch on"
 resolves www.wikipedia.org || fail "DNS broken with DNS watch on"
 adb root > /dev/null && sleep 3 && adb wait-for-device

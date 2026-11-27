@@ -9,6 +9,7 @@ import android.system.ErrnoException
 import android.system.Os
 import android.system.OsConstants
 import android.system.StructPollfd
+import android.util.Log
 import com.chinmay.prahari.core.LiveState
 import com.chinmay.prahari.data.Db
 import com.chinmay.prahari.watch.UsageTracker
@@ -37,7 +38,10 @@ class DnsTunnel(
     /** Called if the tunnel stops on its own, so the VPN is torn down instead of swallowing DNS. */
     private val onDied: () -> Unit,
 ) {
-    private val doh = DohClient()
+    // Short timeouts: a slow DoH server must not stall every app's lookups.
+    private val doh = DohClient(timeoutMs = 2_000)
+    @Volatile private var dohDownUntil = 0L
+    private val stats = java.util.concurrent.atomic.AtomicIntegerArray(4) // queries, doh, network, failed
     private val cm = service.getSystemService(ConnectivityManager::class.java)
     private val power = service.getSystemService(PowerManager::class.java)
     private val usage = UsageTracker(service)
@@ -58,6 +62,7 @@ class DnsTunnel(
     private val uidNames = HashMap<Int, String>()
 
     fun start() {
+        Log.i(TAG, "tunnel up")
         thread = Thread(::loop, "prahari-dns").also { it.start() }
     }
 
@@ -106,7 +111,8 @@ class DnsTunnel(
                     }
                 }
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.w(TAG, "tunnel loop ended: ${e.javaClass.simpleName}")
         }
         if (!stopping) onDied()
     }
@@ -174,16 +180,32 @@ class DnsTunnel(
 
     private fun forward(query: Packets.DnsQuery) {
         val payload = query.dnsPayload()
-        val response = try {
-            doh.resolve(payload)
-        } catch (_: IOException) {
-            // Some networks block DoH. Watching must never cost the phone its DNS, so fall
-            // back to the network's own resolver, the one Android would use without Prahari.
-            try {
-                plainDns(payload)
+        val n = stats.incrementAndGet(0)
+        // DoH first. If it fails (some networks block it), use the network's own resolver,
+        // the one Android would use without Prahari, and skip DoH for a few minutes so
+        // lookups stay fast. Watching must never cost the phone its DNS.
+        val now = System.currentTimeMillis()
+        var response: ByteArray? = null
+        if (now >= dohDownUntil) {
+            response = try {
+                doh.resolve(payload).also { stats.incrementAndGet(1) }
             } catch (_: IOException) {
-                return
+                dohDownUntil = now + DOH_RETRY_MS
+                Log.w(TAG, "DoH unreachable, using the network's DNS for ${DOH_RETRY_MS / 60_000} min")
+                null
             }
+        }
+        if (response == null) {
+            response = try {
+                plainDns(payload).also { stats.incrementAndGet(2) }
+            } catch (_: IOException) {
+                null
+            }
+        }
+        if (n % 25 == 1) Log.i(TAG, "lookups=${stats[0]} doh=${stats[1]} network=${stats[2]} failed=${stats[3]}")
+        if (response == null) {
+            stats.incrementAndGet(3)
+            return
         }
         try {
             synchronized(output) { output.write(Packets.buildReply(query, response)) }
@@ -223,6 +245,8 @@ class DnsTunnel(
     }
 
     private companion object {
+        const val TAG = "PrahariDns"
+        const val DOH_RETRY_MS = 5 * 60_000L
         const val BATCH = 50
         const val FLUSH_MS = 30_000L
     }
