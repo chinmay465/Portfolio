@@ -7,6 +7,7 @@ import SetuVisual from './SetuVisual'
 import RailVisual from './RailVisual'
 import KavachVisual from './KavachVisual'
 import SwarVisual from './SwarVisual'
+import PrahariVisual from './PrahariVisual'
 
 export const VISUALS: Record<ProjectId, ComponentType<{ active: boolean }>> = {
   ekatra: EkatraVisual,
@@ -16,4 +17,5 @@ export const VISUALS: Record<ProjectId, ComponentType<{ active: boolean }>> = {
   rail: RailVisual,
   kavach: KavachVisual,
   swar: SwarVisual,
+  prahari: PrahariVisual,
 }
