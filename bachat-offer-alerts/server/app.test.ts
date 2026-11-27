@@ -1,7 +1,7 @@
 import type { AddressInfo } from 'node:net'
 import type { Server } from 'node:http'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { fixtureFetch } from '../scanner/fetch.ts'
+import { FIXTURE_SOURCES, fixtureFetch } from '../scanner/fetch.ts'
 import { runScan, sourcesFor } from '../scanner/scan.ts'
 import { DEFAULT_SETTINGS, normalizeSettings } from '../shared/types.ts'
 import { createApp, isPushEndpoint } from './app.ts'
@@ -31,7 +31,7 @@ beforeAll(async () => {
   store = new Store(db)
   await store.migrate()
   const status: AppState = { state: 'ready', storage: 'pglite', store, push: fakePush }
-  server = createApp({ status, fetchText: fixtureFetch, scanCooldown: 0 }).listen(0)
+  server = createApp({ status, fetchText: fixtureFetch, sources: FIXTURE_SOURCES, scanCooldown: 0 }).listen(0)
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
 }, 60_000)
 
@@ -130,7 +130,8 @@ describe('Bachat server', () => {
 
   it('adds subscribers\' own channels as sources, once each', () => {
     const subs = [{ settings: normalizeSettings({ channels: ['LootChannel', 'desidime'] }) }, { settings: normalizeSettings({ channels: ['lootchannel'] }) }]
-    expect(sourcesFor(subs).map((s) => s.id)).toEqual(['tg:desidime', 'rss:dealsforindia', 'tg:lootchannel'])
+    expect(sourcesFor(subs).map((s) => s.id)).toEqual(['tg:desidime', 'tg:grabonindiaofficial', 'tg:powerloot', 'tg:realearnkaro', 'tg:lootchannel'])
+    expect(sourcesFor(subs, FIXTURE_SOURCES).map((s) => s.id)).toEqual(['tg:desidime', 'rss:dealsforindia', 'tg:lootchannel'])
   })
 
   it('reports a channel that is not public', async () => {

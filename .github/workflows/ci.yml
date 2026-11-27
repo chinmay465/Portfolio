@@ -244,7 +244,7 @@ jobs:
       # down shouldn't fail the build, but the log shows which ones still work.
       - name: Live source check
         continue-on-error: true
-        run: npm run probe -- desidime GrabOnIndiaOfficial PowerLoot magixdeals realearnkaro bestlootdeals PremiumLootDeals https://www.reddit.com/r/dealsforindia/new/.rss
+        run: npm run probe -- --show
 
   bachat-android:
     runs-on: ubuntu-latest

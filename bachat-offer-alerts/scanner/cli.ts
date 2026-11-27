@@ -3,7 +3,7 @@
 import { openDb, describeError } from '../server/db.ts'
 import { webPushSender } from '../server/push.ts'
 import { Store } from '../server/store.ts'
-import { pickFetch } from './fetch.ts'
+import { pickFetch, pickSources } from './fetch.ts'
 import { runScan } from './scan.ts'
 
 const url = process.env.DATABASE_URL?.trim()
@@ -16,7 +16,7 @@ try {
   const db = await openDb(url, process.env.BACHAT_DATA_DIR ?? 'memory://')
   const store = new Store(db)
   await store.migrate()
-  const summary = await runScan(store, pickFetch(), await webPushSender(store))
+  const summary = await runScan(store, pickFetch(), await webPushSender(store), Date.now(), pickSources())
   for (const s of summary.sources) {
     console.log(`${s.ok ? 'ok ' : 'ERR'} ${s.name.padEnd(22)} ${String(s.posts).padStart(3)} posts, ${String(s.fresh).padStart(3)} new${s.error ? `  (${s.error})` : ''}`)
   }

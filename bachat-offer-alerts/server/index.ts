@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { pickFetch } from '../scanner/fetch.ts'
+import { pickFetch, pickSources } from '../scanner/fetch.ts'
 import { runScan } from '../scanner/scan.ts'
 import { createApp } from './app.ts'
 import type { AppState } from './app.ts'
@@ -17,13 +17,14 @@ const scanEvery = Number(process.env.BACHAT_SCAN_MINUTES ?? 10)
 
 const status: AppState = { state: 'connecting', storage: databaseUrl ? 'postgres' : 'pglite', store: null, push: null }
 const fetchText = pickFetch()
+const sources = pickSources()
 
 if (!databaseUrl) {
   console.warn('DATABASE_URL is not set: deals and subscribers go to an embedded database, which Render wipes on every deploy, and the GitHub Actions scanner cannot reach it.')
 }
 
 // Listen first so Render's health check passes while the database wakes.
-const app = createApp({ status, fetchText, distDir: path.join(__dirname, '..', 'dist') })
+const app = createApp({ status, fetchText, sources, distDir: path.join(__dirname, '..', 'dist') })
 const PORT = Number(process.env.PORT) || 3000
 const server = app.listen(PORT, '0.0.0.0', () => console.log(`bachat-offer-alerts listening on http://localhost:${PORT} (${status.storage})`))
 
@@ -37,7 +38,7 @@ async function connect(attempt = 1): Promise<void> {
     Object.assign(status, { state: 'ready', store, push, error: undefined })
     console.log(`database ready (${db.kind})`)
     if (scanEvery > 0) {
-      const tick = () => runScan(store, fetchText, push).then(
+      const tick = () => runScan(store, fetchText, push, Date.now(), sources).then(
         (s) => console.log(`scan: ${s.newDeals} new deals, ${s.pushes} alerts`),
         (err) => console.error('scan failed', describeError(err)),
       )

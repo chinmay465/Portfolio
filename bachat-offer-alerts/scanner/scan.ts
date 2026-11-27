@@ -57,9 +57,15 @@ const localHour = (tzOffset: number, now: number) => {
 }
 
 /** One check: read every source, store new deals, then send each subscriber what fits their settings. */
-export async function runScan(store: Store, fetchText: FetchText, push: PushSender | null, now = Date.now()): Promise<ScanSummary> {
+export async function runScan(
+  store: Store,
+  fetchText: FetchText,
+  push: PushSender | null,
+  now = Date.now(),
+  defaults: SourceDef[] = DEFAULT_SOURCES,
+): Promise<ScanSummary> {
   const subscribers = await store.subscribers()
-  const sources = sourcesFor(subscribers)
+  const sources = sourcesFor(subscribers, defaults)
   const reports: SourceReport[] = []
 
   // 1. Sources, four at a time.

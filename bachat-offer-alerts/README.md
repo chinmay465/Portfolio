@@ -36,7 +36,7 @@ At most five alerts go out per check; anything more becomes one "N more offers m
 
 ## What it can and can't see
 
-- ✅ **Public deal posts**: DesiDime's Telegram channel (read through the public `t.me/s/` web preview, no login or API key), r/dealsforindia, and any public channel you add.
+- ✅ **Public deal channels**: DesiDime, GrabOn India, PowerLoot and EarnKaro on Telegram (read through the public `t.me/s/` web preview, no login or API key), plus any public channel you add. CI's live source check (`npm run probe -- --show`) prints how every current post is read. RSS and Atom feeds are supported in code as well.
 - ➖ **Offers only inside your account**: personal coupons in the Swiggy, Zomato and Blinkit apps depend on your login and address, and no open feed exists. Swiggy's Builders Club API is invite-only and built for ordering. Zomato's MCP server is for ordering through an AI assistant.
 - ➖ **Amazon and PVR offer pages** block automated reading, and Amazon's product API (now the Creators API) is for its affiliates. Bachat relies on deal posts for them.
 
@@ -63,4 +63,4 @@ The VAPID keys for web push are made on first start and kept in the database, so
 
 ## Android
 
-`android/` is a Kotlin + Jetpack Compose app (minSdk 26). It reads the store list and default sources from `shared/data` and checks the sources itself, on the phone's own connection, so Reddit and Telegram see a normal home connection rather than a cloud server. CI runs the unit tests (including the shared cases), builds the APK, runs `scripts/privacy-check.sh` (only INTERNET and POST_NOTIFICATIONS plus WorkManager's own, no tracker SDKs, no unreviewed endpoints) and uploads `bachat-debug-apk`.
+`android/` is a Kotlin + Jetpack Compose app (minSdk 26). It reads the store list and default sources from `shared/data` and checks the sources itself, on the phone's own connection, so the channels see a normal home connection rather than a cloud server. CI runs the unit tests (including the shared cases), builds the APK, runs `scripts/privacy-check.sh` (only INTERNET and POST_NOTIFICATIONS plus WorkManager's own, no tracker SDKs, no unreviewed endpoints) and uploads `bachat-debug-apk`.

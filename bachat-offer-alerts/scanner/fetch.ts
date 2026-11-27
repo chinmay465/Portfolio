@@ -1,6 +1,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { DEFAULT_SOURCES } from '../shared/types.ts'
+import type { SourceDef } from '../shared/types.ts'
 
 export type FetchText = (url: string) => Promise<string>
 
@@ -39,3 +41,11 @@ export const fixtureFetch: FetchText = async (url) => {
 }
 
 export const pickFetch = (): FetchText => (process.env.BACHAT_FIXTURES === '1' ? fixtureFetch : fetchText)
+
+/** Offline demo sources: the DesiDime channel fixture and a Reddit feed fixture (RSS path). */
+export const FIXTURE_SOURCES: SourceDef[] = [
+  { id: 'tg:desidime', kind: 'telegram', channel: 'desidime', name: 'DesiDime', enabled: true },
+  { id: 'rss:dealsforindia', kind: 'rss', url: 'https://www.reddit.com/r/dealsforindia/new/.rss', name: 'r/dealsforindia', enabled: true },
+]
+
+export const pickSources = (): SourceDef[] => (process.env.BACHAT_FIXTURES === '1' ? FIXTURE_SOURCES : DEFAULT_SOURCES)

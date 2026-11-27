@@ -3,6 +3,7 @@ import path from 'node:path'
 import express from 'express'
 import type { NextFunction, Request, Response } from 'express'
 import { DEFAULT_SETTINGS, DEFAULT_SOURCES, PLATFORMS, normalizeSettings } from '../shared/types.ts'
+import type { SourceDef } from '../shared/types.ts'
 import type { FetchText } from '../scanner/fetch.ts'
 import { runScan } from '../scanner/scan.ts'
 import type { ScanSummary } from '../scanner/scan.ts'
@@ -20,6 +21,8 @@ export interface AppState {
 export interface AppOptions {
   status: AppState
   fetchText: FetchText
+  /** Sources to read besides subscribers' own channels (default: shared/data/sources.json). */
+  sources?: SourceDef[]
   distDir?: string
   /** Seconds between scans someone can trigger from the app. */
   scanCooldown?: number
@@ -117,7 +120,7 @@ export function createApp(opts: AppOptions): express.Express {
       return
     }
     try {
-      scanning ??= runScan(store, opts.fetchText, status.push).finally(() => {
+      scanning ??= runScan(store, opts.fetchText, status.push, Date.now(), opts.sources ?? DEFAULT_SOURCES).finally(() => {
         lastScanAt = Date.now()
         scanning = null
       })

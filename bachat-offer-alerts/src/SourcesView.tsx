@@ -72,7 +72,7 @@ export default function SourcesView({ status, settings, now, onSave }: Props) {
       <div className="card">
         <h2>What Bachat can and can’t see</h2>
         <ul className="facts">
-          <li><span>✅</span><span><b>Public deal posts.</b> Offers people share for Zomato, Swiggy, Instamart, Blinkit, Zepto, BigBasket, Amazon, Flipkart, Myntra, PVR INOX, BookMyShow and more, with the price, MRP and discount read from the post.</span></li>
+          <li><span>✅</span><span><b>Public deal channels.</b> Offers people share for Zomato, Swiggy, Instamart, Blinkit, Zepto, BigBasket, Amazon, Flipkart, Myntra, PVR INOX, BookMyShow and more, with the price, MRP and discount read from the post.</span></li>
           <li><span>✅</span><span><b>90%+ and price-error deals.</b> Spotted from the real price against the MRP, or from words like “price error” and “pricing glitch”. These are usually gone within minutes, so they get their own loud alert.</span></li>
           <li><span>➖</span><span><b>Offers only inside your account.</b> Personal coupons in the Swiggy, Zomato or Blinkit apps depend on your login and address, and no open feed exists for them. Swiggy’s Builders Club API is invite-only and made for ordering, not offer feeds.</span></li>
           <li><span>➖</span><span><b>Amazon and PVR offer pages.</b> They block automated reading, and Amazon’s product API is only for its affiliates, so Bachat relies on deal posts for them.</span></li>
