@@ -175,7 +175,13 @@ sleep 5
 shot 09-dns-watch
 adb shell dumpsys activity services "$PKG" | grep -q "DnsWatchService" || fail "DNS watch did not start"
 # Resolution, not reachability: ping prints "PING host (ip)" once the name resolves.
-resolves() { adb shell ping -c 1 -W 2 "$1" 2>&1 | tee -a "$OUT/ping.txt" | grep -q "PING "; }
+# (ping itself fails here: the emulator has no ICMP, so only its output counts.)
+resolves() {
+  local out
+  out=$(adb shell ping -c 1 -W 2 "$1" 2>&1 || true)
+  echo "$out" >> "$OUT/ping.txt"
+  grep -q "PING " <<< "$out"
+}
 resolves example.com || fail "DNS broken with DNS watch on"
 resolves www.wikipedia.org || fail "DNS broken with DNS watch on"
 adb root > /dev/null && sleep 3 && adb wait-for-device
