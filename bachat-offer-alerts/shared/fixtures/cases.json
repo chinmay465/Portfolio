@@ -1,0 +1,20 @@
+{
+  "comment": "Deal texts with the discount, store and extraordinary flag both apps must find. Read by shared/core.test.ts and the Android unit tests.",
+  "cases": [
+    { "text": "📉 96% Off\nWonderchef Stella Triply Cookware Set on Zepto\n₹200 ~~₹4999~~", "percent": 96, "kind": "price", "upTo": false, "priceError": false, "platform": "zepto", "extraordinary": true },
+    { "text": "LG 32 inch Full HD Monitor\n23% off\n₹15,314 (MRP ₹19,999)\nhttps://amzn.to/abc", "links": ["https://amzn.to/abc"], "percent": 23, "kind": "price", "upTo": false, "priceError": false, "platform": "amazon", "extraordinary": false },
+    { "text": "Bosch 9 kg Front Load Washing Machine, sold on Flipkart\n58% off at ₹23,563", "percent": 58, "kind": "percent", "upTo": false, "priceError": false, "platform": "flipkart", "extraordinary": false },
+    { "text": "Zomato: Flat ₹150 off on orders above ₹199 with code TRYNEW", "percent": 75, "kind": "flat", "upTo": false, "priceError": false, "platform": "zomato", "extraordinary": false },
+    { "text": "Swiggy Instamart ₹1 deal: Amul Taaza 1L @ ₹1 for new users", "percent": 100, "kind": "free", "upTo": false, "priceError": false, "platform": "instamart", "extraordinary": true },
+    { "text": "Swiggy: Upto 60% off on top restaurants this weekend", "percent": 60, "kind": "percent", "upTo": true, "priceError": false, "platform": "swiggy", "extraordinary": false },
+    { "text": "PRICE ERROR!! boAt Airdopes 141 for Rs. 99 on Amazon, grab fast", "percent": null, "kind": null, "upTo": false, "priceError": true, "platform": "amazon", "extraordinary": true },
+    { "text": "PVR INOX: Buy 1 Get 1 on movie tickets every Tuesday with Kotak cards", "percent": 50, "kind": "bogo", "upTo": false, "priceError": false, "platform": "pvr", "extraordinary": false },
+    { "text": "Blinkit pricing glitch: Cadbury Celebrations worth ₹500 for ₹49", "percent": 90, "kind": "price", "upTo": false, "priceError": true, "platform": "blinkit", "extraordinary": true },
+    { "text": "Pay electricity bill on Paytm and get 5% cashback up to ₹100", "percent": 5, "kind": "percent", "upTo": false, "priceError": false, "platform": "other", "extraordinary": false },
+    { "text": "Allen Solly 100% cotton shirts from ₹1,999 to ₹599 on Myntra", "percent": 70, "kind": "price", "upTo": false, "priceError": false, "platform": "myntra", "extraordinary": false },
+    { "text": "BookMyShow: ₹200 off on 2 tickets, code SHOW200", "percent": null, "kind": null, "upTo": false, "priceError": false, "platform": "bookmyshow", "extraordinary": false },
+    { "text": "Big deal on cookware", "links": ["https://www.swiggy.com/instamart/item/123"], "percent": null, "kind": null, "upTo": false, "priceError": false, "platform": "instamart", "extraordinary": false },
+    { "text": "Ajio insane loot: Puma sneakers -91%\n₹449 only", "percent": 91, "kind": "percent", "upTo": false, "priceError": false, "platform": "ajio", "extraordinary": true },
+    { "text": "Up to 90% off on Amazon Great Indian Sale fashion", "percent": 90, "kind": "percent", "upTo": true, "priceError": false, "platform": "amazon", "extraordinary": false }
+  ]
+}
