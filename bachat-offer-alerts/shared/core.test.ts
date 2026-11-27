@@ -171,5 +171,11 @@ describe('settings', () => {
     expect(titleOf('📉 96% Off\n\nWonderchef set')).toBe('Wonderchef set')
     expect(titleOf('[Blinkit] Cadbury at ₹49')).toBe('[Blinkit] Cadbury at ₹49')
     expect(titleOf('70% off')).toBe('70% off')
+    // GrabOn's layout: slogan, product, discount, price, link.
+    const grabon = '🔥 Time to elevate your style!\nALCIS Men Regular Fit Running Tracksuit Deal 🔥😍\n💥 54% OFF\n💰 Now just ₹1,610 (MRP ₹3,499)\n👉 https://grbn.in/XciE6x'
+    expect(titleOf(grabon)).toBe('ALCIS Men Regular Fit Running Tracksuit Deal')
+    expect(extractDiscount(grabon)).toMatchObject({ percent: 54, kind: 'price', price: 1610, mrp: 3499 })
+    expect(titleOf('Biryani BOGO on Zomato!\nUse code EAT')).toBe('Biryani BOGO on Zomato!')
+    expect(titleOf('Grab it fast!')).toBe('Grab it fast!')
   })
 })

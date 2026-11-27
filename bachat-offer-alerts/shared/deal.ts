@@ -9,13 +9,21 @@ const NOT_STORE = /^https?:\/\/(?:[a-z0-9-]+\.)*(?:t\.me|telegram\.(?:me|org)|te
 /** Lines that only restate the discount ("96% Off", "Flat 50% off") make poor titles. */
 export const ONLY_DISCOUNT = /^(?:flat|upto|up to|extra|get)?\s*\d{1,3}\s*%\s*(?:off|discount|cashback)?\s*[!.]*$/i
 
-/** First line with letters that says more than the discount, without leading emoji, at most 120 characters. */
+/** Hype like "Grab this deal now!": short, no numbers, no store, ends in "!". */
+export const HYPE = /^[^0-9]{1,70}!$/
+
+const isHype = (line: string) => HYPE.test(line) && line.split(/\s+/).length <= 9 && detectPlatform(line) === 'other'
+
+/**
+ * First line with letters that says more than the discount or a slogan, without emoji at
+ * either end, at most 120 characters.
+ */
 export function titleOf(text: string): string {
   let fallback = ''
   for (const raw of text.split('\n')) {
-    const line = raw.replace(/~~/g, '').replace(/^[^\p{L}\p{N}₹[(]+/u, '').trim()
+    const line = raw.replace(/~~/g, '').replace(/^[^\p{L}\p{N}₹[(]+/u, '').replace(/[^\p{L}\p{N})\]!?.%₹]+$/u, '').trim()
     if (!/\p{L}/u.test(line) || /^https?:\/\//i.test(line)) continue
-    if (ONLY_DISCOUNT.test(line)) {
+    if (ONLY_DISCOUNT.test(line) || isHype(line)) {
       fallback ||= line
       continue
     }

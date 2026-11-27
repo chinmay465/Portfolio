@@ -17,12 +17,19 @@ object Deals {
 
     fun stripLead(line: String) = LEAD.replace(line, "")
 
-    fun titleOf(text: String): String {
+    /** Hype like "Grab this deal now!": short, no numbers, no store, ends in "!". */
+    private val HYPE = Regex("""^[^0-9]{1,70}!$""")
+    private val TRAIL = Regex("""[^\p{L}\p{N})\]!?.%₹]+$""")
+
+    private fun isHype(line: String, catalog: Catalog?) =
+        HYPE.matches(line) && line.split(Regex("\\s+")).size <= 9 && (catalog == null || Platforms.detect(catalog, line) == "other")
+
+    fun titleOf(text: String, catalog: Catalog? = null): String {
         var fallback = ""
         for (raw in text.split('\n')) {
-            val line = stripLead(raw.replace("~~", "")).trim()
+            val line = TRAIL.replace(stripLead(raw.replace("~~", "")), "").trim()
             if (!LETTER.containsMatchIn(line) || line.startsWith("http://", true) || line.startsWith("https://", true)) continue
-            if (ONLY_DISCOUNT.matches(line)) {
+            if (ONLY_DISCOUNT.matches(line) || isHype(line, catalog)) {
                 if (fallback.isEmpty()) fallback = line
                 continue
             }
@@ -37,7 +44,7 @@ object Deals {
             id = "$sourceId:${post.id}",
             source = sourceId,
             sourceName = sourceName,
-            title = titleOf(post.text),
+            title = titleOf(post.text, catalog),
             text = if (post.text.length > 700) post.text.substring(0, 697) + "…" else post.text,
             url = store ?: post.postUrl,
             postUrl = post.postUrl,

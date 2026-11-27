@@ -132,6 +132,16 @@ class CoreTest {
     }
 
     @Test
+    fun titles() {
+        val grabon = "🔥 Time to elevate your style!\nALCIS Men Regular Fit Running Tracksuit Deal 🔥😍\n💥 54% OFF\n💰 Now just ₹1,610 (MRP ₹3,499)\n👉 https://grbn.in/XciE6x"
+        assertEquals("ALCIS Men Regular Fit Running Tracksuit Deal", Deals.titleOf(grabon, catalog))
+        assertEquals(54, Discount.extract(grabon).percent)
+        assertEquals("Biryani BOGO on Zomato!", Deals.titleOf("Biryani BOGO on Zomato!\nUse code EAT", catalog))
+        assertEquals("Grab it fast!", Deals.titleOf("Grab it fast!", catalog))
+        assertEquals("Wonderchef set", Deals.titleOf("📉 96% Off\n\nWonderchef set", catalog))
+    }
+
+    @Test
     fun notificationText() {
         val d = deal(96, platform = "zepto").let { it.copy(title = "Cookware", d = it.d.copy(price = 200.0, mrp = 4999.0)) }
         assertEquals("🚨 96% off · Zepto" to "Cookware · ₹200 (MRP ₹4999)", Deals.notification(catalog, d, Tier.EXTRAORDINARY))
