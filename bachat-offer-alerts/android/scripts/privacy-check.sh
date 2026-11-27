@@ -79,6 +79,7 @@ for kind in ("activity", "activity-alias", "service", "receiver", "provider"):
 report.append("exported=" + ",".join(exported))
 
 # 4. Tracking / analytics / ads SDKs anywhere in the dex (including transitive deps)
+strings = open(os.path.join(work, "dex-strings.txt"), errors="replace").read()
 trackers = {
     "Firebase": "Lcom/google/firebase/", "Google Play services": "Lcom/google/android/gms/",
     "Crashlytics": "Lcom/crashlytics/", "Facebook SDK": "Lcom/facebook/",
