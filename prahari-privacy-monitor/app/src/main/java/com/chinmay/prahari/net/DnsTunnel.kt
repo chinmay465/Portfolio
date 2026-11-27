@@ -174,7 +174,8 @@ class DnsTunnel(
         try {
             db.addDns(batch)
             LiveState.bump()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.w(TAG, "couldn't save ${batch.size} lookups: ${e.javaClass.simpleName}")
         }
     }
 

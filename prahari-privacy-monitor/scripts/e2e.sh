@@ -191,7 +191,7 @@ done
 resolves www.mozilla.org || fail "DNS broken when DoH is blocked (no fallback)"
 resolves github.com || fail "DNS broken when DoH is blocked (no fallback)"
 echo "DNS keeps working with DNS watch on, with and without DoH: ok"
-sleep 32  # let the batch of lookups reach the database
+sleep 50  # lookups are saved in batches every 30 s
 pull_db() {
   for f in prahari.db prahari.db-wal prahari.db-shm; do
     adb exec-out run-as "$PKG" cat "databases/$f" > "$OUT/$f" 2> /dev/null || rm -f "$OUT/$f"
@@ -201,6 +201,7 @@ pull_db
 python3 - "$OUT/prahari.db" <<'PY'
 import sqlite3, sys
 rows = sqlite3.connect(sys.argv[1]).execute("SELECT pkg, domain, count FROM dns").fetchall()
+print(f"{len(rows)} app/domain pairs recorded")
 for r in rows[:20]:
     print(r)
 names = {r[1] for r in rows}
