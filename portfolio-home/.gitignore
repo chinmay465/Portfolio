@@ -27,3 +27,6 @@ dist-preview
 # Playwright
 test-results
 playwright-report
+
+# Lighthouse CI
+.lighthouseci

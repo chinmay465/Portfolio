@@ -18,4 +18,4 @@ Side projects by Chinmay Upare, one folder per project. Each web project is a st
 
 On [dashboard.render.com](https://dashboard.render.com), go to **New → Blueprint** and pick this repo. Render reads `render.yaml` and creates one service per project — static sites for the landing page, Ekatra and Ank, Node web services for Shodh, Setu and Darshak, and a Docker web service for Rail Planner. After that, every push to `main` redeploys.
 
-CI (`.github/workflows/ci.yml`) runs one job per project on every push and PR: install, test, build and a smoke test. For Kavach, the job runs the unit tests and uploads the debug APK as the `kavach-debug-apk` artifact.
+CI (`.github/workflows/ci.yml`) runs one job per project on every push and PR: install, test, build and a smoke test. For Kavach, the job runs the unit tests and uploads the debug APK as the `kavach-debug-apk` artifact. Pull requests that touch `portfolio-home/` also run Lighthouse CI (`.github/workflows/home-lighthouse.yml`), which fails below the landing page's score budget.

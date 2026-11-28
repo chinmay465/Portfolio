@@ -30,7 +30,8 @@ export default function ScrollWords({ text, reduced, className = '' }: Props) {
   }, [reduced, words.length])
 
   return (
-    <p ref={ref} className={`scroll-words ${className}`} aria-label={text}>
+    <p ref={ref} className={`scroll-words ${className}`}>
+      <span className="sr-only">{text}</span>
       {words.map((w, i) => (
         <span key={i} aria-hidden="true" className={i < lit ? 'lit' : undefined}>
           {w}{' '}

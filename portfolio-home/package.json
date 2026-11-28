@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "lighthouse": "npx --yes @lhci/cli@0.16.1 autorun",
     "og-image": "node scripts/og-image.mjs"
   },
   "dependencies": {

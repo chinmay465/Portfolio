@@ -20,7 +20,11 @@ const requests: Impact = { ...lighthouse, what: 'Support requests', before: '100
 
 const onboarding: Impact = { what: 'Company onboarding', before: '2 days', after: '2 hours', where: 'KredX', how: 'Lookups.' }
 
-const shown = (c: HTMLElement) => c.querySelector('.impact-after')!.textContent
+/** What the eye sees: the decoding text once it runs, not the screen-reader copy. */
+const shown = (c: HTMLElement) => {
+  const live = c.querySelector('.impact-after .impact-live')!
+  return (live.querySelector('[aria-hidden="true"]') ?? live).textContent
+}
 
 describe('ImpactRow', () => {
   it('counts from the old value up to the new one once it scrolls into view', () => {
@@ -70,8 +74,25 @@ describe('ImpactRow', () => {
   })
 
   it('reads the change as one phrase to screen readers', () => {
-    const { getByLabelText } = render(<ImpactRow item={lighthouse} reduced={false} />)
-    expect(getByLabelText('70 to 95')).toBeTruthy()
+    const { container, getByText } = render(<ImpactRow item={lighthouse} reduced={false} />)
+    expect(getByText('70 to 95').className).toBe('sr-only')
+    // Every other part of the values is hidden, so the phrase is read once.
+    const values = container.querySelector('.impact-values')!
+    for (const el of values.children) if (el.className !== 'sr-only') expect(el.getAttribute('aria-hidden')).toBe('true')
+  })
+
+  it('sizes the value by its final text while it counts or decodes, so the row never re-wraps', () => {
+    const room = (c: HTMLElement) => c.querySelector('.impact-after .impact-room')!.textContent
+    const counting = render(<ImpactRow item={requests} reduced={false} />)
+    scrollIntoView()
+    runFrame(1000)
+    runFrame(1500)
+    expect(shown(counting.container)).not.toBe('30%')
+    expect(room(counting.container)).toBe('30%')
+    counting.unmount()
+    const decoding = render(<ImpactRow item={onboarding} reduced={false} />)
+    scrollIntoView()
+    expect(room(decoding.container)).toBe('2 hours')
   })
 
   it('stops counting when it unmounts mid-count', () => {

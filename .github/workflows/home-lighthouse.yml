@@ -1,0 +1,40 @@
+name: Lighthouse (portfolio-home)
+
+# Audits the built portfolio site on pull requests that touch it and fails below the
+# score budget in portfolio-home/lighthouserc.json (performance, accessibility, best practices).
+on:
+  pull_request:
+    paths:
+      - portfolio-home/**
+      - .github/workflows/home-lighthouse.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lighthouse:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: portfolio-home
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: portfolio-home/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - name: Lighthouse CI against the build (3 runs per page, median scored)
+        run: npm run lighthouse
+      - name: Upload Lighthouse reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: home-lighthouse-report
+          path: portfolio-home/.lighthouseci
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7

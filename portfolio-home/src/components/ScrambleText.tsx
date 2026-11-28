@@ -9,7 +9,11 @@ interface Props {
   className?: string
 }
 
-/** Decodes from Devanagari and Latin noise into the real text; hover to run it again. */
+/**
+ * Decodes from Devanagari and Latin noise into the real text; hover to run it again.
+ * Screen readers get the real text from a visually hidden copy (aria-label isn't
+ * allowed on a plain span), never the noise.
+ */
 export default function ScrambleText({ text, reduced, duration = 1200, delay = 0, className }: Props) {
   const [shown, setShown] = useState(reduced ? text : scrambleFrame(text, 0))
   const raf = useRef(0)
@@ -41,7 +45,8 @@ export default function ScrambleText({ text, reduced, duration = 1200, delay = 0
   }, [run, delay])
 
   return (
-    <span className={className} aria-label={text} onPointerEnter={() => run(0)}>
+    <span className={className} onPointerEnter={() => run(0)}>
+      <span className="sr-only">{text}</span>
       <span aria-hidden="true">{reduced ? text : shown}</span>
     </span>
   )
