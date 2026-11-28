@@ -51,7 +51,12 @@ export default function ImpactRow({ item, reduced }: { item: Impact; reduced: bo
         </s>
         <span className="impact-arrow" aria-hidden="true" />
         <strong className="impact-after" aria-hidden="true">
-          {after ?? (seen ? <ScrambleText text={item.after} reduced={reduced} delay={450} duration={900} /> : item.after)}
+          {/* An invisible copy of the final value takes the room and the live value is laid over
+              it, so the row never re-wraps while the number counts or the text decodes. */}
+          <span className="impact-room">{item.count ? `${item.count.to}${item.count.suffix ?? ''}` : item.after}</span>
+          <span className="impact-live">
+            {after ?? (seen ? <ScrambleText text={item.after} reduced={reduced} delay={450} duration={900} /> : item.after)}
+          </span>
         </strong>
       </div>
       <p className="impact-how">{item.how}</p>

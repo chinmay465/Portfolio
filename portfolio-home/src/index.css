@@ -2301,11 +2301,8 @@ kbd {
   transform: translateY(-50%) rotate(45deg);
 }
 .impact-after {
+  position: relative;
   white-space: nowrap;
-  background: linear-gradient(100deg, #ffd2a6, var(--saffron) 60%, var(--rose));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
   transition:
     opacity 0.6s var(--ease) 0.35s,
     transform 0.6s var(--ease) 0.35s;
@@ -2313,6 +2310,20 @@ kbd {
 .impact-row[data-seen='false'] .impact-after {
   opacity: 0;
   transform: translateX(-12px);
+}
+/* The final value, hidden, sizes the slot; the counting or decoding value sits on top of it
+   without taking part in layout, so its changing width can't re-wrap the row. */
+.impact-room {
+  visibility: hidden;
+}
+.impact-live {
+  position: absolute;
+  left: 0;
+  top: 0;
+  background: linear-gradient(100deg, #ffd2a6, var(--saffron) 60%, var(--rose));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 .impact-how {
   margin-top: auto;
