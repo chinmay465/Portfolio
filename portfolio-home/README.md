@@ -52,6 +52,15 @@ e2e/                          Playwright specs: every route, deep links, the com
 - **Site files (Vitest):** `src/lib/site.test.ts` checks that `sitemap.xml` lists exactly the router's pages and every project, that `robots.txt` links it, and that the preview tags point at a PNG that really is 1200×630 and under 300 KB.
 - **Components (Vitest + Testing Library, jsdom):** `ImpactRow` counts from the old value to the new one frame by frame and shows the final value at once with reduced motion; `RoleAccordion` keeps one role open at a time with matching `aria-expanded`; `/projects` shows the right cards for `?type=web`, `?type=android` and the tabs. `src/test/dom.ts` stubs the browser APIs jsdom lacks (IntersectionObserver, animation frames, ResizeObserver, matchMedia) so tests can scroll rows into view and step frames.
 - **End to end (Playwright, Chromium):** `e2e/` visits every page and every `/projects/:id`, unknown paths and ids (404), opens deep links directly and refreshes them, and drives the `Ctrl K` palette by keyboard and mouse. It also checks that the build serves the sitemap, `robots.txt` and the preview image as real files. Requests to the live apps are blocked so results never depend on Render, and any uncaught page error fails the test. CI runs it against `vite preview` after the build; on failure the HTML report is uploaded as `home-playwright-report`.
+- **Lighthouse (Lighthouse CI):** on pull requests that touch `portfolio-home/`, `.github/workflows/home-lighthouse.yml` audits `/`, `/about`, `/experience`, `/projects`, `/projects/ekatra` and `/contact` three times each (Lighthouse's default mobile profile) and fails if a page's median score drops below the budget in `lighthouserc.json`:
+
+  | Category | Minimum |
+  | --- | --- |
+  | Performance | 65 |
+  | Accessibility | 95 |
+  | Best practices | 95 |
+
+  The build is served compressed with path rewrites, as Render does. The reports are uploaded as `home-lighthouse-report`. To change the budget, edit `lighthouserc.json` and say why in the PR.
 
 ## Run
 
@@ -61,6 +70,7 @@ npm run dev      # http://localhost:5173
 npm test
 npm run build    # static output in dist/
 npm run test:e2e # Playwright against vite preview; build first
+npm run lighthouse # Lighthouse CI against dist/ with the score budget; build first, needs Chrome
 npm run og-image # re-render public/og-image.png after editing scripts/og-image.html
 
 # Preview build for hosts that can't rewrite paths: hash routes, relative assets
