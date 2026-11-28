@@ -44,7 +44,8 @@ export default function ImpactRow({ item, reduced }: { item: Impact; reduced: bo
         <h3>{item.what}</h3>
         <span className="impact-where">{item.where}</span>
       </div>
-      <div className="impact-values" aria-label={`${item.before} to ${item.after}`}>
+      <div className="impact-values">
+        <span className="sr-only">{`${item.before} to ${item.after}`}</span>
         <s className="impact-before" aria-hidden="true">
           {item.before}
         </s>

@@ -121,7 +121,7 @@ export default function Layout() {
       <footer className="footer">
         <div className="footer-grid">
           <div>
-            <Link className="brand" to="/">
+            <Link className="brand" to="/" aria-label="Chinmay Upare, home">
               <span className="brand-mark" aria-hidden="true">
                 चि
               </span>
